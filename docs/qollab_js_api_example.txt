@@ -1,0 +1,106 @@
+Source: "JS / Qiskit projects" (Qollab docs), https://qollab.xyz/learn/docs/js-qiskit-projects, copied 2026-10-05
+Also quoted below: "The runtime environment" (https://qollab.xyz/learn/docs/runtime-environment), "Run your code" (https://qollab.xyz/learn/docs/run-your-code) and "Compute backends" (https://qollab.xyz/learn/docs/compute-backends), copied 2026-10-05.
+Nothing in this file is invented: code is verbatim from the docs; notes are close paraphrases or quotes of the docs. Anything the docs do not cover is listed under "NOT DOCUMENTED" and must be settled by probe P5 / P6 and recorded in DECISIONS.md.
+
+==========================================================================
+1. MINIMAL EXAMPLE (verbatim, "A minimal example")
+==========================================================================
+
+import { QuantumCircuit } from 'qiskit';
+
+// No `new`: call the constructor like the Python API
+const circuit = QuantumCircuit(2, 2);
+circuit.h(0);
+circuit.cx(0, 1);
+circuit.measure([0, 1], [0, 1]);
+
+// `backend` is pre-created; run() is async and returns a job
+const job = await backend.run(circuit, { shots: 100 });
+
+// Python objects come back as proxies; .toJs() unpacks them
+const counts = (await job.result()).get_counts().toJs();
+
+// Render into the HTML you defined
+document.getElementById('legend').textContent = JSON.stringify(counts);
+
+==========================================================================
+2. CALLING YOUR OWN PYTHON FILE FROM JS (verbatim)
+==========================================================================
+
+import * as bell from 'quantum.bell';   // your quantum/bell.py
+
+const counts = (await bell.run_bell.callPromising(backend, 1000)).toJs();
+
+==========================================================================
+3. API CONVENTIONS ("The API" section, paraphrased)
+==========================================================================
+
+- Import from 'qiskit' modules, e.g.
+    import { QuantumCircuit } from 'qiskit'
+    import { JobStatus } from 'qiskit.providers.jobstatus'
+- No `new`: const circuit = QuantumCircuit(2, 2)
+- Keyword arguments: pass a trailing object via .callKwargs, e.g.
+    circuit.draw.callKwargs({ output: 'mpl' })
+- Return values are proxies to Python objects; unpack with .toJs(), e.g.
+    result.get_counts().toJs()
+- `backend` is pre-created; running is async:
+    const job = await backend.run(circuit, { shots: 100 })
+  Top-level await works. The injected setTimeout returns a promise, so it can be awaited
+  while polling job.status() against JobStatus.DONE / JobStatus.ERROR (no polling code is
+  shown on the page).
+- Functions in your own Python files must be called with .callPromising (or
+  .callPromisingKwargs). A plain call such as bell.run_bell(backend, 1000) fails on IonQ
+  backends with a ConnectionError saying XHR is not supported.
+- Use named imports or `import * as`; a default import of a Python module gives undefined.
+- The API is the Python Qiskit 2.x API exposed to JavaScript. If requirements.txt does not
+  name Qiskit, the runtime adds qiskit>=2.5.2,<3.0.0 (runtime-environment page).
+- Drawing: circuit.draw.callKwargs({ output: 'mpl' }) returns a Matplotlib figure; requires
+  "Qiskit Visualizations" enabled in the Libraries list; URL.createObjectURL(figure) gives an
+  <img> URL (rendered as SVG).
+
+==========================================================================
+4. PROJECT FILES AND PAGE FORMAT (runtime-environment page)
+==========================================================================
+
+- index.html and main.js at the top level make a JS project (editor label: HTML/JS).
+  If index.html, main.js and main.py are all present, it runs as JS. Files in folders do not count.
+- "index.html is placed inside the page body, so write body content only. The runtime drops
+  <html>, <head> and <body> tags."                     -> answers D9: BODY FRAGMENT
+- "<script> tags do not run, so put your code in main.js."
+- "main.css is optional and is the only stylesheet the runtime loads. Other .html and .css
+  files are not loaded."                               -> file names are index.html, main.css, main.js
+- main.js may import other JS files by ./ or ../ paths, and Python files by dotted name.
+- "JavaScript cannot read project files: fetch("data.csv") does not reach them."
+  (Our design embeds all data in the bundle, so this is fine.)
+- console.log output appears in the console below the page; objects print as [object Object],
+  so wrap them in JSON.stringify.
+- Everything runs in the browser in a sandboxed iframe. GET requests via fetch(url) are allowed
+  (CORS permitting); POST/PUT/DELETE, XMLHttpRequest, WebSocket and web workers are not available.
+- Limits: "A project holds up to 100 files of up to 2 MB each, and all your projects together
+  can use 200 MB. A run has no time limit."            -> relevant to D5 (still confirm with P6)
+- Browser: needs WebAssembly JSPI: recent Chrome, Edge or Opera, or Firefox 153+.
+
+==========================================================================
+5. BACKEND, SHOTS AND NOISE MODEL (runtime-environment, run-your-code, compute-backends)
+==========================================================================
+
+- "Your code does not choose a quantum device. Whoever presses Run picks one in the Select QPU
+  dialog, and the runtime hands it to your code as backend."
+- "Do not create or hardcode a backend yourself, or the project ignores the choice made in the dialog."
+- The noise model comes with the backend chosen in the dialog, e.g. "Picking IonQ Forte 1 here
+  runs IonQ's noise model of Forte on IonQ's cloud." Simulators are labelled Ideal or Noise model.
+- Shots are set in code: JS  await backend.run(circuit, { shots })   (default 1024 if omitted).
+- IonQ noise-model simulators (free): Aria 1/2 (25 qubits), Forte 1 and Forte Enterprise 1 (29 qubits).
+  Run time grows with shots; docs suggest starting around 100 shots.
+- Python can read the selected noise model with backend.options.get("noise_model", "none")
+  (Lesson 6, https://qollab.xyz/learn/programming-your-first-quantum-circuits/noise-and-the-real-machine).
+
+==========================================================================
+NOT DOCUMENTED (settle by probe, record in DECISIONS.md)
+==========================================================================
+
+- Any backend.run option other than shots (noise_model, seed) passed from code, JS or Python.
+  Docs imply noise is chosen only in the Select QPU dialog.      -> D1, D2 (Person A, P3)
+- Whether backend.run from JS works on the IonQ remote simulators exactly as in section 1.  -> D4 (P5)
+- Largest main.js that saves and reloads (docs say 2 MB per file).                         -> D5 (P6)
+- Whether a second account can edit a project (no docs mention collaborators editing).     -> D10 (B2)
