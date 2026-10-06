@@ -415,7 +415,7 @@ The quantum part (the first two boxes) runs on IonQ's simulator; everything from
 
 ### 15.2 Deployment: from the repository to Qollab
 
-(1) printed counts are copied from Qollab and assembled into checked JSON files in the repository; (2) the three built files are pasted into the main project's panes; (3) the main project's live-run button submits a fresh job to the IonQ simulator.
+(1) printed counts are copied from Qollab and assembled into checked JSON files in the repository; (2) the three built files (`index.html`, `main.css`, `main.js`) replace the main project's files; (3) the main project's live-run button submits a fresh job to the IonQ simulator.
 
 ```text
 ┌────────────────────────────────┐          ┌────────────────────────────────┐
@@ -450,9 +450,10 @@ The quantum part (the first two boxes) runs on IonQ's simulator; everything from
 
 | Source (repository) | Destination (Qollab) | Why |
 |---|---|---|
-| `dist/qollab/index.html` | Main project, HTML pane | Page structure |
-| `dist/qollab/style.css` | Main project, CSS pane | Styling |
-| `dist/qollab/app.js` | Main project, JavaScript pane | The whole application, with data embedded, as one self-contained script |
+| `dist/qollab/index.html` | Main project, `index.html` | Page structure, as a body fragment (Qollab strips `<html>`, `<head>` and `<body>`) |
+| `dist/qollab/main.css` | Main project, `main.css` | Styling |
+| `dist/qollab/main.js` | Main project, `main.js` | The whole application, with data embedded, as one self-contained script |
+| `qollab/live.py` | Main project, `qollab/live.py` (only if the live run is on) | Native-gate helper that the live-run button calls |
 | `qollab/bank_generator.py` | Bank generator project | Lets anyone regenerate the shot banks on IonQ's simulator |
 | `docs/project_page.md` | Main project description | The written project page |
 
@@ -502,7 +503,9 @@ model.averageAssignmentError()     // -> number   used for hard-decoding weights
 {
   "schema": "s2s-bank/1",
   "code": "repetition", "d": 5, "r": 3, "logical": 0, "mode": "fresh-ancilla",
-  "backend": "ionq simulator", "noise_model": "forte-1", "seed": 2026,
+  "backend": "<backend.name>", "noise_model": "forte-1", "sampler_seed": 2026,
+  "job_id": "…", "native_ops": { "gpi2": 48, "ms": 12, "measure": 9 }, "date": "2026-10-10T07:40:00Z",
+  "detector_rate": 0.0325,
   "shots": 4000, "n_qubits": 17, "n_clbits": 17,
   "layout": { "ancilla": [[0,1,2,3],[4,5,6,7],[8,9,10,11]], "data": [12,13,14,15,16] },
   "bit_order": "qiskit-little-endian",
@@ -512,7 +515,7 @@ model.averageAssignmentError()     // -> number   used for hard-decoding weights
 }
 ```
 
-`layout.ancilla[k][j]` is the classical bit holding check $j$ in round $k$ (counting from 0); `layout.data[i]` holds data qubit $i$. Classical bit 0 is the least significant bit of each key. Keys are stored in hexadecimal to shrink the bundle, and the SHA-256 checksum guards the copy from Qollab into the repository.
+`layout.ancilla[k][j]` is the classical bit holding check $j$ in round $k$ (counting from 0); `layout.data[i]` holds data qubit $i$. Classical bit 0 is the least significant bit of each key. Keys are stored in hexadecimal to shrink the bundle, and the SHA-256 checksum guards the copy from Qollab into the repository. Circuits are submitted in IonQ's native gates (IonQ's optimiser otherwise removes the parity checks), one configuration per Qollab run, with the seed set through `set_options(sampler_seed=…)`; a bank with a detector rate of 0 is rejected. See `DECISIONS.md` (D1–D3).
 
 **Sweep result (`data/results/*.json`, format `s2s-results/1`).** The configuration, the parameter grid, one series per distance and decoding mode with logical error rate, interval bounds and shot counts, and provenance (commit, bank files, seeds).
 

@@ -1,5 +1,7 @@
 # Signal to Syndrome — Execution Checklist
 
+> **Superseded for the two-person build (6 Oct 2026).** Use `signal-to-syndrome-team-checklist.md`. The probe results in `DECISIONS.md` override this file wherever they differ: Qollab file names are `index.html` (body fragment), `main.css` and `main.js`; one job per Qollab run; bank circuits use IonQ's native gates with the seed set by `set_options(sampler_seed=…)`. The `CLAUDE.md` text embedded below is out of date; the repository's `CLAUDE.md` is authoritative.
+
 Every step needed to build, verify, publish and submit the project, in the order you do them. Companion to `signal-to-syndrome-project-plan.md` (the what and why) and `signal-to-syndrome-proposal.md` (the physics).
 
 | | |

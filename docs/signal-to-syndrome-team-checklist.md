@@ -4,7 +4,7 @@ Every step needed to build, verify, publish and submit the project as a team of 
 
 | | |
 |---|---|
-| Version | 1.0, 4 October 2026 |
+| Version | 1.1, 6 October 2026 (updated with the probe results in `DECISIONS.md`: native-gate bank generator, one job per run, Qollab file names `index.html`/`main.css`/`main.js`, probe P10 for the live run) |
 | Build window | Sat 10 Oct 04:30 IST → Mon 12 Oct 04:30 IST (Fri 9 Oct 19:00 ET → Sun 11 Oct 19:00 ET) |
 | Project plan | `signal-to-syndrome-project-plan.md` explains what is built and why. This checklist replaces its single-person timeline (Section 17.1) with the team timeline below; the gates, cut rules and validation checks are unchanged |
 | Repository | A private GitHub repository shared by both of you, cloned to `E:\My Project\signal-to-syndrome` (or any path you prefer) |
@@ -263,7 +263,7 @@ start "" "dist\local\preview.html"
 ```
 
 3. **Both:** play every enabled level in the local preview (Person B shares the screen, or Person A pulls and builds).
-4. **Person B:** replace the main Qollab project's three panes with `dist/qollab/index.html`, `style.css` and `app.js`; open Diagnostics. **Both:** the fingerprint equals Person A's (V9).
+4. **Person B:** replace the main Qollab project's three files with `dist/qollab/index.html`, `main.css` and `main.js`; open Diagnostics. **Both:** the fingerprint equals Person A's (V9).
 5. **Person B:** publish (public, MIT, attribution in the description). **Person A:** publish the bank generator project the same way (SP1 only) and send its link (H14).
 6. **Both:** open the published links in a signed-out private window and play.
 7. **Person B:**
@@ -281,7 +281,7 @@ git push --tags
 
 ### J4 · JOINT · Sat 20:00 — SP2 integration and publish
 
-As J3, with handoffs H7 and H8, switches rows 5–7 of Appendix T3, and tag `sp2`. Turn on `liveRun` only if D4 says JavaScript can submit jobs and the live run worked in the preview.
+As J3, with handoffs H7 and H8, switches rows 5–7 of Appendix T3, and tag `sp2`. Turn on `liveRun` only if D11 (probe P10) passed and the live run worked on Qollab; in that case Person B also uploads Person A's `qollab/live.py` into the main project (as `qollab/live.py`, or `live.py` at the top level if D11 says folders do not work) in step 4. Build with `liveRun: true`, upload, press "Run a fresh experiment" once with **IonQ Forte 1** picked, and check that level 4 shows lit detectors; if it fails, set `liveRun: false`, rebuild and re-upload before publishing.
 - [ ] Done
 
 ### J5 · JOINT · Sun 09:00 — SP3 integration and publish
@@ -310,7 +310,7 @@ As J3, with handoff H11, switches rows 11–12, and tag `sp4`. Test all five lev
 
 No new features from here on.
 **Do:**
-1. **Person B:** `git pull --rebase`, `npm test`, `npm run build`, `npm run check`; final upload of the three panes; confirm public and MIT on the main project.
+1. **Person B:** `git pull --rebase`, `npm test`, `npm run build`, `npm run check`; final upload of the three files `dist/qollab/index.html`, `main.css` and `main.js` (plus `qollab/live.py` if `liveRun` is on); confirm public and MIT on the main project.
 2. **Person A:** `node tools/sweep.mjs --diag`; confirm the fingerprint on the published page matches; confirm the bank generator project is public, MIT, and runs its smallest configuration.
 3. **Both:** test in signed-out private windows (Person A in Chrome, Person B in Edge): every level, the platform toggle, the live run, Diagnostics.
 4. **The registered team lead:** submit through the global process with the main project link, the generator link and the video; save a screenshot of the confirmation and share it.
@@ -368,29 +368,39 @@ Read CLAUDE.md and DECISIONS.md first.
 Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
 
 Task CC-A1: the Qollab bank generator, its local tests, and the bank assembler.
-Create exactly: qollab/bank_generator.py, validation/test_circuits.py, tools/assemble_bank.mjs, tests/assemble_bank.test.js.
+Create exactly: qollab/bank_generator.py, validation/test_circuits.py, tools/assemble_bank.mjs, tests/assemble_bank.test.js, and qollab/live.py only if D11 in DECISIONS.md says the live run works (part E).
 
-A. qollab/bank_generator.py (standard library + qiskit only)
-1. Settings at the top: NOISE_OPTIONS = the keyword arguments recorded as D1 and D2 in DECISIONS.md (an empty dict if the noise model is chosen in the Run dialog); SHOTS = D8; MODE = "banks" or "v4"; SELECT = list of configuration names to run.
+A. qollab/bank_generator.py (standard library + qiskit only). Platform facts from DECISIONS.md: Qollab allows ONE job per code run; IonQ optimises abstract-gate circuits away, so every circuit is submitted in native gates (D1); the seed is set only with set_options (D2).
+1. Settings at the top, the only line a person edits between runs: CONFIG = the name of the one configuration to run (for example "rep_d3_r1_L0"). Also at the top: SHOTS = D8; a SEEDS table giving every configuration name (banks and V4) its own fixed sampler seed, distinct integers between 1 and 2^31.
 2. build_memory_circuit(d, r, logical, inject=None) -> (QuantumCircuit, layout). One quantum register: data qubits 0..d-1, then one fresh ancilla per check per round. If logical == 1, apply X to every data qubit first. Round k, check j: cx(data j -> ancilla), then cx(data j+1 -> ancilla). One classical register with n_clbits = (d-1)*r + d and the fixed layout in CLAUDE.md. All measurements at the end. inject is a list of (data_qubit, after_round): apply X to that data qubit after all CNOTs of round after_round and before round after_round + 1 (after_round = r-1 means just before the final readout). layout = {"ancilla": [[clbit of check j for j] for k], "data": [clbit of qubit i for i]}.
 3. CONFIGS: rep_d3_r1, rep_d3_r3, rep_d5_r3, rep_d5_r5, rep_d7_r3, each for logical 0 and 1, named like rep_d5_r3_L0.
-4. V4_BATCH: for (d, r) in [(3, 3), (5, 3)], logical 0, every single injection site (i, k) with i in 0..d-1 and k in 0..r-1, named like v4_d3_r3_i1_k0. These run WITHOUT noise options and with 100 shots.
-5. run_circuit(qc, shots, options): job = backend.run(qc, shots=shots, **options); poll job.status() every 5 s until DONE, ERROR or CANCELLED (from qiskit.providers.jobstatus import JobStatus); raise a clear error unless DONE; return job.result().get_counts().
-6. to_bank(...) builds the s2s-bank/1 object (fields: schema, code, d, r, logical, mode "fresh-ancilla", backend, noise_model, seed, shots, n_qubits, n_clbits, layout, bit_order "qiskit-little-endian", key_encoding "hex", counts, checksum). Keys: strip spaces, check length == n_clbits, convert binary to lowercase hex without prefix. checksum = {total_shots, n_keys, sha256 of json.dumps(counts, sort_keys=True, separators=(",", ":"))}. For V4 entries also store "inject": [[i, k]].
-7. emit(bank, name): S = json.dumps(bank, sort_keys=True, separators=(",", ":")); print "=== S2S-BANK BEGIN <name> chunks=<N> sha256=<sha256 of S> ===", then for each 4000-character chunk the line "--- chunk <i>/<N> ---" followed by the chunk on its own line, then "=== S2S-BANK END <name> ===".
-8. main() runs SELECT (MODE "banks") or V4_BATCH (MODE "v4"), printing a progress line before each job. The last line of the file is: if "backend" in globals(): main()
+4. V4_BATCH: for (d, r) in [(3, 3), (5, 3)], logical 0, every single injection site (i, k) with i in 0..d-1 and k in 0..r-1, named like v4_d3_r3_i1_k0. These run with noise model "ideal" (not forte-1) and 100 shots, one configuration per run like the banks.
+5. run_native(qc, shots, noise_model, seed), the native recipe of D1, exactly:
+   - first assert backend.options.get("noise_model") == "forte-1"; otherwise raise an error telling the user to pick IonQ Forte 1 in the Select QPU dialog;
+   - nb = backend.with_name(backend.name, gateset="native", noise_model=noise_model); nb.set_options(noise_model=noise_model, sampler_seed=seed). Never pass the seed as a run() argument (it has no effect, D2). Never construct a provider or read an API key;
+   - qn = transpile(qc, backend=nb); native_ops = dict(qn.count_ops());
+   - job = nb.run(qn, shots=shots); poll job.status() every 5 s until DONE, ERROR or CANCELLED (from qiskit.providers.jobstatus import JobStatus); raise a clear error unless DONE;
+   - return (job.result().get_counts(), job.job_id(), native_ops).
+6. detector_rate(counts, d, r, layout): the fraction of detector bits equal to 1 over all detectors and all shots, with detectors as defined in CLAUDE.md (layer k < r: m[k][j] XOR m[k-1][j], with m[-1] = 0; final layer: x[j] XOR x[j+1] XOR m[r-1][j]).
+7. to_bank(...) builds the s2s-bank/1 object (fields: schema, code, d, r, logical, mode "fresh-ancilla", backend (= backend.name), noise_model, sampler_seed, job_id, native_ops, date (UTC, ISO 8601), detector_rate, shots, n_qubits, n_clbits, layout, bit_order "qiskit-little-endian", key_encoding "hex", counts, checksum). Keys: strip spaces, check length == n_clbits, convert binary to lowercase hex without prefix. checksum = {total_shots, n_keys, sha256 of json.dumps(counts, sort_keys=True, separators=(",", ":"))}. For V4 entries also store "inject": [[i, k]].
+8. emit(bank, name): S = json.dumps(bank, sort_keys=True, separators=(",", ":")); print the line "BEGIN_BANK <name> chunks=<N> sha256=<sha256 of S>", then for each 4000-character chunk the line "--- chunk <i>/<N> ---" followed by the chunk on its own line, then the line "END_BANK <name>" (D7: the person copies everything from BEGIN_BANK to END_BANK out of the console).
+9. main(): look up CONFIG in CONFIGS and V4_BATCH (an unknown name raises an error listing the valid names); print one progress line with the name, qubit count, shots, seed and the expected duration (about 6-8 min per 4000 shots at d = 3, r = 3, longer for larger d and r; D3); submit exactly one job with run_native (noise model "forte-1" for rep_* names, "ideal" for v4_* names); compute and print detector_rate; for a rep_* configuration whose detector_rate is 0, raise an error saying the circuit was optimised away and the bank must not be used, and emit nothing; otherwise emit. The last line of the file is: if "backend" in globals(): main()
    so that importing the module locally never runs a job.
 
 B. validation/test_circuits.py (pytest, qiskit.providers.basic_provider.BasicSimulator, circuits of at most 24 qubits only)
 1. rep_d3_r1, rep_d3_r3, rep_d5_r3, logical 0 and 1, no injection: exactly one outcome; every ancilla bit 0; every data bit equals the logical value.
 2. d = 3, r = 3, logical 0, every injection site (i, k): exactly one outcome, equal to the prediction: the ancilla bits of checks i-1 and i (those that exist) flipped in every round > k, and data bit i flipped.
 3. Layout: classical-bit indices match the CLAUDE.md formula for d = 5, r = 3.
+4. detector_rate is 0 for counts containing only the error-free outcome and positive when one ancilla bit is flipped in some shots (a non-vacuous pair).
+5. SEEDS has one entry per configuration name in CONFIGS and V4_BATCH, all distinct, all in 1..2^31.
 Each test has a comment stating, in words, the break it catches.
 
-C. tools/assemble_bank.mjs <raw text file> [output dir, default data/banks]
-Parse every BEGIN...END block (tolerate Windows line endings and blank lines), check chunk count and order, join chunks, verify the sha256 from the BEGIN line, parse the JSON, re-verify checksum.total_shots == sum of counts == shots, n_keys, and the counts sha256 using the same canonical form as Python (keys sorted, separators without spaces). Write <output dir>/<name>.json pretty-printed with 2 spaces; print one summary line per bank; exit 1 with a clear message on any mismatch.
+C. tools/assemble_bank.mjs <file or folder>... [--out <dir>, default data/banks]
+A folder argument means every .txt file in it. Parse every BEGIN_BANK ... END_BANK block (tolerate Windows line endings and blank lines), check chunk count and order, join chunks, verify the sha256 from the BEGIN_BANK line, parse the JSON, re-verify checksum.total_shots == sum of counts == shots, n_keys, and the counts sha256 using the same canonical form as Python (keys sorted, separators without spaces). Reject a bank whose name starts with rep_ and whose detector_rate is missing or 0 (the circuit was optimised away). Write <out>/<name>.json pretty-printed with 2 spaces; print one summary line per bank (name, shots, distinct keys, detector_rate, sampler_seed); exit 1 with a clear message on any mismatch.
 
-D. tests/assemble_bank.test.js: a round trip on a synthetic block built in the test; a block with one corrupted character must fail; a block with a missing chunk must fail.
+D. tests/assemble_bank.test.js: a round trip on a synthetic block built in the test; a block with one corrupted character must fail; a block with a missing chunk must fail; a rep_ bank with detector_rate 0 must fail while the same bank with detector_rate 0.03 passes.
+
+E. qollab/live.py (only if D11 says the live run works; otherwise skip it and say so in the report). A standalone file (it is uploaded alone into Person B's JavaScript project, so it must not import bank_generator) with run_live(backend, shots=200, seed=7): build the d = 3, r = 3, logical 0 circuit with the same qubit order and classical-bit layout as build_memory_circuit, run it with the native recipe of part A step 5 (noise model "forte-1", sampler_seed = int(seed), shots = int(shots)) and return the counts as a plain dict of binary-string keys to int, as the P10 helper in the team checklist (Appendix T4) does. Add to validation/test_circuits.py a test that the circuit run_live builds (expose it as live_circuit()) gives the same single noiseless outcome as build_memory_circuit(3, 3, 0).
 
 Run `npm test`, then `python -m pytest validation -q`. End with the report format.
 ```
@@ -418,7 +428,7 @@ Before `git add -A`, check that `git status --short` lists only files you own.
 
 ### A7 · QOLLAB · Sat 07:40 — First bank end to end
 
-**Do:** on Qollab create a Python/Qiskit project `Signal to Syndrome — bank generator`; paste `qollab/bank_generator.py`; set `MODE = "banks"` and `SELECT = ["rep_d3_r1_L0"]`; choose the IonQ simulator with the noise setting from D1; run. Copy the full output into `data/raw/rep_d3_r1_L0.txt`. Then:
+**Do:** on Qollab create a Python/Qiskit project `Signal to Syndrome — bank generator` (you own it, D10); paste `qollab/bank_generator.py`; set `CONFIG = "rep_d3_r1_L0"`; press Run and pick **IonQ Forte 1** in the Select QPU dialog (D1). One configuration per run: Qollab refuses a second job in the same run. When it finishes, use the console toolbar's copy (or download) button and save everything from the `BEGIN_BANK` line to the `END_BANK` line into `data/raw/rep_d3_r1_L0.txt`. The console shows only the latest run, so copy before you run again (D7). Then:
 
 ```bat
 node tools/assemble_bank.mjs data\raw\rep_d3_r1_L0.txt
@@ -429,13 +439,13 @@ git push
 ```
 
 Send `HANDOFF H4 (first bank): rep_d3_r1_L0`.
-**Pass:** the assembler reports no error; the bank shows several distinct outcomes.
+**Pass:** the assembler reports no error; the printed detector rate is above 0 (for reference, P9 gave 0.0325 at $d=3$, $r=3$; a rate of 0 means the circuit was optimised away and the generator refuses to print the bank); the bank shows several distinct outcomes; its provenance has `backend`, `noise_model` `forte-1`, `sampler_seed`, `job_id`, `native_ops` and `date`.
 - [ ] Done
 
-### A8 · QOLLAB · Sat 07:55 — Run all banks in the background
+### A8 · QOLLAB · Sat 07:55 — Run the other banks, one run each
 
-**Do:** set `SELECT` to the other nine configurations, smallest first (`rep_d3_r1_L1`, `rep_d3_r3_L0`, `rep_d3_r3_L1`, `rep_d5_r3_L0`, `rep_d5_r3_L1`, `rep_d5_r5_L0`, `rep_d5_r5_L1`, `rep_d7_r3_L0`, `rep_d7_r3_L1`) and run; leave the tab open.
-**Pass:** the first progress lines appear.
+**Do:** run the other nine configurations one at a time, smallest first: `rep_d3_r1_L1`, `rep_d3_r3_L0`, `rep_d3_r3_L1`, `rep_d5_r3_L0`, `rep_d5_r3_L1`, `rep_d5_r5_L0`, `rep_d5_r5_L1`, `rep_d7_r3_L0`, `rep_d7_r3_L1`. For each: set `CONFIG`, Run with **IonQ Forte 1**, wait, copy the `BEGIN_BANK` … `END_BANK` block into `data/raw/<name>.txt`, then start the next one. Budget about 6–8 min per configuration at $d=3$ and more for larger $d$ and $r$ (D3), so the nine runs take roughly 1.5–2 hours: work on A9 and A10 between runs, keeping the Qollab tab open. If a run shows `detector rate 0`, stop and tell Person B (the native path has failed); do not use that bank.
+**Pass:** each finished configuration has its own raw file with one complete `BEGIN_BANK` … `END_BANK` block.
 - [ ] Done
 
 ### A9 · CLAUDE CODE · Sat 08:00 — CC-A2: flat readout, idle errors, calibration, statistics
@@ -482,10 +492,10 @@ git push
 
 ### A11 · QOLLAB · TERMINAL · Sat 09:30 — Collect and assemble the banks
 
-**Do:** copy the finished output of A8 into `data/raw/banks_batch1.txt`, then:
+**Do:** check that every finished A8 configuration has its raw file in `data\raw`, then:
 
 ```bat
-node tools/assemble_bank.mjs data\raw\banks_batch1.txt
+node tools/assemble_bank.mjs data\raw
 dir data\banks
 git add data
 git commit -m "All banks"
@@ -670,7 +680,7 @@ Then `npm test`, commit, push, send `HANDOFF H9: sc.js, params/sc.json`.
 
 ### A23 · QOLLAB · TERMINAL · Sat 20:30 — V4 batch on the ideal simulator
 
-**Do:** in the generator project set `MODE = "v4"`, choose the IonQ simulator **without** noise, run, copy the output into `data/raw/v4.txt`, then `node tools/assemble_bank.mjs data\raw\v4.txt`. Expect 24 files `v4_*.json` (9 for $d=3$, 15 for $d=5$). Commit and push.
+**Do:** in the generator project run each V4 configuration as its own run (one job per run): set `CONFIG` to `v4_d3_r3_i0_k0`, Run with **IonQ Forte 1** picked in the dialog (the generator itself switches V4 names to the `ideal` noise model, D1), and copy the `BEGIN_BANK` … `END_BANK` block into `data/raw/v4/<name>.txt`; repeat for every site. These are 100-shot ideal runs, so each should take well under a minute. Then `node tools/assemble_bank.mjs data\raw\v4`. Expect 24 files `v4_*.json` (9 for $d=3$, 15 for $d=5$). If time runs short, do the 9 sites at $d=3$ only and note this in your section of `DECISIONS.md`. Commit and push.
 - [ ] Done
 
 ### A24 · CLAUDE CODE · Sat 21:00 — CC-A7: V4 test and Stage 3 sweeps
@@ -806,8 +816,8 @@ Review Person B's files since `sp4`.
 ### B1 · QOLLAB · SELF · before Thu 8 Oct — Platform study and sketches
 
 **Why:** you own everything that runs in Qollab's JavaScript project, and you build the interface.
-**Do:** open Qollab's lesson on running a circuit in JavaScript; copy Qollab's example (how a circuit is built, how `backend.run` is called from JavaScript, how results are unpacked with `.toJs()`) into your notes. Note how projects are created, published and licensed, and whether two accounts can share a project. Sketch the three-panel layout and levels 1–5 on paper (project plan, Section 18). Read a short guide to web accessibility (keyboard focus, contrast, text alternatives for charts).
-**Pass:** you can describe the JavaScript API pattern and the publishing steps from your notes.
+**Do:** open Qollab's lesson on running a circuit in JavaScript; copy Qollab's example (how a circuit is built, how `backend.run` is called from JavaScript, how results are unpacked with `.toJs()`) into your notes. Note how projects are created, published and licensed, and whether two accounts can share a project. Sketch the three-panel layout and levels 1–5 on paper (project plan, Section 18). Read a short guide to web accessibility (keyboard focus, contrast, text alternatives for charts). Before Saturday, run probe P10 (Appendix T4) once and record the result as D11 in your section of `DECISIONS.md`; tell Person A the outcome, because it decides whether they write `qollab/live.py` in CC-A1.
+**Pass:** you can describe the JavaScript API pattern and the publishing steps from your notes; D11 has an answer.
 - [ ] Done
 
 ### B2 · QOLLAB · PLATFORM · Sat 04:35 — JavaScript probes
@@ -1007,11 +1017,11 @@ Interface (one page, sentence-case labels, no external fonts or libraries):
 - Accessibility: every control works with the keyboard and shows a visible focus ring; text contrast at least 4.5:1; every chart has a text alternative listing its values.
 - diag.js calls diagnostic(bankD3R3) and shows the result in the Diagnostics section.
 
-tools/build.mjs: bundle src/ui/main.js with esbuild (format iife, minify, JSON imports embedded) into dist/qollab/app.js; write dist/qollab/style.css; write dist/qollab/index.html from the template in the form recorded in D9 (full document or body fragment), with no script or stylesheet tags for app.js and style.css, because Qollab injects its panes. Also write dist/local/preview.html, one self-contained file with the CSS and JavaScript inlined, for local testing. Print each output file's size.
+tools/build.mjs: bundle src/ui/main.js with esbuild (format iife, minify, JSON imports embedded) into dist/qollab/main.js; write dist/qollab/main.css; write dist/qollab/index.html from the template as a body fragment (D9: Qollab strips <html>, <head> and <body> and does not run <script> tags), with no script or stylesheet tags, because Qollab loads main.js and main.css itself. Also write dist/local/preview.html, one self-contained file with the CSS and JavaScript inlined, for local testing. Print each output file's size. (The source files keep their names, src/ui/main.js and src/ui/style.css; only the files in dist/qollab/ use the Qollab names.)
 
 tools/release_check.mjs: exit 1 unless all of these hold, printing a pass/fail table:
-- the three dist/qollab files exist; app.js plus index.html are below the limit in D5;
-- neither contains "fetch(", "XMLHttpRequest", "WebSocket" or "import(";
+- the three dist/qollab files (index.html, main.css, main.js) exist; main.js plus index.html are at most 1 900 000 bytes (D5);
+- neither main.js nor index.html contains "fetch(", "XMLHttpRequest", "WebSocket" or "import(";
 - every http(s) URL in them has a host on the allowlist qollab.xyz, ionq.com, docs.ionq.com, arxiv.org, doi.org, github.com;
 - the attribution line appears in index.html and README.md; LICENSE exists and contains neither PERSON_A_NAME nor PERSON_B_NAME;
 - every file in data/banks passes validateBank;
@@ -1054,13 +1064,15 @@ Read CLAUDE.md and DECISIONS.md first.
 Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
 Task CC-B7: levels 3 and 4 for the trapped-ion readout, and the live-run button.
-Create exactly: src/ui/level3.js, src/ui/level4.js, src/ui/liverun.js. Modify only src/ui/main.js (register the levels) and src/ui/style.css.
+Create exactly: src/ui/level3.js, src/ui/level4.js, src/ui/liverun.js. Modify only src/ui/main.js (register the levels), src/ui/style.css, tools/build.mjs and tools/release_check.mjs (the live-run import, below).
 
 Use only the bridges for Person A's modules and data (createIonReadout, decodeShot, runPoint, stage2, paramsIon, bankD3R3). Show the trapped-ion platform only when FEATURES.ion is true and the live-run button only when FEATURES.liveRun is true. Do not modify the bridges or features.js.
 
 - Level 3 "Listen longer?": a detection-time slider over the tau grid of paramsIon; histograms of photon counts for bright and dark (the readout object's countHistogram method, 5000 samples each) with the threshold marked; the assignment error at the slider value; the chart of logical error against tau from stage2 (hard mode) for each distance, with optima.tauPhys and optima.tauLog marked (or "no interior minimum"); a "Batch" button that runs runPoint with 200 shots of bankD3R3 at the slider value and shows the logical error with its interval.
 - Level 4 "Trust but verify": the level 2 grid, each lit detector shaded by the confidence of the measurements that produced it (from decodeShot's llrAnc and llrData; opacity plus ring thickness, never colour alone); for each shot, decodeShot in mode "hard" and in mode "soft" with the same seed, their matchings (paths) side by side, and whether each kept the logical value; a running tally over 20 shots; and the chart of hard against soft logical error against tau (stage2).
-- liverun.js: if D4 says JavaScript can submit jobs, a "Run a fresh experiment" button that builds the d = 3, r = 3, L0 circuit and submits 200 shots using exactly the call pattern in docs/qollab_js_api_example.txt and the noise setting in D1, converts the counts into an in-memory bank, validates it with validateBank, and feeds it to level 4. If D4 says no, show a short note with a link to the bank generator project (link in DECISIONS.md). Do not invent any API beyond the example file.
+- liverun.js: the live run must use native gates, or it returns no detector events (DECISIONS platform facts, D4), so JavaScript does not build the circuit itself: it calls Person A's Python helper qollab/live.py, as tested in probe P10 (D11). If D11 says the live run works: a "Run a fresh experiment" button that calls `(await globalThis.s2sLive.run_live.callPromising(backend, 200, seed)).toJs()` (`backend` is Qollab's pre-created global; seed is a new integer per press, for example Date.now() modulo 2^31, shown on screen), converts a Map result with Object.fromEntries, turns the binary-key counts into an in-memory s2s-bank/1 bank for d = 3, r = 3, L0 (hex keys and layout as in CLAUDE.md, with a checksum that validateBank accepts), validates it with validateBank, and feeds it to level 4. Show a status line while the job runs (expect tens of seconds to minutes) and a clear message on error. If globalThis.s2sLive is undefined, or D11 says the live run does not work, show instead a short note with a link to the bank generator project (link in DECISIONS.md). Do not invent any API beyond docs/qollab_js_api_example.txt and P10.
+- tools/build.mjs: esbuild cannot keep an ES import inside an IIFE (an external import becomes a require() call that fails in the browser), so when FEATURES.liveRun is true, write dist/qollab/main.js as the single line `import * as s2sLive from 'qollab.live'; globalThis.s2sLive = s2sLive;` followed by the IIFE bundle (use 'live' instead of 'qollab.live' if D11 says live.py had to sit at the top level). When liveRun is false, main.js is the IIFE alone, as before. CLAUDE.md rule 3 allows exactly this one import.
+- tools/release_check.mjs: when liveRun is false, main.js must not contain "qollab.live"; when it is true, the first line of main.js must be exactly the import line above. Print a reminder that qollab/live.py must be uploaded to the main project with the three files.
 - The accessibility rules from CC-B6 apply.
 
 Run `npm test`, `npm run build` and `npm run check`. End with the report format.
@@ -1110,7 +1122,7 @@ Try it locally with `superconducting: true` temporarily; commit with it set to `
 ### B16 · EDITOR · VERIFY · Sat 19:30 — Switch to the real Stage 2 results
 
 **Depends on:** H8.
-**Do:** make switches 6–7 of Appendix T3 (results file; `ion: true`). Build, check, preview. If D4 allows live runs and the live run worked in the preview, prepare `liveRun: true` for J4.
+**Do:** make switches 6–7 of Appendix T3 (results file; `ion: true`). Build, check, preview. If D11 says the live run works and Person A has pushed `qollab/live.py`, prepare `liveRun: true` for J4. The local preview has no `backend`, so the live run can only be tested on Qollab, in J4 step 4.
 **Pass:** release check passes with `ion: true`.
 - [ ] Done
 
@@ -1237,14 +1249,14 @@ Person B creates `CLAUDE.md` in J2 with exactly this content.
 This file is the contract for all code in this repository. Authority order: this file > DECISIONS.md > docs/*.md plans > the current prompt. If a prompt conflicts with this file, stop and say so.
 
 ## What the project is
-An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise). Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
+An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise), submitted in native gates so IonQ's optimiser does not remove them. Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
 
 ## Architecture rules
 1. Core logic lives in `src/core/` as ES modules (package "type": "module"). No runtime dependencies. No DOM, network or file-system access in `src/core/`.
 2. The user interface lives in `src/ui/` and imports from `src/core/`.
-3. The shipped artefact is `dist/qollab/` (index.html, style.css, app.js), built by `tools/build.mjs` with esbuild into one IIFE with all data embedded. Nothing in `dist/` may load an external resource or call fetch, XMLHttpRequest, WebSocket or dynamic import().
+3. The shipped artefact is `dist/qollab/` (index.html, main.css, main.js; index.html is a body fragment), built by `tools/build.mjs` with esbuild into one IIFE with all data embedded. Nothing in `dist/` may load an external resource or call fetch, XMLHttpRequest, WebSocket or dynamic import(). Only exception: when the liveRun feature is on, main.js begins with the single line `import * as s2sLive from 'qollab.live'; globalThis.s2sLive = s2sLive;` before the IIFE (`'live'` instead of `'qollab.live'` if D11 says so). It loads the Python helper qollab/live.py, which is uploaded to the main project with the three files (DECISIONS D11).
 4. Node scripts for builds, sweeps and checks live in `tools/` as .mjs files. They may read and write files.
-5. Python appears only in `qollab/` (runs on Qollab: standard library plus qiskit, uses the pre-existing `backend` object, never constructs providers or reads API keys) and `validation/` (runs locally with %USERPROFILE%\venvs\s2s\Scripts\python.exe).
+5. Python appears only in `qollab/` (runs on Qollab: standard library plus qiskit, uses the pre-existing `backend` object, never constructs providers or reads API keys; it may derive a native-gate backend with backend.with_name(backend.name, gateset="native", noise_model="forte-1") (DECISIONS D1)) and `validation/` (runs locally with %USERPROFILE%\venvs\s2s\Scripts\python.exe).
 
 ## Conventions
 - Indexing in code is 0-based. Data qubits i = 0..d-1. Check j = 0..d-2 measures Z_j Z_{j+1}. Rounds k = 0..r-1. Detector layers k = 0..r, where layer r is the final layer computed from the data readout. Detector index = k*(d-1) + j. Boundary node index = (d-1)*(r+1).
@@ -1341,6 +1353,7 @@ Fingerprint (V9), checks, deviations and handoff notes:
 | D5 | Largest JavaScript pane content that saves and reloads | | Probe P6 | |
 | D9 | HTML pane: full document or body fragment | | Probe P5 | |
 | D10 | Can two accounts edit one Qollab project | | B2 | |
+| D11 | Live run through a Python helper (P10) | | Probe P10 | |
 
 PyMatching tie counts, published links, deviations and handoff notes:
 ~~~
@@ -1357,7 +1370,7 @@ Each switch changes one line in `src/ui/bridge_core.js` or `src/ui/bridge_data.j
 | 4 | H6 | `bridge_data.js` | `'../../data/fixtures/stage1_flat.json'` | `'../../data/results/stage1_flat.json'` |
 | 5 | H7 | `bridge_core.js`, `bridge_data.js` | `'./stubs/ion_stub.js'`; `'../../data/fixtures/params_ion.json'` | `'../core/readout/ion.js'`; `'../../params/ion.json'` |
 | 6 | H8 | `bridge_data.js` | `'../../data/fixtures/stage2_ion.json'` | `'../../data/results/stage2_ion.json'` |
-| 7 | — | `features.js` | `ion: false` (and `liveRun: false`) | `ion: true` (and `liveRun: true` if D4 allows and it works) |
+| 7 | — | `features.js` | `ion: false` (and `liveRun: false`) | `ion: true` (and `liveRun: true` if D11 passed and it works on Qollab) |
 | 8 | H9 | `bridge_core.js`, `bridge_data.js` | `'./stubs/sc_stub.js'`; `'../../data/fixtures/params_sc.json'` | `'../core/readout/sc.js'`; `'../../params/sc.json'` |
 | 9 | H10 | `bridge_data.js` | `'../../data/fixtures/stage3_sc.json'` | `'../../data/results/stage3_sc.json'` |
 | 10 | — | `features.js` | `superconducting: false` | `superconducting: true` |
@@ -1366,7 +1379,7 @@ Each switch changes one line in `src/ui/bridge_core.js` or `src/ui/bridge_data.j
 
 ## Appendix T4 — Platform probes
 
-These are disposable platform tests; never save them into the repository. Person A runs P2, P3, P4 and P7; Person B runs P5 and P6.
+These are disposable platform tests; never save them into the repository. Person A runs P2, P3, P4 and P7; Person B runs P5 and P6, and P10 once before Saturday. P2–P7 were run on Tue 6 Oct; their answers are in `DECISIONS.md`.
 
 ### P2 — Which Python packages are available
 
@@ -1490,6 +1503,64 @@ node -e "const t=require('fs').readFileSync('out.txt','utf8'); const b=t.split(/
 ```
 
 **Pass:** length `200000` and the same hash as the Python output. Record as D7 (or record the method that worked, such as a download button).
+
+### P10 — Live run through a Python helper (Person B, before Saturday)
+
+**Why:** the live run (d=3, r=3, L0, 200 shots) needs native gates too, or IonQ's optimiser leaves it with no detector events (DECISIONS, platform facts). The documented way to run Python from a JavaScript project is a Python file called with `.callPromising` (`docs/qollab_js_api_example.txt`, section 2).
+**Do:** create a new JavaScript project `S2S probe live`; press Run with **IonQ Forte 1** picked in the dialog. Files:
+
+`index.html`
+
+```html
+<div id="out"></div>
+```
+
+`qollab/live.py` (create a folder `qollab` with this file; if Qollab will not make folders, put `live.py` at the top level and change the import in `main.js` to `'live'`)
+
+```python
+from qiskit import QuantumCircuit, transpile
+
+def run_live(backend, shots=200, seed=7):
+    d, r = 3, 3
+    n = d + (d - 1) * r
+    qc = QuantumCircuit(n, n)
+    for k in range(r):
+        for j in range(d - 1):
+            a = d + k * (d - 1) + j
+            qc.cx(j, a)
+            qc.cx(j + 1, a)
+    for k in range(r):
+        for j in range(d - 1):
+            qc.measure(d + k * (d - 1) + j, k * (d - 1) + j)
+    for i in range(d):
+        qc.measure(i, (d - 1) * r + i)
+    nb = backend.with_name(backend.name, gateset="native", noise_model="forte-1")
+    nb.set_options(noise_model="forte-1", sampler_seed=int(seed))
+    job = nb.run(transpile(qc, backend=nb), shots=int(shots))
+    return {k: int(v) for k, v in job.result().get_counts().items()}
+```
+
+`main.js`
+
+```js
+import * as live from 'qollab.live';
+
+const box = document.getElementById('out') || document.body;
+function R(...a) { const s = 'RESULT ' + a.join(' '); console.log(s); const p = document.createElement('div'); p.textContent = s; box.append(p); }
+
+const t0 = performance.now();
+try {
+  const raw = (await live.run_live.callPromising(backend, 200, 7)).toJs();
+  const c = raw instanceof Map ? Object.fromEntries(raw) : raw;
+  const keys = Object.keys(c);
+  const tot = keys.reduce((s, k) => s + Number(c[k]), 0);
+  const allZero = Number(c['0'.repeat(9)] || 0);
+  R('P10', `shots=${tot} distinct=${keys.length} allZeroFraction=${(allZero / tot).toFixed(4)} total=${((performance.now() - t0) / 1000).toFixed(1)}s`);
+} catch (e) { R('P10 ERROR', e.name, String(e.message).slice(0, 300)); }
+R('done');
+```
+
+**Pass:** `distinct` above 1 and `allZeroFraction` below 1 mean the live run works with noise: record D11 as "works" (with the numbers, the time, and whether the `qollab/` folder worked). Then Person A writes the real `qollab/live.py` in CC-A1 (part E), CC-B7 calls it, and the build adds the one import line allowed by `CLAUDE.md` rule 3. An `ERROR`, or `distinct=1`, means D11 "does not work": `liveRun` stays off and the page links to the bank generator.
 
 ## Appendix T5 — Review and fix prompts
 

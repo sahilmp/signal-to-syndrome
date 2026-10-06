@@ -3,14 +3,14 @@
 This file is the contract for all code in this repository. Authority order: this file > DECISIONS.md > docs/*.md plans > the current prompt. If a prompt conflicts with this file, stop and say so.
 
 ## What the project is
-An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise). Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
+An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise), submitted in native gates so IonQ's optimiser does not remove them. Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
 
 ## Architecture rules
 1. Core logic lives in `src/core/` as ES modules (package "type": "module"). No runtime dependencies. No DOM, network or file-system access in `src/core/`.
 2. The user interface lives in `src/ui/` and imports from `src/core/`.
-3. The shipped artefact is `dist/qollab/` (index.html, style.css, app.js), built by `tools/build.mjs` with esbuild into one IIFE with all data embedded. Nothing in `dist/` may load an external resource or call fetch, XMLHttpRequest, WebSocket or dynamic import().
+3. The shipped artefact is `dist/qollab/` (index.html, main.css, main.js; index.html is a body fragment), built by `tools/build.mjs` with esbuild into one IIFE with all data embedded. Nothing in `dist/` may load an external resource or call fetch, XMLHttpRequest, WebSocket or dynamic import(). Only exception: when the liveRun feature is on, main.js begins with the single line `import * as s2sLive from 'qollab.live'; globalThis.s2sLive = s2sLive;` before the IIFE (`'live'` instead of `'qollab.live'` if D11 says so). It loads the Python helper qollab/live.py, which is uploaded to the main project with the three files (DECISIONS D11).
 4. Node scripts for builds, sweeps and checks live in `tools/` as .mjs files. They may read and write files.
-5. Python appears only in `qollab/` (runs on Qollab: standard library plus qiskit, uses the pre-existing `backend` object, never constructs providers or reads API keys) and `validation/` (runs locally with %USERPROFILE%\venvs\s2s\Scripts\python.exe).
+5. Python appears only in `qollab/` (runs on Qollab: standard library plus qiskit, uses the pre-existing `backend` object, never constructs providers or reads API keys; it may derive a native-gate backend with backend.with_name(backend.name, gateset="native", noise_model="forte-1") (DECISIONS D1)) and `validation/` (runs locally with %USERPROFILE%\venvs\s2s\Scripts\python.exe).
 
 ## Conventions
 - Indexing in code is 0-based. Data qubits i = 0..d-1. Check j = 0..d-2 measures Z_j Z_{j+1}. Rounds k = 0..r-1. Detector layers k = 0..r, where layer r is the final layer computed from the data readout. Detector index = k*(d-1) + j. Boundary node index = (d-1)*(r+1).
