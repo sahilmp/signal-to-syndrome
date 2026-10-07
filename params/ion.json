@@ -1,0 +1,11 @@
+{
+  "schema": "s2s-params/1",
+  "platform": "trapped-ion",
+  "bright_is_bit": 1,
+  "R_bright_per_us": { "value": 0.472, "source": "Crain et al., Commun. Phys. 2, 97 (2019), 171Yb+ with SNSPD, Results (Fig. 2a discussion): overall photon detection rate 472(14) kcps = 0.472 counts/us (collected, system efficiency 4.356%)" },
+  "R_dark_per_us": { "value": 4.2e-6, "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results and Methods: background count rate 4.2(1) cps = 4.2e-6 counts/us" },
+  "gamma_bright_to_dark_per_us": { "value": 3.41e-4, "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results (Fig. 2a discussion): dark pumping rate 341(13) Hz = 3.41e-4 /us" },
+  "gamma_dark_to_bright_per_us": { "value": 1.64e-5, "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results (Fig. 2a discussion): bright pumping rate 16.4(5) Hz = 1.64e-5 /us" },
+  "T1_idle_us": { "value": 1.0e7, "source": "Microsoft Azure Quantum IonQ provider documentation (learn.microsoft.com/azure/quantum/provider-ionq), IonQ Aria, System timing: T1 10-100 s (same 171Yb+ qubit as Forte; no Forte T1 is published there); lower end 10 s = 1e7 us used (conservative)" },
+  "tau_grid_us": { "value": [1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 100, 200, 500], "source": "spans the published detection-time range: 10.5-181.6 us (Noek et al., Opt. Lett. 38, 4735 (2013)), 11 us average and 500 us fixed window (Crain et al. 2019); 1-7 us added to resolve the short-time, photon-starved regime" }
+}
