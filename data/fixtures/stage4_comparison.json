@@ -1,0 +1,362 @@
+{
+  "schema": "s2s-results/1",
+  "fixture": true,
+  "stage": 4,
+  "platforms": {
+    "trapped-ion": {
+      "tauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "xMin": 300,
+            "lo": 200,
+            "hi": 400,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 300,
+            "lo": 200,
+            "hi": 400,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 200,
+            "lo": 150,
+            "hi": 300,
+            "atEdge": false
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "xMin": 300,
+            "lo": 200,
+            "hi": 400,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 300,
+            "lo": 200,
+            "hi": 400,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 200,
+            "lo": 150,
+            "hi": 300,
+            "atEdge": false
+          }
+        ]
+      },
+      "perRound": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.000544,
+            "lo": 0.000462,
+            "hi": 0.000626
+          },
+          {
+            "d": 5,
+            "value": 0.000007,
+            "lo": 0.000006,
+            "hi": 0.000008
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.000381,
+            "lo": 0.000324,
+            "hi": 0.000438
+          },
+          {
+            "d": 5,
+            "value": 0.000005,
+            "lo": 0.000004,
+            "hi": 0.000006
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ]
+      },
+      "perMicrosecond": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 3.885714285714286e-7,
+            "lo": 3.3e-7,
+            "hi": 4.471428571428572e-7
+          },
+          {
+            "d": 5,
+            "value": 5e-9,
+            "lo": 4.285714285714286e-9,
+            "hi": 5.714285714285714e-9
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 2.721428571428571e-7,
+            "lo": 2.3142857142857144e-7,
+            "hi": 3.128571428571429e-7
+          },
+          {
+            "d": 5,
+            "value": 3.571428571428572e-9,
+            "lo": 2.857142857142857e-9,
+            "hi": 4.285714285714286e-9
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ]
+      },
+      "breakEven": {
+        "epsBar": 0.03,
+        "tau_us": 300
+      }
+    },
+    "superconducting": {
+      "tauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "xMin": 0.7,
+            "lo": 0.5,
+            "hi": 1,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 0.7,
+            "lo": 0.5,
+            "hi": 1,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 0.7,
+            "lo": 0.5,
+            "hi": 1,
+            "atEdge": false
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "xMin": 0.7,
+            "lo": 0.5,
+            "hi": 1,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 0.7,
+            "lo": 0.5,
+            "hi": 1,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 0.5,
+            "lo": 0.4,
+            "hi": 0.7,
+            "atEdge": false
+          }
+        ]
+      },
+      "perRound": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.000331,
+            "lo": 0.000281,
+            "hi": 0.000381
+          },
+          {
+            "d": 5,
+            "value": 0.000003,
+            "lo": 0.000003,
+            "hi": 0.000004
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.000232,
+            "lo": 0.000197,
+            "hi": 0.000266
+          },
+          {
+            "d": 5,
+            "value": 0.000002,
+            "lo": 0.000002,
+            "hi": 0.000003
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ]
+      },
+      "perMicrosecond": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.000331,
+            "lo": 0.000281,
+            "hi": 0.000381
+          },
+          {
+            "d": 5,
+            "value": 0.000003,
+            "lo": 0.000003,
+            "hi": 0.000004
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.000232,
+            "lo": 0.000197,
+            "hi": 0.000266
+          },
+          {
+            "d": 5,
+            "value": 0.000002,
+            "lo": 0.000002,
+            "hi": 0.000003
+          },
+          {
+            "d": 7,
+            "value": 0,
+            "lo": 0,
+            "hi": 0
+          }
+        ]
+      },
+      "breakEven": {
+        "epsBar": 0.03,
+        "tau_us": 0.7
+      }
+    }
+  },
+  "sensitivity": [
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_bright_per_us",
+      "scale": 0.5,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "holds",
+      "C4": "flips"
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_bright_per_us",
+      "scale": 2,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "holds"
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_dark_per_us",
+      "scale": 0.5,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined"
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_dark_per_us",
+      "scale": 2,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "undetermined",
+      "C4": "flips"
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "T1_us",
+      "scale": 0.5,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "holds",
+      "C4": "flips"
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "T1_us",
+      "scale": 2,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "holds"
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "eta",
+      "scale": 0.5,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined"
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "eta",
+      "scale": 2,
+      "C1": "holds",
+      "C2": "holds",
+      "C3": "undetermined",
+      "C4": "flips"
+    }
+  ],
+  "provenance": {
+    "generator": "tools/make_fixtures.mjs",
+    "fixture": true,
+    "note": "synthetic placeholder, not a result"
+  }
+}

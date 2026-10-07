@@ -1,0 +1,32 @@
+{
+  "schema": "s2s-params/1",
+  "fixture": true,
+  "trapped-ion": {
+    "two_qubit_gate_us": {
+      "value": 600,
+      "source": "fixture placeholder, not a published value"
+    },
+    "gate_layers_per_round": {
+      "value": 2,
+      "source": "derived: each round is two parallel CNOT layers"
+    },
+    "reset_us": {
+      "value": 50,
+      "source": "fixture placeholder, not a published value"
+    }
+  },
+  "superconducting": {
+    "two_qubit_gate_us": {
+      "value": 0.05,
+      "source": "fixture placeholder, not a published value"
+    },
+    "gate_layers_per_round": {
+      "value": 2,
+      "source": "derived: each round is two parallel CNOT layers"
+    },
+    "reset_us": {
+      "value": 0.5,
+      "source": "fixture placeholder, not a published value"
+    }
+  }
+}

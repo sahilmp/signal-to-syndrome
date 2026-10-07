@@ -1,0 +1,41 @@
+{
+  "schema": "s2s-params/1",
+  "fixture": true,
+  "platform": "trapped-ion",
+  "bright_is_bit": 1,
+  "R_bright_per_us": {
+    "value": 0.05,
+    "source": "fixture placeholder, not a published value"
+  },
+  "R_dark_per_us": {
+    "value": 0.002,
+    "source": "fixture placeholder, not a published value"
+  },
+  "gamma_bright_to_dark_per_us": {
+    "value": 0.0001,
+    "source": "fixture placeholder, not a published value"
+  },
+  "gamma_dark_to_bright_per_us": {
+    "value": 0.00002,
+    "source": "fixture placeholder, not a published value"
+  },
+  "T1_idle_us": {
+    "value": 1000000000,
+    "source": "fixture placeholder, not a published value"
+  },
+  "tau_grid_us": {
+    "value": [
+      25,
+      50,
+      75,
+      100,
+      150,
+      200,
+      300,
+      400,
+      600,
+      800
+    ],
+    "source": "fixture placeholder, not a published value"
+  }
+}
