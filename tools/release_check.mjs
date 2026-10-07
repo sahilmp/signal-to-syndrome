@@ -129,6 +129,20 @@ for (const [feature, on] of Object.entries(FEATURES)) {
   }
 }
 
+// 7. Live-run import line (CLAUDE.md rule 3): only with liveRun on, and then exactly as the
+// first line of main.js. LIVE_MODULE must match tools/build.mjs ('live' if D11 says so).
+const LIVE_MODULE = 'qollab.live';
+const LIVE_IMPORT = `import * as s2sLive from '${LIVE_MODULE}'; globalThis.s2sLive = s2sLive;`;
+const mainJs = read(jsFile);
+if (mainJs === null) {
+  row('main.js: live-run import line matches FEATURES.liveRun', false, 'file missing');
+} else if (FEATURES.liveRun === true) {
+  const firstLine = mainJs.split(/\r?\n/, 1)[0];
+  row('liveRun on: first line of main.js is the live-run import', firstLine === LIVE_IMPORT, firstLine === LIVE_IMPORT ? '' : `first line starts "${firstLine.slice(0, 80)}"`);
+} else {
+  row(`liveRun off: main.js does not contain "${LIVE_MODULE}"`, !mainJs.includes(LIVE_MODULE));
+}
+
 // Table.
 const w = Math.max(...rows.map((r) => r.rule.length));
 console.log(`${'Rule'.padEnd(w)}  Result  Detail`);
@@ -136,4 +150,8 @@ console.log(`${'-'.repeat(w)}  ------  ------`);
 for (const r of rows) console.log(`${r.rule.padEnd(w)}  ${r.ok ? 'PASS  ' : 'FAIL  '}  ${r.detail}`);
 const failed = rows.filter((r) => !r.ok).length;
 console.log(`\n${rows.length - failed} passed, ${failed} failed.`);
+if (FEATURES.liveRun === true) {
+  const helper = existsSync(p('qollab', 'live.py')) ? 'qollab/live.py' : 'qollab/live.py (NOT FOUND in this repository)';
+  console.log(`\nReminder: liveRun is on. Upload ${helper} to the main Qollab project (folder qollab/, or live.py at the top level if D11 says so) together with the three files in dist/qollab/.`);
+}
 process.exit(failed === 0 ? 0 : 1);

@@ -5,11 +5,16 @@ import pkg from '../../package.json' with { type: 'json' };
 import { FEATURES } from './features.js';
 import { mountLevel1 } from './level1.js';
 import { mountLevel2 } from './level2.js';
+import { mountLevel3 } from './level3.js';
+import { mountLevel4 } from './level4.js';
 import { mountDiagnostics } from './diag.js';
 
 const LEVELS = [
   { id: 'level1', flag: 'level1', label: 'Level 1: Be the decoder', mount: mountLevel1 },
   { id: 'level2', flag: 'level2', label: 'Level 2: Time is a dimension', mount: mountLevel2 },
+  // Trapped-ion levels; level 4 also holds the live-run panel (FEATURES.liveRun).
+  { id: 'level3', flag: 'ion', label: 'Level 3: Listen longer?', mount: mountLevel3 },
+  { id: 'level4', flag: 'ion', label: 'Level 4: Trust but verify', mount: mountLevel4 },
 ];
 
 function start() {

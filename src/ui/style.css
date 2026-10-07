@@ -141,6 +141,29 @@
 .grid-svg .grid-label { font-size: 14px; fill: var(--text); }
 .grid-svg .grid-sublabel { font-size: 12px; fill: var(--muted); }
 
+/* Levels 3 and 4 */
+.hint { color: var(--muted); font-size: 0.9rem; margin: 4px 0; }
+.optima { margin: 4px 0 12px; padding-left: 1.2rem; font-size: 0.9rem; }
+#s2s-app select {
+  font: inherit;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+.l4-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.l4-panel { margin: 0; padding: 8px; background: var(--panel); border-radius: 8px; min-width: 0; }
+.l4-panel figcaption { font-weight: 600; }
+.grid-svg .det.lit-conf { fill: var(--lit); stroke: var(--text); }
+.verdict { margin: 6px 0 0; font-size: 0.9rem; }
+.verdict.kept, .verdict.lost { font-weight: 600; }
+.live-run { margin: 24px 0 8px; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; }
+#s2s-app .live-run h3 { font-size: 1.1rem; margin: 0 0 6px; }
+.live-note a { color: var(--accent); }
+.status.error { color: var(--focus); font-weight: 600; } /* #b3261e: 6.5:1 on white */
+
 /* Charts */
 .chart { margin: 16px 0; max-width: 680px; }
 .chart figcaption { font-weight: 600; margin-bottom: 4px; }
@@ -175,4 +198,5 @@
 @media (max-width: 600px) {
   .diagnostics dl { grid-template-columns: 1fr; }
   #s2s-app .qubit { min-width: 96px; }
+  .l4-pair { grid-template-columns: 1fr; }
 }
