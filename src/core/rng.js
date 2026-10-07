@@ -15,6 +15,9 @@ function logFactorial(n) {
   return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
 }
 
+// The seed is reduced to a 32-bit unsigned integer (Math.trunc, then mod 2^32), so seeds
+// that agree after that reduction (e.g. 1.5 and 1, or 2^32 + 1 and 1) give the same stream.
+// Use integer seeds in 0..2^32-1.
 export function createRng(seed) {
   if (!Number.isFinite(seed)) throw new Error(`createRng: seed must be a finite number, got ${seed}`);
   let state = Math.trunc(seed) >>> 0;

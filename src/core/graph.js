@@ -39,9 +39,11 @@ export function weightFromP(p) {
   return Math.log((1 - q) / q);
 }
 
-// Soft weight of a single readout: |llr| (Infinity for perfect readout).
+// Soft weight of a single readout: |llr|, capped at weightFromP(1e-12) = 27.63 so that it
+// equals weightFromP(pFromLlr(llr)) (CLAUDE.md edge-weight rule; perfect readout is finite).
+const W_MAX = Math.log((1 - P_MIN) / P_MIN);
 export function weightFromLlr(llr) {
-  return Math.abs(llr);
+  return Math.min(Math.abs(llr), W_MAX);
 }
 
 // Probability that the hard decision is wrong given the llr.

@@ -61,8 +61,10 @@ function sameDist(a, b) {
   return Math.abs(a - b) <= TIE_TOL * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
-// Dijkstra from src over all nodes (boundary included). Ties are broken by lower
-// observable parity, then by lower predecessor index. Infinity edges are skipped.
+// Dijkstra from src over all nodes (boundary included). Infinity edges are skipped.
+// Ties are broken step by step: when a node is relaxed by a path of equal distance, the
+// lower observable parity wins, then the lower predecessor index. Each node keeps only one
+// parity, so this does not guarantee the lowest parity over all shortest paths.
 function dijkstra(graph, adj, weights, src) {
   const n = graph.nDetectors + 1;
   const dist = new Float64Array(n).fill(Infinity);
@@ -216,6 +218,11 @@ export function decode(graph, weights, detectorBits) {
   let flip = 0;
   let cost = 0;
   const paths = [];
+  // Only Infinity weights can make a defect unreachable; never return a silent Infinity cost.
+  for (const [i, j] of pairs) {
+    const c = j < 0 ? boundaryCost[i] : pairCost[i * n + j];
+    if (c === Infinity) throw new Error(`decode: detector ${lit[i]} cannot be matched (all routes have Infinity weight)`);
+  }
   for (const [i, j] of pairs) {
     if (j < 0) {
       flip ^= boundaryParity[i];

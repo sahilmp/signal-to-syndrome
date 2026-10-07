@@ -107,3 +107,52 @@ test('validateBank rejects missing fields, wrong schema, wrong n_keys, bad keys'
     /does not fit/,
   );
 });
+
+// Catches: fails if n_clbits is not checked against (d-1)*r + d, so a bank whose keys are
+// read with the wrong width would be split into the wrong bits.
+test('validateBank rejects an n_clbits that does not match d and r', () => {
+  assert.throws(() => validateBank(makeBank({ n_clbits: 8 })), /n_clbits is 8, expected/);
+});
+
+// A bank with n_clbits = (d-1)*r + d and the formula layout; one shot of the all-zero key.
+function sizedBank(d, r) {
+  const nClbits = (d - 1) * r + d;
+  const ancilla = Array.from({ length: r }, (_, k) => Array.from({ length: d - 1 }, (_, j) => k * (d - 1) + j));
+  const data = Array.from({ length: d }, (_, i) => (d - 1) * r + i);
+  return makeBank({
+    d, r, n_clbits: nClbits, layout: { ancilla, data },
+    shots: 1, counts: { '0': 1 }, checksum: { total_shots: 1, n_keys: 1 },
+  });
+}
+
+// Catches: fails if the 29-bit limit (parseInt of the hex key must stay exact and fit the
+// bit operations) is off by one. Boundary pair: d = 5, r = 6 gives n_clbits = 29 and is
+// accepted; d = 2, r = 28 gives n_clbits = 30 and is rejected.
+test('validateBank: n_clbits = 29 accepted, 30 rejected', () => {
+  assert.equal(validateBank(sizedBank(5, 6)), true);
+  assert.throws(() => validateBank(sizedBank(2, 28)), /at most 29/);
+});
+
+// Catches: fails if a layout may use a classical bit twice or point outside 0..n_clbits-1,
+// so two checks would read the same bit or split would read undefined.
+test('validateBank rejects duplicate and out-of-range layout bits', () => {
+  const dup = makeBank({ layout: { ancilla: [[0, 1], [2, 3]], data: [4, 5, 5] } });
+  assert.throws(() => validateBank(dup), /used twice/);
+  const out = makeBank({ layout: { ancilla: [[0, 1], [2, 3]], data: [4, 5, 7] } });
+  assert.throws(() => validateBank(out), /is not a classical bit in 0\.\.6/);
+  const neg = makeBank({ layout: { ancilla: [[-1, 1], [2, 3]], data: [4, 5, 6] } });
+  assert.throws(() => validateBank(neg), /is not a classical bit/);
+});
+
+// Catches: fails if zero, negative or fractional counts are accepted. Boundary pair: a
+// count of 1 is accepted, a count of 0 is rejected.
+test('validateBank rejects non-positive and non-integer counts', () => {
+  const one = makeBank({ counts: { '0': 9, '40': 1 }, checksum: { total_shots: 10, n_keys: 2 } });
+  assert.equal(validateBank(one), true);
+  const zero = makeBank({ counts: { '0': 10, '40': 0 }, checksum: { total_shots: 10, n_keys: 2 } });
+  assert.throws(() => validateBank(zero), /must be a positive integer, got 0/);
+  const neg = makeBank({ counts: { '0': 11, '40': -1 }, checksum: { total_shots: 10, n_keys: 2 } });
+  assert.throws(() => validateBank(neg), /must be a positive integer, got -1/);
+  const frac = makeBank({ counts: { '0': 9.5, '40': 0.5 }, checksum: { total_shots: 10, n_keys: 2 } });
+  assert.throws(() => validateBank(frac), /must be a positive integer/);
+});

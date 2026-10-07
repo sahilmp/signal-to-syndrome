@@ -66,26 +66,41 @@ test('buildGraph rejects even d and r < 1', () => {
 });
 
 // Catches: fails if p is not clamped at 0.5 (weights would go negative) or at 1e-12
-// (p = 0 would give Infinity). Boundary pair: p = 0.5 gives 0 and p = 0.4 gives ln 1.5.
+// (p = 0 would give Infinity), or if the lower clamp sits at the wrong value.
+// Boundary pairs: p = 0.5 gives 0 and p = 0.4 gives ln 1.5; p = 1e-12 gives the cap
+// W_MAX = ln[(1-1e-12)/1e-12] = 27.631, p = 1e-13 (past the clamp) also gives W_MAX, and
+// p = 2e-12 (inside it) gives W_MAX - ln 2.
 test('weightFromP: formula and clamping', () => {
+  const W_MAX = Math.log((1 - 1e-12) / 1e-12);
+  assert.ok(Math.abs(W_MAX - 27.631021115871) < 1e-9);
   assert.equal(weightFromP(0.5), 0);
   assert.ok(Math.abs(weightFromP(0.4) - Math.log(1.5)) < 1e-15);
   assert.equal(weightFromP(0.7), 0);
-  assert.equal(weightFromP(0), Math.log((1 - 1e-12) / 1e-12));
-  assert.ok(Number.isFinite(weightFromP(0)));
+  assert.ok(Math.abs(weightFromP(1e-12) - W_MAX) < 1e-12);
+  assert.ok(Math.abs(weightFromP(1e-13) - W_MAX) < 1e-12);
+  assert.ok(Math.abs(weightFromP(0) - W_MAX) < 1e-12);
+  assert.ok(Math.abs(weightFromP(2e-12) - (W_MAX - Math.log(2))) < 1e-9);
 });
 
-// Catches: fails if the sign of the llr leaks into the weight or probability, or if perfect
-// readout (llr = +/-Infinity) gives NaN instead of weight Infinity and p = 0.
+// Catches: fails if the sign of the llr leaks into the weight or probability, if perfect
+// readout (llr = +/-Infinity) gives NaN instead of p = 0, or if weightFromLlr is not capped
+// at W_MAX = weightFromP(1e-12) (CLAUDE.md edge-weight rule). Boundary pair: |llr| = 27 is
+// below the cap and returned as is; |llr| = 28 is past it and gives W_MAX.
 test('weightFromLlr, pFromLlr and xorP', () => {
+  const W_MAX = weightFromP(1e-12);
   assert.equal(weightFromLlr(-2.5), 2.5);
-  assert.equal(weightFromLlr(Infinity), Infinity);
-  assert.equal(weightFromLlr(-Infinity), Infinity);
+  assert.equal(weightFromLlr(27), 27);
+  assert.equal(weightFromLlr(-28), W_MAX);
+  assert.equal(weightFromLlr(Infinity), W_MAX);
+  assert.equal(weightFromLlr(-Infinity), W_MAX);
+  for (const l of [-30, -5, 0, 0.3, 12]) {
+    assert.ok(Math.abs(weightFromLlr(l) - weightFromP(pFromLlr(l))) < 1e-9, `llr ${l}`);
+  }
   assert.equal(pFromLlr(0), 0.5);
   assert.ok(Math.abs(pFromLlr(-3) - 1 / (1 + Math.exp(3))) < 1e-15);
   assert.equal(pFromLlr(Infinity), 0);
   assert.equal(pFromLlr(-Infinity), 0);
   assert.ok(Math.abs(xorP(0.1, 0.2) - 0.26) < 1e-15);
-  assert.equal(xorP(0, 0.3), 0.3);
-  assert.equal(xorP(0.5, 0.3), 0.5);
+  assert.ok(Math.abs(xorP(0, 0.3) - 0.3) < 1e-15);
+  assert.ok(Math.abs(xorP(0.5, 0.3) - 0.5) < 1e-15);
 });

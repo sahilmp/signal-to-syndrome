@@ -50,13 +50,14 @@ test('normal has mean 0 and variance 1', () => {
 });
 
 // Catches: fails if the cached second Box-Muller value is correlated with the first
-// (e.g. returning the same value twice). Pair correlation SE = 1/sqrt(N/2); 4 SE = 0.0126.
+// (e.g. returning the same value twice). Pair correlation SE = 1/sqrt(N/2) = 0.00316;
+// tolerance 0.013 (4.1 SE).
 test('consecutive normals are uncorrelated', () => {
   const rng = createRng(8);
   const pairs = N / 2;
   let sxy = 0;
   for (let i = 0; i < pairs; i++) sxy += rng.normal() * rng.normal();
-  assert.ok(Math.abs(sxy / pairs) < 0.0126, `pair correlation ${sxy / pairs}`);
+  assert.ok(Math.abs(sxy / pairs) < 0.013, `pair correlation ${sxy / pairs}`);
 });
 
 // Catches: fails if exponential uses the rate as a scale (mean 1/rate swapped for rate).
@@ -68,37 +69,63 @@ test('exponential has mean 1/rate', () => {
 });
 
 // Poisson tolerances: SE(mean) = sqrt(lambda/N); SE(var) = sqrt((lambda + 2*lambda^2)/N)
-// (fourth central moment lambda*(1 + 3*lambda)). We allow 5 SE.
-function checkPoisson(lambda, seed) {
+// (fourth central moment lambda*(1 + 3*lambda)). Point probabilities: the fraction of draws
+// equal to k has SE = sqrt(P(k)(1 - P(k))/N), with P(k) = exp(-lambda) lambda^k / k!.
+// We allow 5 SE everywhere.
+function poissonPmf(lambda, k) {
+  let logFact = 0;
+  for (let i = 2; i <= k; i++) logFact += Math.log(i);
+  return Math.exp(-lambda + k * Math.log(lambda) - logFact);
+}
+
+function checkPoisson(lambda, seed, ks) {
   const rng = createRng(seed);
   const n = N;
-  const { mean, variance } = moments(() => rng.poisson(lambda), n);
+  const hits = new Map(ks.map((k) => [k, 0]));
+  const { mean, variance } = moments(() => {
+    const v = rng.poisson(lambda);
+    if (hits.has(v)) hits.set(v, hits.get(v) + 1);
+    return v;
+  }, n);
   const seMean = Math.sqrt(lambda / n);
   const seVar = Math.sqrt((lambda + 2 * lambda * lambda) / n);
   assert.ok(Math.abs(mean - lambda) < 5 * seMean, `lambda ${lambda}: mean ${mean}, tol ${5 * seMean}`);
   assert.ok(Math.abs(variance - lambda) < 5 * seVar, `lambda ${lambda}: variance ${variance}, tol ${5 * seVar}`);
+  for (const k of ks) {
+    const pk = poissonPmf(lambda, k);
+    const se = Math.sqrt((pk * (1 - pk)) / n);
+    const frac = hits.get(k) / n;
+    assert.ok(Math.abs(frac - pk) < 5 * se, `lambda ${lambda}: P(${k}) ${frac}, expected ${pk}, tol ${5 * se}`);
+  }
 }
 
 // Catches: fails if Knuth's method is off by one (returns k instead of k-1, mean lambda+1)
-// or compares against the wrong limit. Tolerance in the comment above checkPoisson.
-test('poisson mean and variance at lambda = 5 (Knuth branch)', () => {
-  checkPoisson(5, 21);
+// or compares against the wrong limit, or if the shape is wrong while mean and variance
+// survive (checked through P(0) = e^-5 and P(5)). Tolerances in the comment above checkPoisson.
+test('poisson distribution at lambda = 5 (Knuth branch)', () => {
+  checkPoisson(5, 21, [0, 5]);
 });
 
 // Catches: fails if a PTRS constant or the acceptance test is wrong, which biases the
-// mean or variance at lambda >= 30. Tolerance in the comment above checkPoisson.
-test('poisson mean and variance at lambda = 50 (PTRS branch)', () => {
-  checkPoisson(50, 22);
+// mean, the variance or the probability at the mode (P(50)) at lambda >= 30.
+// Tolerances in the comment above checkPoisson.
+test('poisson distribution at lambda = 50 (PTRS branch)', () => {
+  checkPoisson(50, 22, [50]);
 });
 
-// Catches: fails if lambda = 0 loops or returns a non-zero value, and if the branch
-// switch at lambda = 30 is broken (the boundary case must still give integer draws
-// with the right mean). Tolerance: 5 * sqrt(30/N).
-test('poisson at lambda = 0 returns 0; lambda = 30 uses PTRS correctly', () => {
+// Catches: fails if lambda = 0 loops or returns a non-zero value.
+test('poisson at lambda = 0 returns 0', () => {
   const rng = createRng(23);
   for (let i = 0; i < 100; i++) assert.equal(rng.poisson(0), 0);
-  const { mean } = moments(() => rng.poisson(30), N);
-  assert.ok(Math.abs(mean - 30) < 5 * Math.sqrt(30 / N), `mean ${mean}`);
+});
+
+// Catches: fails if either side of the branch switch at lambda = 30 is broken. Boundary
+// pair: lambda = 29.99 is the last Knuth value and lambda = 30 the first PTRS value; both
+// must give the right mean, variance and P(k = 29).
+// Tolerances in the comment above checkPoisson.
+test('poisson branch switch: lambda = 29.99 (Knuth) and lambda = 30 (PTRS)', () => {
+  checkPoisson(29.99, 24, [29]);
+  checkPoisson(30, 25, [29]);
 });
 
 // Catches: fails if int(n) can return n or a negative value, or is not uniform

@@ -103,15 +103,28 @@ test('vertical pair gives flip 0 with cost equal to one time-like weight', () =>
 });
 
 // Catches: fails if Infinity edges are treated as usable (or produce NaN costs): with the
-// qubit-0 edge removed, a defect at (k,0) must go to the right boundary with flip 0.
+// qubit-0 edge removed, a defect at (0,0) must go to the right boundary with flip 0 (cost 2).
+// Time edges weigh 5, so the other route (time edge, then the layer-1 qubit-0 edge, cost 6,
+// flip 1) is strictly worse and the result does not depend on the tie-break.
 test('Infinity edges are unusable', () => {
   const d = 3;
   const g = buildGraph(d, 1);
-  const w = uniformWeights(g);
+  const w = new Float64Array(g.edges.map((e) => (e.kind === 'time' ? 5 : 1)));
   w[spaceEdge(g, 0, 0).id] = Infinity;
   const res = decode(g, w, bitsWith(g, [node(d, 0, 0)]));
   assert.equal(res.flip, 0);
   assert.equal(res.cost, 2);
+});
+
+// Catches: fails if a defect that no finite route reaches is returned silently with cost
+// Infinity and an empty path. Non-vacuous pair: with only the qubit-0 edge cut the defect
+// is decoded (previous test); with every edge at (0,0) cut, decode throws.
+test('unreachable defect throws', () => {
+  const d = 3;
+  const g = buildGraph(d, 1);
+  const w = uniformWeights(g);
+  for (const e of g.edges) if (e.u === node(d, 0, 0) || e.v === node(d, 0, 0)) w[e.id] = Infinity;
+  assert.throws(() => decode(g, w, bitsWith(g, [node(d, 0, 0)])), /cannot be matched/);
 });
 
 // Catches: fails if the decoder does not pick the minimum-weight correction, or if the
