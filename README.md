@@ -15,7 +15,7 @@ SP0: repository scaffold. No physics, decoder or interface code yet.
 
 ## Run it on Qollab
 
-Link to the published Qollab project: pending.
+Link to the published Qollab project: https://qollab.xyz/u/SQuant/main-project (private until the hackathon opens). Bank generator: https://qollab.xyz/u/SQuant/signal-to-syndrome-bank-genera (private until the hackathon opens).
 
 ## Rebuild locally
 
