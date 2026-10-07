@@ -1,0 +1,17 @@
+{
+  "name": "signal-to-syndrome",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "build": "node tools/build.mjs",
+    "check": "node tools/release_check.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
