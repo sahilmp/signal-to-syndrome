@@ -220,8 +220,10 @@ const V10_BINS = [[0, 1], [1, 2], [2, 4], [4, 8]];
 const seedFor2 = (d, logical, tauIndex, draw) => 2000000 + 10000 * d + 1000 * logical + 10 * tauIndex + draw;
 const fieldValue = (card, name) => (card[name] !== null && typeof card[name] === 'object' ? card[name].value : card[name]);
 
-// ln Pois(n; lambda) by direct summation (n is small here: it is at most nTh).
+// Poisson CDF P(N <= m; lambda) by direct summation (m is small here: it is at most nTh).
+// lambda = 0 is a point mass at 0 (the general term would give 0 * log 0 = NaN).
 function poisCdf(m, lambda) {
+  if (lambda === 0) return m >= 0 ? 1 : 0;
   let s = 0;
   let lf = 0;
   for (let n = 0; n <= m; n++) {
@@ -374,7 +376,7 @@ function stage2() {
   for (const d of distances) {
     for (const mode of STAGE2_MODES) {
       const m = minimumWithBootstrap(taus, perShot.get(`${d},${mode}`), BOOT_B, createRng(BOOT_SEED + 10 * d + (mode === 'soft' ? 1 : 0)));
-      tauLog.push({ d, mode, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge });
+      tauLog.push({ d, mode, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied });
     }
   }
 
@@ -399,7 +401,7 @@ function stage2() {
     assignment,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
-      tauLog: tauLog.map(({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge }) => ({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge })),
+      tauLog: tauLog.map(({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
     },
     params: {
       card,
@@ -465,7 +467,7 @@ function stage2() {
   console.log(`\ntau*_log (bootstrap B = ${BOOT_B} over quantum shots, 95% percentile interval):`);
   for (const m of tauLog) {
     const where = m.atEdge ? `no interior minimum (lowest at tau ${m.xMin})` : `${fmt(m.xMin, 2)} us [${fmt(m.lo, 2)}, ${fmt(m.hi, 2)}]`;
-    console.log(`  d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%`);
+    console.log(`  d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%, tied ${(100 * m.fractionTied).toFixed(1)}%`);
   }
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);

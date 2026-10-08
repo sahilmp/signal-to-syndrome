@@ -1,9 +1,9 @@
 // Sweep engine: decode one quantum shot through a readout model, run a whole bank at one
 // readout setting, and the V9 fingerprint shared by Node and the browser.
 //
-// Per shot: split the bits, measure every ancilla and data bit with the readout model,
-// add idle errors with p = readout.idleFlipProbability(), compute detectors, weight the
-// edges (gate noise, idle noise, readout noise) and decode with exact matching.
+// Per shot: split the bits, add idle errors with p = readout.idleFlipProbability() to the
+// true bits, measure every ancilla and data bit with the readout model, compute detectors,
+// weight the edges (gate noise, idle noise, readout noise) and decode with exact matching.
 
 import { createRng } from './rng.js';
 import { expandShots, split } from './bank.js';
@@ -28,8 +28,8 @@ function graphFor(d, r) {
 // m[k][j]: gate xor readout of that ancilla, because gate errors on the ancilla also
 // light vertical pairs (calibrate.js counts time-like edges as gate-noise edges too).
 // Hard mode uses the model's average assignment error, soft mode the error probability
-// implied by each measurement's llr.
-function edgeWeights(graph, { mode, pGate, pIdle, readout, llrAnc, llrData }) {
+// implied by each measurement's llr. Exported for tests only; not part of the Module API.
+export function edgeWeights(graph, { mode, pGate, pIdle, readout, llrAnc, llrData }) {
   const { r } = graph;
   const soft = mode === 'soft';
   const pAvg = soft ? 0 : readout.averageAssignmentError();
@@ -53,10 +53,17 @@ function edgeWeights(graph, { mode, pGate, pIdle, readout, llrAnc, llrData }) {
 export function decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng, logical = 0 }) {
   if (mode !== 'hard' && mode !== 'soft') throw new Error(`decodeShot: mode must be "hard" or "soft", got ${mode}`);
   if (!(pGate >= 0 && pGate <= 0.5)) throw new Error(`decodeShot: pGate must be in [0, 0.5], got ${pGate}`);
-  const { m, x } = split(shotBits, layout, d, r);
+  const { m: mBank, x: xBank } = split(shotBits, layout, d, r);
+
+  // Idle errors during ancilla readout act on the true values before the later ancillas and
+  // the data are read, so each readout sees the flipped bit (with an asymmetric readout a
+  // flipped dark ion reads with the bright statistics). The idle draws come first and are
+  // made even when pIdle = 0, so the readout draws line up across readout models.
+  const pIdle = readout.idleFlipProbability();
+  const { m, x } = injectIdle(mBank, xBank, d, r, pIdle, rng);
 
   // Readout of every ancilla (round order) and then every data bit.
-  const measAnc = [];
+  const hardAnc = [];
   const llrAnc = [];
   for (let k = 0; k < r; k++) {
     const h = new Uint8Array(d - 1);
@@ -66,24 +73,16 @@ export function decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng, 
       h[j] = res.hard;
       l[j] = res.llr;
     }
-    measAnc.push(h);
+    hardAnc.push(h);
     llrAnc.push(l);
   }
-  const measData = new Uint8Array(d);
+  const hardData = new Uint8Array(d);
   const llrData = new Float64Array(d);
   for (let i = 0; i < d; i++) {
     const res = readout.measure(x[i], rng);
-    measData[i] = res.hard;
+    hardData[i] = res.hard;
     llrData[i] = res.llr;
   }
-
-  // Idle errors during ancilla readout flip later reports; the llr sign follows the hard bit.
-  const pIdle = readout.idleFlipProbability();
-  const { m: hardAnc, x: hardData } = injectIdle(measAnc, measData, d, r, pIdle, rng);
-  for (let k = 0; k < r; k++) {
-    for (let j = 0; j < d - 1; j++) if (hardAnc[k][j] !== measAnc[k][j]) llrAnc[k][j] = -llrAnc[k][j];
-  }
-  for (let i = 0; i < d; i++) if (hardData[i] !== measData[i]) llrData[i] = -llrData[i];
 
   const detectors = computeDetectors(hardAnc, hardData, d, r);
   const graph = graphFor(d, r);

@@ -58,6 +58,15 @@ from qiskit.providers.jobstatus import JobStatus
 
 CHUNK = 4000
 POLL_SECONDS = 5
+# CLAUDE.md: n_clbits <= 29, so the JavaScript side's parseInt(hex, 16) is exact.
+MAX_CLBITS = 29
+
+
+def _check_clbits(d, r):
+    n_clbits = (d - 1) * r + d
+    if n_clbits > MAX_CLBITS:
+        raise ValueError(f"d = {d}, r = {r} needs n_clbits = {n_clbits}; at most {MAX_CLBITS} is supported")
+    return n_clbits
 
 
 def build_memory_circuit(d, r, logical, inject=None):
@@ -66,7 +75,7 @@ def build_memory_circuit(d, r, logical, inject=None):
     check j of round k -> bit k*(d-1) + j, data qubit i -> bit (d-1)*r + i."""
     n_checks = d - 1
     n_qubits = d + n_checks * r
-    n_clbits = n_checks * r + d
+    n_clbits = _check_clbits(d, r)
     qr = QuantumRegister(n_qubits, "q")
     cr = ClassicalRegister(n_clbits, "c")
     qc = QuantumCircuit(qr, cr)
@@ -187,7 +196,7 @@ def counts_sha256(counts):
 def to_bank(d, r, logical, layout, raw_counts, *, backend_name, noise_model, sampler_seed,
             job_id, native_ops, det_rate, inject=None):
     """Build the s2s-bank/1 object from Qiskit binary counts."""
-    n_clbits = (d - 1) * r + d
+    n_clbits = _check_clbits(d, r)
     counts = {}
     for key, c in raw_counts.items():
         bits = key.replace(" ", "")

@@ -57,6 +57,45 @@ test('atEdge: true for a rising series at the first grid point', () => {
   assert.equal(m.xMin, 1);
 });
 
+// Boundary test (non-vacuous pair). Catches: fails if tied minima still take the first tied
+// point (biased toward small x) or are fitted, or if `tied` miscounts. Two equal lowest
+// values at x = 10 and 40 give the midpoint in ln x, sqrt(10 * 40) = 20, with tied = 2 and
+// atEdge false; raising the value at 40 by a fixed step (1e-3) removes the tie, so the
+// lowest point is 10 alone (tied = 1) and the fitted xMin lies between 7 and 15.
+test('findMinimum: tied minima give the midpoint in ln x; one step off the tie gives a fit', () => {
+  const xs = [5, 7, 10, 15, 40, 100];
+  const ys = [0.02, 0.01, 0.004, 0.006, 0.004, 0.02];
+  const t = findMinimum(xs, ys);
+  assert.equal(t.tied, 2);
+  assert.equal(t.atEdge, false);
+  assert.ok(Math.abs(t.xMin - 20) < 1e-9, `xMin ${t.xMin}`);
+  assert.equal(t.yMin, 0.004);
+
+  const untied = ys.slice();
+  untied[4] = 0.005;
+  const u = findMinimum(xs, untied);
+  assert.equal(u.tied, 1);
+  assert.ok(u.xMin > 7 && u.xMin < 15, `xMin ${u.xMin}`);
+
+  // A tie that includes the first grid point is not an edge minimum: 0 at x = 5 and x = 10.
+  const zeros = findMinimum(xs, [0, 0.01, 0, 0.003, 0.004, 0.02]);
+  assert.equal(zeros.tied, 2);
+  assert.equal(zeros.atEdge, false);
+  assert.ok(Math.abs(zeros.xMin - Math.sqrt(50)) < 1e-9, `xMin ${zeros.xMin}`);
+});
+
+// Catches: fails if the fitted yMin can go below 0. The points (7, 0.002), (10, 0.0001),
+// (15, 0.02) give a parabola in ln x whose vertex, at x ~ 8.7, has the value -1.3e-3
+// without the clamp, a negative error rate; with it, yMin is exactly 0.
+test('findMinimum clamps the fitted yMin at 0', () => {
+  const xs = [5, 7, 10, 15, 40];
+  const m = findMinimum(xs, [0.05, 0.002, 0.0001, 0.02, 0.05]);
+  assert.equal(m.tied, 1);
+  assert.equal(m.atEdge, false);
+  assert.ok(m.xMin > 8 && m.xMin < 9.5, `xMin ${m.xMin}`);
+  assert.equal(m.yMin, 0);
+});
+
 // Catches: fails if the bootstrap resamples grid points instead of shots, uses a different
 // resample at each grid point, or miscounts edge replicates. Every shot follows the same
 // U-shaped curve in ln x with minimum at 17 (plus a shot-dependent offset that does not move

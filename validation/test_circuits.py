@@ -128,6 +128,20 @@ def test_config_lists():
     assert all(c["noise_model"] == "forte-1" and c["shots"] == bg.SHOTS for c in bg.CONFIGS.values())
 
 
+# Boundary test (non-vacuous pair). Catches: a configuration whose classical register is wider
+# than 29 bits (CLAUDE.md; the JavaScript side reads keys with parseInt) being built or
+# packaged. d = 3, r = 13 needs exactly 29 bits and is accepted; r = 14 needs 31 and is
+# rejected by both build_memory_circuit and to_bank, before any job would be submitted.
+def test_n_clbits_limit_29():
+    qc, _ = bg.build_memory_circuit(3, 13, 0)
+    assert qc.num_clbits == 29
+    with pytest.raises(ValueError, match="n_clbits = 31"):
+        bg.build_memory_circuit(3, 14, 0)
+    with pytest.raises(ValueError, match="n_clbits = 31"):
+        bg.to_bank(3, 14, 0, {"ancilla": [], "data": []}, {}, backend_name="t", noise_model="x",
+                   sampler_seed=1, job_id="j", native_ops={}, det_rate=0.0)
+
+
 # Catches: a bank whose hex keys, checksum or layout disagree with the s2s-bank/1 contract
 # (for example keys converted from the wrong end, or a checksum over a non-canonical form).
 def test_to_bank_and_emit_round_trip(capsys):

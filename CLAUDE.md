@@ -17,7 +17,7 @@ An open-source lab, published and runnable on Qollab, showing how qubit-readout 
 - Classical-bit layout (fixed): check j of round k is classical bit k*(d-1) + j; data qubit i is classical bit (d-1)*r + i.
 - Bit order: Qiskit little-endian. Classical bit 0 is the least significant bit of the integer (the rightmost character of a binary key). Banks store keys as lowercase hexadecimal without prefix. n_clbits <= 29, so parseInt(hex, 16) is exact.
 - Logical observable: the Z value of data qubit 0. Observable edges are the edges representing a flip of data qubit 0.
-- Idle errors: an X on data qubit i after round k (k = 0..r-2) flips m[k'][i-1] and m[k'][i] (checks that exist) for all k' > k, and flips x[i]. No idle error is applied after the last round, because the data are read out together with the last ancillas.
+- Idle errors: an X on data qubit i after round k (k = 0..r-2) flips m[k'][i-1] and m[k'][i] (checks that exist) for all k' > k, and flips x[i]. No idle error is applied after the last round, because the data are read out together with the last ancillas. Idle errors act on the true bits before readout: decodeShot applies them to m, x from split and then measures, so each readout sees the flipped bit.
 - Units: time in microseconds. Frequencies in parameter files are ordinary frequencies in MHz, converted to angular frequency 2*pi*f in rad/us at load. Count rates in counts per microsecond.
 - Randomness: every function that draws random numbers takes an explicit rng from createRng(seed). Never use Math.random.
 - Readout-model contract: measure(trueBit, rng) -> { hard, llr }; idleFlipProbability(); averageAssignmentError(). llr = ln[p(s|1)/p(s|0)]; +/-Infinity is allowed for perfect readout.

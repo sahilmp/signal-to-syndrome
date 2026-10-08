@@ -111,6 +111,25 @@ test('inner checksum mismatches fail', () => {
   assert.throws(() => assembleTexts([{ text: makeBlock('rep_d3_r1_L0', badSha).text, source: 's' }]), /counts sha256 mismatch/);
 });
 
+// Catches: a mislabelled paste (block name for one configuration, bank of another) being
+// written under the wrong file name, or a name check that rejects correctly named banks.
+// Non-vacuous pairs: the same bank passes under its own name and fails under a name that
+// differs only in L, only in r, or only in d; a v4 bank passes with matching inject and
+// fails with another site; an unknown prefix fails.
+test('block name must match the bank d, r, logical (and inject for v4)', () => {
+  const run = (name, bank) => assembleTexts([{ text: makeBlock(name, bank).text, source: 's' }]);
+  assert.equal(run('rep_d3_r1_L0', makeBank()).length, 1);
+  assert.throws(() => run('rep_d3_r1_L1', makeBank()), /logical 0 \(name says 1\)/);
+  assert.throws(() => run('rep_d3_r3_L0', makeBank()), /r 1 \(name says 3\)/);
+  assert.throws(() => run('rep_d5_r1_L0', makeBank()), /d 3 \(name says 5\)/);
+  assert.equal(run('rep_d3_r1_L1', makeBank({ logical: 1 })).length, 1);
+
+  const v4 = makeBank({ noise_model: 'ideal', inject: [[2, 0]] });
+  assert.equal(run('v4_d3_r1_i2_k0', v4).length, 1);
+  assert.throws(() => run('v4_d3_r1_i1_k0', v4), /inject \[\[2,0\]\] \(name says \[\[1,0\]\]\)/);
+  assert.throws(() => run('bank_d3_r1_L0', makeBank()), /name is neither/);
+});
+
 // Catches: the command line not writing <out>/<name>.json, not reading .txt files from a folder,
 // or exiting 0 when a bank is bad.
 test('command line: folder input, --out, exit codes', () => {
