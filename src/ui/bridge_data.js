@@ -1,5 +1,5 @@
 import stage1 from '../../data/results/stage1_flat.json' with { type: 'json' };
-import stage2 from '../../data/fixtures/stage2_ion.json' with { type: 'json' };
+import stage2 from '../../data/results/stage2_ion.json' with { type: 'json' };
 import stage3 from '../../data/fixtures/stage3_sc.json' with { type: 'json' };
 import stage4 from '../../data/fixtures/stage4_comparison.json' with { type: 'json' };
 import bankD3R1 from '../../data/banks/rep_d3_r1_L0.json' with { type: 'json' };
