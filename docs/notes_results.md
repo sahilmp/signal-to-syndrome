@@ -46,7 +46,88 @@ The checklist rule gave time-like edges the readout probability only. That made 
 
 ## Stage 2: trapped-ion readout
 
-Not measured yet (CC-09). To record: V7, V10; F1-ion (τ*_phys, with and without pumping); F2-ion (hard against soft, τ*_log per distance or "no interior minimum").
+Source: `data/results/stage2_ion.json` and the console output of `node tools/sweep.mjs --stage 2` (Thu 8 Oct 2026; two runs, identical output, ~45–65 s each). Readout: `createIonReadout(params/ion.json, τ)` (Crain et al. 2019 lab values, not Forte values; see DECISIONS A15). Banks: `rep_d{3,5,7}_r3_L{0,1}.json`, L0 and L1 pooled. pGate calibrated per bank with readout off (0.0124 to 0.0139). R = 4 readout draws per quantum shot, so n = 32 000 per point; hard and soft see the same readout draws. No non-exact matchings. τ*_log: bootstrap over quantum shots, B = 200, 95% percentile interval; the minimum is located by a parabola in ln τ through the lowest grid point and its two neighbours (`src/core/optimum.js`).
+
+### Validation (V7, V10)
+
+| Check | Result | Outcome |
+|---|---|---|
+| V7, both gammas 0: empirical assignment error (200 000 truth samples per τ) against the analytic Poisson tails at nTh | Agreement within 4 binomial SE at all 13 grid points. E.g. τ = 5: 0.0472 analytic, 0.0472 empirical; τ = 10: 4.48e-3 against 4.53e-3; τ = 20: 8.2e-5 against 6.5e-5. From τ = 50 the analytic error is below 1e-8 and no errors were drawn | **Pass** |
+| V10, llr calibration (card values with pumping; belief equals truth because the belief model integrates the same at-most-one-switch process the sampler draws), samples pooled over the τ grid | \|llr\| in [0, 1): 0.3359 observed against 0.3363 predicted (m = 301 406); **[1, 2): 0.1965 against 0.1957 (m = 124 883)**; [2, 4): 0.0610 against 0.0604; [4, 8): 0.00183 against 0.00179. All within 4 SE | **Pass** |
+| F1 belief against truth (card with pumping) | Belief error inside or within 4 SE of the empirical Wilson interval at every τ | **Pass** |
+
+Deviation: the checklist states V10 with both gammas 0. With the card's rates and no pumping the llr is so large that the [1, 2) bin is nearly empty, so V10 was run with pumping on, where belief still equals truth.
+
+### F1-ion: assignment error against τ
+
+| τ (µs) | 1 | 3 | 5 | 10 | 15 | **20** | 30 | 50 | 100 | 200 | 500 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Belief, with pumping | 0.312 | 0.122 | 0.0475 | 4.9e-3 | 9.2e-4 | **5.9e-4** | 6.5e-4 | 8.6e-4 | 1.4e-3 | 2.3e-3 | 4.8e-3 |
+| Empirical (Wilson 95%) | 0.311 | 0.122 | 0.0480 | 4.9e-3 [4.6, 5.2]e-3 | 9.8e-4 [8.5e-4, 1.1e-3] | 5.7e-4 [4.8e-4, 6.9e-4] | 7.0e-4 [5.9e-4, 8.2e-4] | 9.4e-4 [8.1e-4, 1.1e-3] | 1.3e-3 [1.2e-3, 1.5e-3] | 2.3e-3 [2.1e-3, 2.6e-3] | 5.0e-3 [4.7e-3, 5.3e-3] |
+| Belief, no pumping | 0.312 | 0.121 | 0.0472 | 4.5e-3 | 4.5e-4 | 8.2e-5 | 5.4e-6 | 8.5e-9 | 4e-16 | 9e-31 | 2e-74 |
+
+- **With pumping the assignment error has an interior minimum: τ*_phys = 23.5 µs** (fitted error 5.4e-4; grid minimum at 20 µs). It then rises about 8× by 500 µs, driven by dark→bright pumping (DECISIONS A15).
+- **Without pumping it falls monotonically**: no interior minimum (lowest at the grid end, 500 µs). This matches the A15/CC-A4 expectation.
+
+### F2-ion: logical error against τ (r = 3, Wilson 95%)
+
+| τ (µs) | d3 hard | d3 soft | d5 hard | d5 soft | d7 hard | d7 soft |
+|---|---|---|---|---|---|---|
+| 1 | 0.3523 | 0.1475 | 0.3764 | 0.0784 | 0.3944 | 0.0503 |
+| 2 | 0.1832 | 0.0541 | 0.1706 | 0.0280 | 0.1618 | 0.0134 |
+| 3 | 0.0895 | 0.0280 | 0.0623 | 0.0116 | 0.0480 | 0.0035 |
+| 5 | 0.0217 [0.0202, 0.0233] | 0.0229 [0.0213, 0.0246] | 0.0077 | 0.0038 | 0.0031 | 0.0010 |
+| 7 | 0.0081 [0.0071, 0.0091] | 0.0110 [0.0099, 0.0122] | 0.0016 [0.0012, 0.0021] | 0.0021 [0.0017, 0.0027] | 0.0004 | 0.0004 |
+| 10 | 0.0039 [0.0033, 0.0047] | 0.0076 [0.0067, 0.0086] | 0.0010 [0.0007, 0.0015] | 0.0018 [0.0014, 0.0024] | 0.0001 [0.0000, 0.0003] | 0.0004 [0.0002, 0.0007] |
+| 20 | 0.0034 [0.0029, 0.0041] | 0.0071 [0.0062, 0.0080] | 0.0008 [0.0006, 0.0012] | 0.0015 [0.0011, 0.0020] | 0.0002 [0.0001, 0.0004] | 0.0004 [0.0002, 0.0007] |
+| 50 | 0.0034 [0.0029, 0.0041] | 0.0065 [0.0057, 0.0074] | 0.0009 [0.0006, 0.0013] | 0.0014 [0.0011, 0.0019] | 0.0004 | 0.0003 |
+| 100 | 0.0035 [0.0029, 0.0042] | 0.0056 [0.0049, 0.0065] | 0.0009 | 0.0015 | 0.0003 | 0.0003 |
+| 200 | 0.0038 [0.0032, 0.0045] | 0.0056 [0.0049, 0.0065] | 0.0009 | 0.0012 | 0.0003 | 0.0003 |
+| 500 | 0.0039 [0.0033, 0.0047] | 0.0058 [0.0050, 0.0067] | 0.0011 [0.0008, 0.0015] | 0.0012 [0.0008, 0.0016] | 0.0003 | 0.0003 |
+
+Full series (all 13 grid points, all intervals) are in `stage2_ion.json`.
+
+### C2 (soft at or below hard at every τ): **fails**
+
+Soft is at or below hard (point estimates) at only 14 of 39 points, and above hard beyond the intervals at 10 of them.
+
+- **Short τ (1–3 µs, photon-starved): soft wins strongly**, by 2–14×. Example: d = 7 at τ = 1 gives 0.050 against 0.394. Here a count of 0 is ambiguous and the llr tells the decoder so.
+- **τ ≥ 7 µs (τ ≥ 5 µs at d = 3): soft loses.**
+  - d = 3: soft is above hard beyond the intervals at every τ from 7 to 500 µs (9 points), by up to 2× (τ = 20: 0.0071 [0.0062, 0.0080] against 0.0034 [0.0029, 0.0041]).
+  - d = 5: soft is above hard (point estimates) at every τ from 7 to 500 µs, beyond the intervals only at τ = 15.
+  - d = 7: the intervals overlap at every τ ≥ 5 µs.
+- **Diagnosis (single-shot probe, rep_d3_r3_L0, τ = 20; soft 41 errors against hard 13 of 4000):**
+  - Once τ ≳ 5 µs, readout errors (≈ 6e-4) are tiny next to gate errors (pGate ≈ 0.0125). Every candidate matching then costs almost the same, about ln(1/pGate) ≈ 4.37 per edge, with differences of about 0.01.
+  - Soft breaks these near-ties using small differences between readout llrs. Hard gives all readout edges a slightly higher p than bulk gate edges, so it breaks them toward time-like and final-layer edges. That choice evidently fits the simulator's actual noise better.
+  - The likely root cause is the uniform-pGate edge model in `src/core/sweep.js` (every edge gets the same gate probability), not the readout model; V10 shows the llr is calibrated. Not changed; any fix (e.g. per-edge-class gate calibration) is a separate decision and would change Stage 1 numbers too.
+
+### τ*_log per distance (C1, ion part)
+
+| d | Mode | τ*_log (µs) | 95% bootstrap interval | Replicates at an edge |
+|---|---|---|---|---|
+| 3 | hard | **21.8** | [20.0, 87.5] | 0% |
+| 3 | soft | 141 | [102, 500] | 19% |
+| 5 | hard | **22.9** | [12.0, 206] | 0% |
+| 5 | soft | 316 | [22, 500] | 40% |
+| 7 | hard | 11.8 | [11.2, 12.3] (too narrow, see below) | 0% |
+| 7 | soft | 224 | [12, 500] | 9% |
+
+- **Every curve has an interior minimum on the full data, but the minima are shallow.** From τ = 10 to 500 µs the hard pL stays inside overlapping intervals at every distance (d = 3: 0.0034 to 0.0039). So the logical error is flat over 10–500 µs at this sample size; τ*_log is located only loosely.
+- **Hard mode: τ*_log ≈ τ*_phys.** d = 3 gives 21.8 and d = 5 gives 22.9, against τ*_phys = 23.5 µs, which lies inside both intervals. The logical optimum follows the readout (pumping) optimum.
+- **The d = 7 hard interval is not trustworthy.** It rests on 3 to 13 errors per grid point, and the minimum hangs on τ = 10 µs (3 errors of 32 000). The bootstrap measures how the fitted vertex moves, not the grid coarseness.
+- **Soft-mode minima sit at long τ, with 9–40% of replicates at the grid end,** so they are not resolved. That follows from soft losing at τ ≥ 7 µs (C2 above).
+
+**C1, ion part: holds.** There is no idle-driven optimum. The idle flip probability is 0.5 (1 − e^(−τ/T1)) ≤ 2.5e-5 at every grid point, 20× below the readout error at τ*_phys. The hard-mode τ*_log coincides with τ*_phys, which is set by dark→bright pumping. Beyond about 10 µs the logical error is limited by the gate-noise floor, not by τ.
+
+### Compared with the A15 / CC-A4 expectation
+
+- τ*_phys near 20 µs: as computed in CC-A4 (grid minimum 20 µs, fitted 23.5 µs).
+- No idle-driven minimum: as expected.
+- The surprise is C2. Soft decoding helps only when readout is photon-starved (τ ≤ 3 µs), and hurts slightly once readout is far better than the gates, because the decoder's uniform gate-noise model makes nearly every matching cost the same.
+
+### Provenance caveat
+
+`stage2_ion.json` records commit `8c26fbe` (CC-A4), which does not yet contain `src/core/optimum.js` or the `--stage 2` code. Same fix as Stage 1: commit the code, rerun `node tools/sweep.mjs --stage 2` (all seeds are fixed; the output was reproduced exactly), then commit the results.
 
 ## Stage 3: superconducting readout
 
