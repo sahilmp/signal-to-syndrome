@@ -4,7 +4,7 @@ import stage3 from '../../data/fixtures/stage3_sc.json' with { type: 'json' };
 import stage4 from '../../data/fixtures/stage4_comparison.json' with { type: 'json' };
 import bankD3R1 from '../../data/banks/rep_d3_r1_L0.json' with { type: 'json' };
 import bankD3R3 from '../../data/banks/rep_d3_r3_L0.json' with { type: 'json' };
-import paramsIon from '../../data/fixtures/params_ion.json' with { type: 'json' };
+import paramsIon from '../../params/ion.json' with { type: 'json' };
 import paramsSc from '../../data/fixtures/params_sc.json' with { type: 'json' };
 import paramsCycle from '../../data/fixtures/params_cycle.json' with { type: 'json' };
 export { stage1, stage2, stage3, stage4, bankD3R1, bankD3R3, paramsIon, paramsSc, paramsCycle };
