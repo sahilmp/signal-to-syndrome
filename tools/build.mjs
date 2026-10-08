@@ -35,8 +35,9 @@ const result = await build({
 });
 let js = result.outputFiles[0].text;
 // CLAUDE.md rule 3: with liveRun on, main.js begins with the single import line for the
-// Python helper (module name 'qollab.live'; change to 'live' if D11 says so).
-const LIVE_MODULE = 'qollab.live';
+// Python helper. Module name 'live': Qollab's upload takes files only, no folders, so
+// live.py sits at the top level of the main project (DECISIONS D11).
+const LIVE_MODULE = 'live';
 if (FEATURES.liveRun === true) {
   js = `import * as s2sLive from '${LIVE_MODULE}'; globalThis.s2sLive = s2sLive;\n${js}`;
 }

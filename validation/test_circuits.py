@@ -168,3 +168,31 @@ def test_to_bank_and_emit_round_trip(capsys):
     assert lines[1] == "--- chunk 1/1 ---"
     assert json.loads(lines[2]) == bank
     assert lines[-1] == "END_BANK rep_d3_r3_L0"
+
+
+# Catches: the standalone live-run helper (qollab/live.py, CC-A1 part E) drifting from the
+# bank generator, for example a different qubit order, a CNOT on the wrong ancilla, or an
+# ancilla/data bit written to a different classical bit; the CNOT list, the qubit-to-bit
+# measurement map or the noiseless outcome would then differ from build_memory_circuit(3, 3, 0).
+# The CNOT list is compared directly because with logical 0 every data qubit is |0>, so a
+# miswired CNOT leaves the noiseless outcome unchanged.
+def test_live_circuit_matches_bank_generator():
+    import live
+    qc_live = live.live_circuit()
+    qc_bank, _ = bg.build_memory_circuit(3, 3, 0)
+    assert qc_live.num_qubits == qc_bank.num_qubits
+    assert qc_live.num_clbits == qc_bank.num_clbits
+
+    def measure_map(qc):
+        return {qc.find_bit(inst.qubits[0]).index: qc.find_bit(inst.clbits[0]).index
+                for inst in qc.data if inst.operation.name == "measure"}
+
+    def cx_list(qc):
+        return [tuple(qc.find_bit(q).index for q in inst.qubits)
+                for inst in qc.data if inst.operation.name == "cx"]
+
+    assert cx_list(qc_live) == cx_list(qc_bank)
+    assert measure_map(qc_live) == measure_map(qc_bank)
+    counts_live = run_counts(qc_live)
+    assert len(counts_live) == 1
+    assert counts_live == run_counts(qc_bank)

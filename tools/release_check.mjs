@@ -130,8 +130,8 @@ for (const [feature, on] of Object.entries(FEATURES)) {
 }
 
 // 7. Live-run import line (CLAUDE.md rule 3): only with liveRun on, and then exactly as the
-// first line of main.js. LIVE_MODULE must match tools/build.mjs ('live' if D11 says so).
-const LIVE_MODULE = 'qollab.live';
+// first line of main.js. LIVE_MODULE must match tools/build.mjs ('live': top-level live.py, D11).
+const LIVE_MODULE = 'live';
 const LIVE_IMPORT = `import * as s2sLive from '${LIVE_MODULE}'; globalThis.s2sLive = s2sLive;`;
 const mainJs = read(jsFile);
 if (mainJs === null) {
@@ -140,7 +140,8 @@ if (mainJs === null) {
   const firstLine = mainJs.split(/\r?\n/, 1)[0];
   row('liveRun on: first line of main.js is the live-run import', firstLine === LIVE_IMPORT, firstLine === LIVE_IMPORT ? '' : `first line starts "${firstLine.slice(0, 80)}"`);
 } else {
-  row(`liveRun off: main.js does not contain "${LIVE_MODULE}"`, !mainJs.includes(LIVE_MODULE));
+  // Look for the import itself: the bare word 'live' occurs throughout the bundle.
+  row(`liveRun off: main.js does not import '${LIVE_MODULE}'`, !mainJs.includes(`from '${LIVE_MODULE}'`) && !mainJs.includes('s2sLive from'));
 }
 
 // Table.
@@ -152,6 +153,6 @@ const failed = rows.filter((r) => !r.ok).length;
 console.log(`\n${rows.length - failed} passed, ${failed} failed.`);
 if (FEATURES.liveRun === true) {
   const helper = existsSync(p('qollab', 'live.py')) ? 'qollab/live.py' : 'qollab/live.py (NOT FOUND in this repository)';
-  console.log(`\nReminder: liveRun is on. Upload ${helper} to the main Qollab project (folder qollab/, or live.py at the top level if D11 says so) together with the three files in dist/qollab/.`);
+  console.log(`\nReminder: liveRun is on. Upload ${helper} to the main Qollab project as live.py at the top level (D11: no folders), together with the three files in dist/qollab/.`);
 }
 process.exit(failed === 0 ? 0 : 1);
