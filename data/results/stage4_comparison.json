@@ -1,0 +1,5404 @@
+{
+  "schema": "s2s-results/1",
+  "stage": 4,
+  "platforms": {
+    "trapped-ion": {
+      "tauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "xMin": 31.6228,
+            "lo": 19.9822,
+            "hi": 81.2252,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 22.9238,
+            "lo": 14.0922,
+            "hi": 189.226,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 11.8389,
+            "lo": 11.2337,
+            "hi": 44.7214,
+            "atEdge": false
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "xMin": 500,
+            "lo": 97.7608,
+            "hi": 500,
+            "atEdge": true
+          },
+          {
+            "d": 5,
+            "xMin": 500,
+            "lo": 22.2408,
+            "hi": 500,
+            "atEdge": true
+          },
+          {
+            "d": 7,
+            "xMin": 180.888,
+            "lo": 44.7214,
+            "hi": 500,
+            "atEdge": false
+          }
+        ]
+      },
+      "perRound": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.001196480467172997,
+            "lo": 0.0009964202628437889,
+            "hi": 0.001436651711960531
+          },
+          {
+            "d": 5,
+            "value": 0.0002849176464003179,
+            "lo": 0.00019625960466066475,
+            "hi": 0.0004136134479432296
+          },
+          {
+            "d": 7,
+            "value": 0.00003558926127362635,
+            "lo": 0.00001294941594689198,
+            "hi": 0.00009824702198730068
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.0018400969395087159,
+            "lo": 0.0015873339253242027,
+            "hi": 0.002133026665712476
+          },
+          {
+            "d": 5,
+            "value": 0.00038571414095069193,
+            "lo": 0.00027982757773122285,
+            "hi": 0.0005316450926522464
+          },
+          {
+            "d": 7,
+            "value": 0.00008485714332544676,
+            "lo": 0.00004326045485369413,
+            "hi": 0.00016647580914310231
+          }
+        ]
+      },
+      "perMicrosecond": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 5.918415973410059e-7,
+            "lo": 4.928813935239496e-7,
+            "hi": 7.10642812279586e-7,
+            "cycle_us": 2021.6228
+          },
+          {
+            "d": 5,
+            "value": 1.415441788707143e-7,
+            "lo": 9.749976857577259e-8,
+            "hi": 2.054789396117377e-7,
+            "cycle_us": 2012.9238
+          },
+          {
+            "d": 7,
+            "value": 1.7778284393227823e-8,
+            "lo": 6.468760271814071e-9,
+            "hi": 4.907838587176055e-8,
+            "cycle_us": 2001.8389
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 7.389947548227775e-7,
+            "lo": 6.374835041462661e-7,
+            "hi": 8.566372151455728e-7,
+            "cycle_us": 2490
+          },
+          {
+            "d": 5,
+            "value": 1.5490527749023773e-7,
+            "lo": 1.1238055330571199e-7,
+            "hi": 2.135120854025086e-7,
+            "cycle_us": 2490
+          },
+          {
+            "d": 7,
+            "value": 3.908867860776178e-8,
+            "lo": 1.9927538801492353e-8,
+            "hi": 7.668558172651115e-8,
+            "cycle_us": 2170.888
+          }
+        ]
+      },
+      "pLAtTauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "r": 3,
+            "tau_us": 31.6228,
+            "value": 0.0035808588598297054,
+            "lo": 0.002983307625686877,
+            "hi": 0.004297583187846174
+          },
+          {
+            "d": 5,
+            "r": 3,
+            "tau_us": 22.9238,
+            "value": 0.000854265963325825,
+            "lo": 0.0005885477372254432,
+            "hi": 0.0012398141703612482
+          },
+          {
+            "d": 7,
+            "r": 3,
+            "tau_us": 11.8389,
+            "value": 0.00010676018442807985,
+            "lo": 0.000038847241725121564,
+            "hi": 0.0002946831548912344
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "r": 3,
+            "tau_us": 500,
+            "value": 0.0055,
+            "lo": 0.0047469,
+            "hi": 0.00637182
+          },
+          {
+            "d": 5,
+            "r": 3,
+            "tau_us": 500,
+            "value": 0.00115625,
+            "lo": 0.000839013,
+            "hi": 0.00159324
+          },
+          {
+            "d": 7,
+            "r": 3,
+            "tau_us": 180.888,
+            "value": 0.0002545282280118353,
+            "lo": 0.00012977013608319953,
+            "hi": 0.0004992611607141
+          }
+        ]
+      },
+      "breakEven": {
+        "epsBar": 0.2364465377981797,
+        "tau_us": 1.562068755782397,
+        "mode": "hard",
+        "axis": "averageAssignmentError() (belief model)",
+        "byMode": {
+          "hard": {
+            "epsBar": 0.2364465377981797,
+            "tau_us": 1.562068755782397,
+            "lo": 0.20955946769014655,
+            "hi": 0.2666399388203482,
+            "halfWidth": 0.028540235565100824,
+            "clamped": false,
+            "segment": [
+              1,
+              2
+            ]
+          },
+          "soft": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          }
+        },
+        "empiricalAxis": {
+          "hard": {
+            "epsBar": 0.2362011761350067,
+            "tau_us": 1.562068755782397,
+            "lo": 0.2096667068031307,
+            "hi": 0.26599861669765085,
+            "halfWidth": 0.02816595494726007,
+            "clamped": false,
+            "segment": [
+              1,
+              2
+            ]
+          },
+          "soft": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          }
+        }
+      },
+      "tauPhys": {
+        "belief": {
+          "xMin": 23.4849,
+          "atEdge": false
+        },
+        "empirical": {
+          "xMin": 23.016342286112987,
+          "atEdge": false
+        }
+      }
+    },
+    "superconducting": {
+      "tauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "xMin": 0.793475,
+            "lo": 0.435995,
+            "hi": 0.853598,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 0.755642,
+            "lo": 0.688411,
+            "hi": 0.875156,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 0.783115,
+            "lo": 0.578625,
+            "hi": 0.989949,
+            "atEdge": false
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "xMin": 0.601006,
+            "lo": 0.574193,
+            "hi": 0.668127,
+            "atEdge": false
+          },
+          {
+            "d": 5,
+            "xMin": 0.591608,
+            "lo": 0.568757,
+            "hi": 0.85651,
+            "atEdge": false
+          },
+          {
+            "d": 7,
+            "xMin": 0.581855,
+            "lo": 0.553148,
+            "hi": 1.31067,
+            "atEdge": false
+          }
+        ]
+      },
+      "perRound": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.007775439113025618,
+            "lo": 0.007230949110749714,
+            "hi": 0.008360595038621793
+          },
+          {
+            "d": 5,
+            "value": 0.0011088812138620285,
+            "lo": 0.0009170686774519129,
+            "hi": 0.001340797650782504
+          },
+          {
+            "d": 7,
+            "value": 0.0002566852928648388,
+            "lo": 0.0001733761330160423,
+            "hi": 0.00038003059388087704
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.00441186285900568,
+            "lo": 0.004008575212173174,
+            "hi": 0.004855523992378462
+          },
+          {
+            "d": 5,
+            "value": 0.0007406800052842697,
+            "lo": 0.0005872060185163095,
+            "hi": 0.0009342278093637879
+          },
+          {
+            "d": 7,
+            "value": 0.00018654034420758305,
+            "lo": 0.00011787766692780795,
+            "hi": 0.00029523300880102235
+          }
+        ]
+      },
+      "perMicrosecond": {
+        "hard": [
+          {
+            "d": 3,
+            "value": 0.006896329508881011,
+            "lo": 0.006413400838821006,
+            "hi": 0.007415326316434327,
+            "cycle_us": 1.127475
+          },
+          {
+            "d": 5,
+            "value": 0.0010176564540115272,
+            "lo": 0.0008416238337471507,
+            "hi": 0.0012304937316866492,
+            "cycle_us": 1.089642
+          },
+          {
+            "d": 7,
+            "value": 0.00022977517342873276,
+            "lo": 0.00015519989707061697,
+            "hi": 0.00034018932149409596,
+            "cycle_us": 1.117115
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "value": 0.004718539623281219,
+            "lo": 0.004287218704664114,
+            "hi": 0.005193040464316231,
+            "cycle_us": 0.935006
+          },
+          {
+            "d": 5,
+            "value": 0.0008002091655260864,
+            "lo": 0.0006344003276941314,
+            "hi": 0.0010093125916843717,
+            "cycle_us": 0.925608
+          },
+          {
+            "d": 7,
+            "value": 0.0002036789057302554,
+            "lo": 0.00012870778335850975,
+            "hi": 0.00032235780642243843,
+            "cycle_us": 0.915855
+          }
+        ]
+      },
+      "pLAtTauLog": {
+        "hard": [
+          {
+            "d": 3,
+            "r": 3,
+            "tau_us": 0.793475,
+            "value": 0.022965452951666014,
+            "lo": 0.02138063990969504,
+            "hi": 0.024664725426770073
+          },
+          {
+            "d": 5,
+            "r": 3,
+            "tau_us": 0.755642,
+            "value": 0.0033192713903065383,
+            "lo": 0.0027461630276746636,
+            "hi": 0.004011616163918822
+          },
+          {
+            "d": 7,
+            "r": 3,
+            "tau_us": 0.783115,
+            "value": 0.000769660622206322,
+            "lo": 0.0005199480641933786,
+            "hi": 0.0011392254616699358
+          }
+        ],
+        "soft": [
+          {
+            "d": 3,
+            "r": 3,
+            "tau_us": 0.601006,
+            "value": 0.013119144873113489,
+            "lo": 0.011929571235102533,
+            "hi": 0.014425573195225956
+          },
+          {
+            "d": 5,
+            "r": 3,
+            "tau_us": 0.591608,
+            "value": 0.00221875,
+            "lo": 0.00175955,
+            "hi": 0.00279745
+          },
+          {
+            "d": 7,
+            "r": 3,
+            "tau_us": 0.581855,
+            "value": 0.000559412274787048,
+            "lo": 0.0003535496364689706,
+            "hi": 0.0008851761541591762
+          }
+        ]
+      },
+      "breakEven": {
+        "epsBar": null,
+        "tau_us": null,
+        "mode": "hard",
+        "axis": "averageAssignmentError() (belief model)",
+        "byMode": {
+          "hard": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          },
+          "soft": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          }
+        },
+        "empiricalAxis": {
+          "hard": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          },
+          "soft": {
+            "epsBar": null,
+            "tau_us": null,
+            "lo": null,
+            "hi": null,
+            "halfWidth": null,
+            "clamped": false,
+            "note": "d = 5 below d = 3 at every grid point"
+          }
+        }
+      },
+      "tauPhys": {
+        "belief": {
+          "xMin": 0.586604,
+          "atEdge": false
+        },
+        "empirical": {
+          "xMin": 0.9056922881461583,
+          "atEdge": false
+        }
+      }
+    }
+  },
+  "conclusions": {
+    "C1": {
+      "verdict": "flips",
+      "parts": {
+        "superconducting": {
+          "verdict": "undetermined",
+          "tauPhys": 0.9056922881461583,
+          "cases": {
+            "d3 hard": {
+              "verdict": "holds",
+              "xMin": 0.793475,
+              "lo": 0.435995,
+              "hi": 0.853598
+            },
+            "d3 soft": {
+              "verdict": "holds",
+              "xMin": 0.601006,
+              "lo": 0.574193,
+              "hi": 0.668127
+            },
+            "d5 hard": {
+              "verdict": "holds",
+              "xMin": 0.755642,
+              "lo": 0.688411,
+              "hi": 0.875156
+            },
+            "d5 soft": {
+              "verdict": "holds",
+              "xMin": 0.591608,
+              "lo": 0.568757,
+              "hi": 0.85651
+            },
+            "d7 hard": {
+              "verdict": "undetermined",
+              "xMin": 0.783115,
+              "lo": 0.578625,
+              "hi": 0.989949
+            },
+            "d7 soft": {
+              "verdict": "undetermined",
+              "xMin": 0.581855,
+              "lo": 0.553148,
+              "hi": 1.31067
+            }
+          }
+        },
+        "trapped-ion": {
+          "verdict": "flips",
+          "maxIdle": 0.0000249994,
+          "idleLimit": 0.000001,
+          "interiorMinima": [
+            "d3 hard",
+            "d5 hard",
+            "d7 hard",
+            "d7 soft"
+          ]
+        }
+      }
+    },
+    "C2": {
+      "verdict": "flips",
+      "parts": {
+        "trapped-ion": {
+          "verdict": "flips",
+          "softAboveBeyondIntervals": 11,
+          "softBelowBeyondIntervals": 11
+        },
+        "superconducting": {
+          "verdict": "holds",
+          "softAboveBeyondIntervals": 0,
+          "softBelowBeyondIntervals": 20
+        }
+      }
+    },
+    "C3": {
+      "verdict": "flips",
+      "parts": {
+        "d3 hard": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d5 hard": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d7 hard": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d3 soft": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d5 soft": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d7 soft": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": "ion lower"
+        }
+      }
+    },
+    "C4": {
+      "verdict": "undetermined",
+      "parts": {
+        "hard": {
+          "verdict": "undetermined",
+          "ion": 0.2364465377981797,
+          "superconducting": null,
+          "diff": null,
+          "sumHalfWidths": null
+        },
+        "soft": {
+          "verdict": "undetermined",
+          "ion": null,
+          "superconducting": null,
+          "diff": null,
+          "sumHalfWidths": null
+        }
+      }
+    }
+  },
+  "sensitivity": [
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_bright_per_us",
+      "scale": 0.5,
+      "value": 0.236,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 77.45966692414831,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 99.99999999999996,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 236.31584054625688,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 141.42135623730945,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.27519873158727354,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_bright_per_us",
+      "scale": 2,
+      "value": 0.944,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.62277660168379,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 49.99999999999999,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 5,
+              "xMin": 21.213203435596427,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 38.729833462074154,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": null,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_dark_per_us",
+      "scale": 0.5,
+      "value": 0.0000021,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 31.62277660168379,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 70.71067811865471,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 163.53560360429273,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 316.2277660168377,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080267849980493,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "R_dark_per_us",
+      "scale": 2,
+      "value": 0.0000084,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 122.47448713915892,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080881097729533,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "gamma_bright_to_dark_per_us",
+      "scale": 0.5,
+      "value": 0.0001705,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 38.72983346207417,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 223.60679774997897,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 37.41657386773941,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20076226769874028,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "gamma_bright_to_dark_per_us",
+      "scale": 2,
+      "value": 0.000682,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 99.99999999999996,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 70.71067811865471,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 316.2277660168377,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 99.99999999999996,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20088960629633018,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "gamma_dark_to_bright_per_us",
+      "scale": 0.5,
+      "value": 0.0000082,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 99.99999999999996,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 70.71067811865471,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 5,
+              "xMin": 141.42135623730945,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080193807405328,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "gamma_dark_to_bright_per_us",
+      "scale": 2,
+      "value": 0.0000328,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 44.72135954999579,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 38.72983346207417,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 54.77225575051659,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20081029175696624,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "T1_idle_us",
+      "scale": 0.5,
+      "value": 5000000,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 194.8000493769743,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "T1_idle_us",
+      "scale": 2,
+      "value": 20000000,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "cycle.two_qubit_gate_us",
+      "scale": 0.5,
+      "value": 485,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "cycle.two_qubit_gate_us",
+      "scale": 2,
+      "value": 1940,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "cycle.reset_us",
+      "scale": 0.5,
+      "value": 25,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "trapped-ion",
+      "parameter": "cycle.reset_us",
+      "scale": 2,
+      "value": 100,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "chi_over_2pi_MHz",
+      "scale": 0.5,
+      "value": 0.5,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "flips",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "holds",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 1.5546175098585022,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.6733200530681511,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 1.1407855537593585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 1.1171413768236675,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.6733200530681511,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 1.1832159566199232,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": 0.16300950552885346,
+          "soft": 0.1278599734518053
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "chi_over_2pi_MHz",
+      "scale": 2,
+      "value": 2,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.49913443806790203,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5517894515048443,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.45825756949558394,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.32686188072416383,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.48281736845632267,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.45825756949558394,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": null
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "kappa_over_2pi_MHz",
+      "scale": 0.5,
+      "value": 1,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "flips",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.5556521716680591,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.636159235494683,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.5658174393072176,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.7071067811865475,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5550987653367218,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.5916079783099616,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.17369024817413492
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "kappa_over_2pi_MHz",
+      "scale": 2,
+      "value": 4,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "undetermined",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "undetermined",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "holds",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.5205898647632935,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5725370208441146,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.447213595499958,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5378766084867167,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.49109197350658634,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": 0.18770275112760468,
+          "soft": 0.18357973071125452
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "nbar",
+      "scale": 0.5,
+      "value": 2.5,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "flips",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.7487008987916759,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.1832159566199232,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.7381547328356881,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.414213562373095,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.6897602296879597,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.23488130122405093
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "nbar",
+      "scale": 2,
+      "value": 10,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.549228677797742,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5916079783099616,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.4714079384497752,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5145570761051835,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": 0.07158686888761331,
+          "soft": null
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "eta",
+      "scale": 0.5,
+      "value": 0.15,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "flips",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.7487008987916759,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.1832159566199232,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.7381547328356881,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.414213562373095,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.6897602296879597,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.2348813012240509
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "eta",
+      "scale": 2,
+      "value": 0.6,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.549228677797742,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5916079783099616,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.46995052984297125,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5145570761051835,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": 0.07158686888761336,
+          "soft": null
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "T1_us",
+      "scale": 0.5,
+      "value": 25,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "flips",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.7071067811865475,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.674238187833649,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.8366600265340756,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5764789944038666,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5916079783099616,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 1.3341497322401614,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": null
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "T1_us",
+      "scale": 2,
+      "value": 100,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 1.1832159566199232,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 2.0493901531919194,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.5291502622129182,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.6210673635520143,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 1.0808509995948659,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.8944271909999159,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.11465839543682194
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "cycle.two_qubit_gate_us",
+      "scale": 0.5,
+      "value": 0.021,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "cycle.two_qubit_gate_us",
+      "scale": 2,
+      "value": 0.084,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "cycle.reset_us",
+      "scale": 0.5,
+      "value": 0.125,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    },
+    {
+      "platform": "superconducting",
+      "parameter": "cycle.reset_us",
+      "scale": 2,
+      "value": 0.5,
+      "C1": "flips",
+      "C2": "holds",
+      "C3": "flips",
+      "C4": "undetermined",
+      "parts": {
+        "C1": {
+          "superconducting": "undetermined",
+          "trapped-ion": "flips"
+        },
+        "C2": {
+          "trapped-ion": "holds",
+          "superconducting": "holds"
+        },
+        "C3": {
+          "d3 hard": "flips",
+          "d5 hard": "undetermined",
+          "d7 hard": "undetermined",
+          "d3 soft": "undetermined",
+          "d5 soft": "undetermined",
+          "d7 soft": "undetermined"
+        },
+        "C4": {
+          "hard": "undetermined",
+          "soft": "undetermined"
+        }
+      },
+      "tauLog": {
+        "trapped-ion": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "superconducting": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        }
+      },
+      "breakEven": {
+        "trapped-ion": {
+          "hard": 0.20080472266743843,
+          "soft": null
+        },
+        "superconducting": {
+          "hard": null,
+          "soft": 0.10143822441706109
+        }
+      }
+    }
+  ],
+  "sensitivityBaseline": {
+    "note": "scale 1 (card values) at the same reduced statistics as the sensitivity rows",
+    "C1": {
+      "verdict": "flips",
+      "parts": {
+        "superconducting": {
+          "verdict": "undetermined",
+          "tauPhys": 0.9613645243801214,
+          "cases": {
+            "d3 hard": {
+              "verdict": "undetermined",
+              "xMin": 0.9899494936611665
+            },
+            "d3 soft": {
+              "verdict": "undetermined",
+              "xMin": 0.5486765029691341
+            },
+            "d5 hard": {
+              "verdict": "undetermined",
+              "xMin": 0.6670748661200807
+            },
+            "d5 soft": {
+              "verdict": "undetermined",
+              "xMin": 0.5369214242562508
+            },
+            "d7 hard": {
+              "verdict": "undetermined",
+              "xMin": 0.529150262212918
+            },
+            "d7 soft": {
+              "verdict": "undetermined",
+              "xMin": 0.529150262212918
+            }
+          }
+        },
+        "trapped-ion": {
+          "verdict": "flips",
+          "maxIdle": 0.000024999375010416538,
+          "idleLimit": 0.000001,
+          "interiorMinima": [
+            "d3 hard",
+            "d3 soft",
+            "d5 hard",
+            "d7 hard",
+            "d7 soft"
+          ]
+        }
+      }
+    },
+    "C2": {
+      "verdict": "holds",
+      "parts": {
+        "trapped-ion": {
+          "verdict": "holds",
+          "softAboveBeyondIntervals": 0,
+          "softBelowBeyondIntervals": 9
+        },
+        "superconducting": {
+          "verdict": "holds",
+          "softAboveBeyondIntervals": 0,
+          "softBelowBeyondIntervals": 8
+        }
+      }
+    },
+    "C3": {
+      "verdict": "flips",
+      "parts": {
+        "d3 hard": {
+          "verdict": "flips",
+          "perRound": "ion lower",
+          "perMicrosecond": "ion lower"
+        },
+        "d5 hard": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": "ion lower"
+        },
+        "d7 hard": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": "ion lower"
+        },
+        "d3 soft": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": "ion lower"
+        },
+        "d5 soft": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": "ion lower"
+        },
+        "d7 soft": {
+          "verdict": "undetermined",
+          "perRound": null,
+          "perMicrosecond": null
+        }
+      }
+    },
+    "C4": {
+      "verdict": "undetermined",
+      "parts": {
+        "hard": {
+          "verdict": "undetermined",
+          "ion": 0.20080472266743843,
+          "superconducting": null,
+          "diff": null,
+          "sumHalfWidths": null
+        },
+        "soft": {
+          "verdict": "undetermined",
+          "ion": null,
+          "superconducting": 0.10143822441706109,
+          "diff": null,
+          "sumHalfWidths": null
+        }
+      }
+    },
+    "platforms": {
+      "trapped-ion": {
+        "tauLog": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 63.245553203367585,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 31.622776601683803,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 206.17249980754661,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 500,
+              "lo": null,
+              "hi": null,
+              "atEdge": true
+            },
+            {
+              "d": 7,
+              "xMin": 59.16079783099615,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "perRound": {
+          "hard": [
+            {
+              "d": 3,
+              "value": 0.0013369047761353984,
+              "lo": 0.000676990287940071,
+              "hi": 0.0026384174880778807
+            },
+            {
+              "d": 5,
+              "value": 0.00016672225310701097,
+              "lo": 0.00002942355150699647,
+              "hi": 0.0009440931761290314
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0006398576865969537
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "value": 0.0016889517042331234,
+              "lo": 0.0009197321276692205,
+              "hi": 0.003100233045745226
+            },
+            {
+              "d": 5,
+              "value": 0.00016672225310701097,
+              "lo": 0.00002942355150699647,
+              "hi": 0.0009440931761290314
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0006398576865969537
+            }
+          ]
+        },
+        "perMicrosecond": {
+          "hard": [
+            {
+              "d": 3,
+              "value": 6.511178237058051e-7,
+              "lo": 3.2971715773783894e-7,
+              "hi": 0.0000012849985156239878,
+              "cycle_us": 2053.2455532033673
+            },
+            {
+              "d": 5,
+              "value": 8.246951658670391e-8,
+              "lo": 1.455442224313331e-8,
+              "hi": 4.669976946520345e-7,
+              "cycle_us": 2021.6227766016839
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 3.122535270410369e-7,
+              "cycle_us": 2049.160797830996
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "value": 7.690432806990929e-7,
+              "lo": 4.187886551488182e-7,
+              "hi": 0.0000014116527941301987,
+              "cycle_us": 2196.1724998075465
+            },
+            {
+              "d": 5,
+              "value": 6.695672815542609e-8,
+              "lo": 1.1816687352207417e-8,
+              "hi": 3.791538859955949e-7,
+              "cycle_us": 2490
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 3.122535270410369e-7,
+              "cycle_us": 2049.160797830996
+            }
+          ]
+        },
+        "pLAtTauLog": {
+          "hard": [
+            {
+              "d": 3,
+              "r": 3,
+              "tau_us": 63.245553203367585,
+              "value": 0.004,
+              "lo": 0.002028222209821939,
+              "hi": 0.007873558449886893
+            },
+            {
+              "d": 5,
+              "r": 3,
+              "tau_us": 31.622776601683803,
+              "value": 0.0005,
+              "lo": 0.00008826546015058292,
+              "hi": 0.0028269350227618393
+            },
+            {
+              "d": 7,
+              "r": 3,
+              "tau_us": 59.16079783099615,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0019171176005129348
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "r": 3,
+              "tau_us": 206.17249980754661,
+              "value": 0.00504975903687381,
+              "lo": 0.002754124051919726,
+              "hi": 0.00924314965848495
+            },
+            {
+              "d": 5,
+              "r": 3,
+              "tau_us": 500,
+              "value": 0.0005,
+              "lo": 0.00008826546015058292,
+              "hi": 0.0028269350227618393
+            },
+            {
+              "d": 7,
+              "r": 3,
+              "tau_us": 59.16079783099615,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0019171176005129348
+            }
+          ]
+        },
+        "breakEven": {
+          "epsBar": 0.20080472266743843,
+          "tau_us": 1.92835199588499,
+          "mode": "hard",
+          "axis": "averageAssignmentError() (belief model)",
+          "byMode": {
+            "hard": {
+              "epsBar": 0.20080472266743843,
+              "tau_us": 1.92835199588499,
+              "lo": 0.1946322029541551,
+              "hi": 0.3119100775065382,
+              "halfWidth": 0.05863893727619156,
+              "clamped": true,
+              "segment": [
+                1,
+                2
+              ]
+            },
+            "soft": {
+              "epsBar": null,
+              "tau_us": null,
+              "lo": null,
+              "hi": null,
+              "halfWidth": null,
+              "clamped": false,
+              "note": "d = 5 below d = 3 at every grid point"
+            }
+          },
+          "empiricalAxis": {
+            "hard": {
+              "epsBar": 0.1993378947368421,
+              "tau_us": 1.92835199588499,
+              "lo": 0.1931,
+              "hi": 0.31162,
+              "halfWidth": 0.05926000000000001,
+              "clamped": true,
+              "segment": [
+                1,
+                2
+              ]
+            },
+            "soft": {
+              "epsBar": null,
+              "tau_us": null,
+              "lo": null,
+              "hi": null,
+              "halfWidth": null,
+              "clamped": false,
+              "note": "d = 5 below d = 3 at every grid point"
+            }
+          }
+        },
+        "tauPhys": {
+          "belief": {
+            "xMin": 23.484900025892316,
+            "atEdge": false
+          },
+          "empirical": {
+            "xMin": 24.137068848162848,
+            "atEdge": false
+          }
+        }
+      },
+      "superconducting": {
+        "tauLog": {
+          "hard": [
+            {
+              "d": 3,
+              "xMin": 0.9899494936611665,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.6670748661200807,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "xMin": 0.5486765029691341,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 5,
+              "xMin": 0.5369214242562508,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            },
+            {
+              "d": 7,
+              "xMin": 0.529150262212918,
+              "lo": null,
+              "hi": null,
+              "atEdge": false
+            }
+          ]
+        },
+        "perRound": {
+          "hard": [
+            {
+              "d": 3,
+              "value": 0.0076251345237240975,
+              "lo": 0.005691934434296662,
+              "hi": 0.010208761801784493
+            },
+            {
+              "d": 5,
+              "value": 0.0007154184314404679,
+              "lo": 0.0002880265726511139,
+              "hi": 0.0017835846834269129
+            },
+            {
+              "d": 7,
+              "value": 0.0003335558027988376,
+              "lo": 0.00009144111396299486,
+              "hi": 0.0012159581075014154
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "value": 0.004161375991747433,
+              "lo": 0.002816532350010911,
+              "hi": 0.006151568663250289
+            },
+            {
+              "d": 5,
+              "value": 0.0004749424100707901,
+              "lo": 0.00016921302776041873,
+              "hi": 0.0014210820670611524
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0006398576865969537
+            }
+          ]
+        },
+        "perMicrosecond": {
+          "hard": [
+            {
+              "d": 3,
+              "value": 0.0057593847501221755,
+              "lo": 0.004299208135618939,
+              "hi": 0.007710839311214076,
+              "cycle_us": 1.3239494936611664
+            },
+            {
+              "d": 5,
+              "value": 0.0007146502780688655,
+              "lo": 0.0002877173150569986,
+              "hi": 0.0017816696271075584,
+              "cycle_us": 1.0010748661200806
+            },
+            {
+              "d": 7,
+              "value": 0.00038644001792188245,
+              "lo": 0.00010593881270285541,
+              "hi": 0.0014087444107170628,
+              "cycle_us": 0.863150262212918
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "value": 0.004714497301955426,
+              "lo": 0.0031908998829545156,
+              "hi": 0.006969222181124947,
+              "cycle_us": 0.882676502969134
+            },
+            {
+              "d": 5,
+              "value": 0.0005453332491807528,
+              "lo": 0.00019429195682598257,
+              "hi": 0.001631699516721302,
+              "cycle_us": 0.8709214242562507
+            },
+            {
+              "d": 7,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0007413050943835739,
+              "cycle_us": 0.863150262212918
+            }
+          ]
+        },
+        "pLAtTauLog": {
+          "hard": [
+            {
+              "d": 3,
+              "r": 3,
+              "tau_us": 0.9899494936611665,
+              "value": 0.022528320895062633,
+              "lo": 0.01688215222910879,
+              "hi": 0.03000522828053356
+            },
+            {
+              "d": 5,
+              "r": 3,
+              "tau_us": 0.6670748661200807,
+              "value": 0.002143185817801089,
+              "lo": 0.0008635820576919617,
+              "hi": 0.0053316896999181995
+            },
+            {
+              "d": 7,
+              "r": 3,
+              "tau_us": 0.529150262212918,
+              "value": 0.001,
+              "lo": 0.000274273176083379,
+              "hi": 0.0036390101892285302
+            }
+          ],
+          "soft": [
+            {
+              "d": 3,
+              "r": 3,
+              "tau_us": 0.5486765029691341,
+              "value": 0.012380513925401028,
+              "lo": 0.008402089295725853,
+              "hi": 0.018228586353289576
+            },
+            {
+              "d": 5,
+              "r": 3,
+              "tau_us": 0.5369214242562508,
+              "value": 0.0014234742369866613,
+              "lo": 0.0005074673043690127,
+              "hi": 0.0042511408350900375
+            },
+            {
+              "d": 7,
+              "r": 3,
+              "tau_us": 0.529150262212918,
+              "value": 0,
+              "lo": 0,
+              "hi": 0.0019171176005129348
+            }
+          ]
+        },
+        "breakEven": {
+          "epsBar": null,
+          "tau_us": null,
+          "mode": "hard",
+          "axis": "averageAssignmentError() (belief model)",
+          "byMode": {
+            "hard": {
+              "epsBar": null,
+              "tau_us": null,
+              "lo": null,
+              "hi": null,
+              "halfWidth": null,
+              "clamped": false,
+              "note": "d = 5 below d = 3 at every grid point"
+            },
+            "soft": {
+              "epsBar": 0.10143822441706109,
+              "tau_us": 0.08705505632961244,
+              "lo": 0.08530084292317601,
+              "hi": 0.16598775039260139,
+              "halfWidth": 0.04034345373471269,
+              "clamped": true,
+              "segment": [
+                0.05,
+                0.1
+              ]
+            }
+          },
+          "empiricalAxis": {
+            "hard": {
+              "epsBar": null,
+              "tau_us": null,
+              "lo": null,
+              "hi": null,
+              "halfWidth": null,
+              "clamped": false,
+              "note": "d = 5 below d = 3 at every grid point"
+            },
+            "soft": {
+              "epsBar": 0.453716,
+              "tau_us": 0.08705505632961244,
+              "lo": 0.44522,
+              "hi": 0.4877,
+              "halfWidth": 0.02124000000000001,
+              "clamped": true,
+              "segment": [
+                0.05,
+                0.1
+              ]
+            }
+          }
+        },
+        "tauPhys": {
+          "belief": {
+            "xMin": 0.5866042035827281,
+            "atEdge": false
+          },
+          "empirical": {
+            "xMin": 0.9613645243801214,
+            "atEdge": false
+          }
+        }
+      }
+    }
+  },
+  "params": {
+    "cycle": {
+      "schema": "s2s-params/1",
+      "trapped-ion": {
+        "two_qubit_gate_us": {
+          "value": 970,
+          "source": "IonQ Forte 1, 2-q gate speed 970 us (ZZ gate) at job submission: Robertson et al., 'Variational Gibbs State Preparation on Trapped-Ion Devices', arXiv:2603.03801 (2026), Table 1. For comparison: Aria two-qubit gate 600 us (Microsoft Azure Quantum IonQ provider page, Aria system timing); Forte Enterprise 1 650 us (same Table 1)"
+        },
+        "gate_layers_per_round": {
+          "value": 2,
+          "source": "derived: each round is two parallel CNOT layers"
+        },
+        "reset_us": {
+          "value": 50,
+          "source": "IonQ Forte 1, reset speed 50 us at job submission: Robertson et al., arXiv:2603.03801 (2026), Table 1 (Aria 1: 20 us; Forte Enterprise 1: 150 us, same table)"
+        }
+      },
+      "superconducting": {
+        "two_qubit_gate_us": {
+          "value": 0.042,
+          "source": "Google Quantum AI, 'Quantum error correction below the surface code threshold', Nature 638, 920 (2025), arXiv:2408.13687, Supplementary Information Section I: CZ gates in 42 ns on the 105-qubit processor (37 ns on the 72-qubit processor)"
+        },
+        "gate_layers_per_round": {
+          "value": 2,
+          "source": "derived: each round is two parallel CNOT layers"
+        },
+        "reset_us": {
+          "value": 0.25,
+          "source": "multi-level reset to the ground state within 250 ns: McEwen et al., 'Removing leakage-induced correlated errors in superconducting quantum error correction', Nat. Commun. 12, 1761 (2021), arXiv:2102.06131 (value as stated in the APS March Meeting 2021 abstract L33.12; check against the paper). Google's 1.1 us surface-code cycle (arXiv:2408.13687) gives no reset duration"
+        }
+      }
+    },
+    "ion": {
+      "schema": "s2s-params/1",
+      "platform": "trapped-ion",
+      "bright_is_bit": 1,
+      "R_bright_per_us": {
+        "value": 0.472,
+        "source": "Crain et al., Commun. Phys. 2, 97 (2019), 171Yb+ with SNSPD, Results (Fig. 2a discussion): overall photon detection rate 472(14) kcps = 0.472 counts/us (collected, system efficiency 4.356%)"
+      },
+      "R_dark_per_us": {
+        "value": 0.0000042,
+        "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results and Methods: background count rate 4.2(1) cps = 4.2e-6 counts/us"
+      },
+      "gamma_bright_to_dark_per_us": {
+        "value": 0.000341,
+        "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results (Fig. 2a discussion): dark pumping rate 341(13) Hz = 3.41e-4 /us"
+      },
+      "gamma_dark_to_bright_per_us": {
+        "value": 0.0000164,
+        "source": "Crain et al., Commun. Phys. 2, 97 (2019), Results (Fig. 2a discussion): bright pumping rate 16.4(5) Hz = 1.64e-5 /us"
+      },
+      "T1_idle_us": {
+        "value": 10000000,
+        "source": "Microsoft Azure Quantum IonQ provider documentation (learn.microsoft.com/azure/quantum/provider-ionq), IonQ Aria, System timing: T1 10-100 s (same 171Yb+ qubit as Forte; no Forte T1 is published there); lower end 10 s = 1e7 us used (conservative)"
+      },
+      "tau_grid_us": {
+        "value": [
+          1,
+          2,
+          3,
+          5,
+          7,
+          10,
+          15,
+          20,
+          30,
+          50,
+          100,
+          200,
+          500
+        ],
+        "source": "spans the published detection-time range: 10.5-181.6 us (Noek et al., Opt. Lett. 38, 4735 (2013)), 11 us average and 500 us fixed window (Crain et al. 2019); 1-7 us added to resolve the short-time, photon-starved regime"
+      }
+    },
+    "sc": {
+      "schema": "s2s-params/1",
+      "platform": "superconducting",
+      "chi_over_2pi_MHz": {
+        "value": 1,
+        "source": "representative transmon value (plan section 7.4 default), not one device; published dispersive shifts span ~0.5-8 MHz, e.g. |chi|/2pi = 7.9 MHz in Walter et al., Phys. Rev. Applied 7, 054020 (2017), arXiv:1701.06933"
+      },
+      "kappa_over_2pi_MHz": {
+        "value": 2,
+        "source": "chosen as kappa = 2 chi, the optimum of kappa |delta alpha|^2 at fixed nbar (plan section 7); Walter et al., Phys. Rev. Applied 7, 054020 (2017) use the same design rule with a Purcell filter, kappa_eff/2pi = 37.5 MHz"
+      },
+      "nbar": {
+        "value": 5,
+        "source": "UNSOURCED (illustrative): a few photons, below typical critical photon numbers; plan section 7.4 default"
+      },
+      "eta": {
+        "value": 0.3,
+        "source": "representative heterodyne chain with a quantum-limited amplifier (plan section 7.4 default); Walter et al., Phys. Rev. Applied 7, 054020 (2017) report eta = 0.66 with a phase-sensitive parametric amplifier, so 0.3 is conservative"
+      },
+      "T1_us": {
+        "value": 50,
+        "source": "representative transmon T1 (plan section 7.4 default), within the published range from 7.6 us (Walter et al., Phys. Rev. Applied 7, 054020 (2017)) to a few hundred us in current devices"
+      },
+      "detection": "heterodyne",
+      "ringup": true,
+      "tau_grid_us": {
+        "value": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.3,
+          0.4,
+          0.5,
+          0.7,
+          1,
+          1.4,
+          2,
+          3
+        ],
+        "source": "spans published integration times: 48-88 ns (Walter et al. 2017) up to the few-us regime where T1 decay dominates"
+      }
+    },
+    "definitions": {
+      "perRound": "0.5 (1 - (1 - 2 pL)^(1/r)) at tau*_log; pL and its Wilson bounds interpolated linearly in ln tau between grid points (the best grid point when tau*_log is at the grid edge)",
+      "perMicrosecond": "perRound / cycleTime, cycleTime = gate_layers_per_round * two_qubit_gate_us + tau*_log + reset_us",
+      "breakEven": "first sign change of pL(d=5) - pL(d=3) in tau order, x axis averageAssignmentError() (belief); interval from the crossings of hi5 - lo3 and lo5 - hi3 (Wilson) on the same grid segment",
+      "C1": "superconducting: interior tau*_log below tau*_phys (empirical assignment curve) for every d and mode (full: bootstrap interval; reduced: Wilson intervals on the grid); trapped-ion: idle flip probability below 0.000001 at every tau, or no interior tau*_log",
+      "C2": "per platform: soft never above hard beyond the Wilson intervals, and below hard beyond them at one or more (d, tau)",
+      "C3": "per (d, mode): platform ordering by per-round error differs from ordering by per-microsecond error, each ordering requiring non-overlapping intervals",
+      "C4": "per mode: |epsBar(ion) - epsBar(sc)| < sum of half-widths; undetermined if a platform has no crossing, or a flip rests on a clamped interval",
+      "combine": "a verdict is \"flips\" if any part flips, \"holds\" if every part holds, otherwise \"undetermined\""
+    },
+    "sensitivity": {
+      "scales": [
+        0.5,
+        2
+      ],
+      "readoutDrawsPerShot": 1,
+      "shotsPerBank": 1000,
+      "f1Samples": 50000,
+      "bootstrap": false,
+      "distances": [
+        3,
+        5,
+        7
+      ],
+      "parameters": {
+        "trapped-ion": [
+          "R_bright_per_us",
+          "R_dark_per_us",
+          "gamma_bright_to_dark_per_us",
+          "gamma_dark_to_bright_per_us",
+          "T1_idle_us"
+        ],
+        "superconducting": [
+          "chi_over_2pi_MHz",
+          "kappa_over_2pi_MHz",
+          "nbar",
+          "eta",
+          "T1_us"
+        ]
+      },
+      "cycleParameters": [
+        "two_qubit_gate_us",
+        "reset_us"
+      ]
+    }
+  },
+  "provenance": {
+    "tool": "tools/sweep.mjs --stage 4",
+    "commit": "4b71c56aa7daeb66fb46c13992d63e34d7f624be",
+    "date": "2026-10-08T12:35:51.177Z",
+    "node": "v24.18.1",
+    "params": [
+      "params/cycle.json",
+      "params/ion.json",
+      "params/sc.json"
+    ],
+    "inputs": {
+      "trapped-ion": {
+        "file": "data\\results\\stage2_ion.json",
+        "commit": "4900c603e82baf36ccbefc9c66d4d67e93b40738",
+        "date": "2026-10-08T08:48:26.511Z",
+        "cardMatchesParams": true
+      },
+      "superconducting": {
+        "file": "data\\results\\stage3_sc.json",
+        "commit": "89b23b3f0a73e5c4c3a984c3ef3cc40db1eaa597",
+        "date": "2026-10-08T12:04:43.876Z",
+        "cardMatchesParams": true
+      }
+    },
+    "banks": [
+      "rep_d3_r3_L0.json",
+      "rep_d3_r3_L1.json",
+      "rep_d5_r3_L0.json",
+      "rep_d5_r3_L1.json",
+      "rep_d7_r3_L0.json",
+      "rep_d7_r3_L1.json"
+    ],
+    "pGate": {
+      "rep_d3_r3_L0.json": 0.0124748,
+      "rep_d3_r3_L1.json": 0.0123568,
+      "rep_d5_r3_L0.json": 0.0131673,
+      "rep_d5_r3_L1.json": 0.0130489,
+      "rep_d7_r3_L0.json": 0.0130263,
+      "rep_d7_r3_L1.json": 0.0139025
+    },
+    "seedRule": "reduced decode seed = 4000000 + (superconducting ? 100000 : 0) + 10000*d + 1000*logical + tauIndex (same in every rerun; hard and soft share it); shot subsample seed 401 + 10*d + logical; F1 seed 402",
+    "nonExact": 38,
+    "runtime_s": 372.69
+  }
+}
