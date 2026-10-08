@@ -164,6 +164,30 @@
 .live-note a { color: var(--accent); }
 .status.error { color: var(--focus); font-weight: 600; } /* #b3261e: 6.5:1 on white */
 
+/* Platform toggle (levels 3 and 4) */
+.platform-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 8px 0 12px;
+  padding: 6px 12px 10px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+}
+.platform-toggle legend { padding: 0 4px; font-weight: 600; }
+.platform-option { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+#s2s-app .platform-option input[type="radio"] { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.platform-option label { cursor: pointer; }
+.platform-option input:checked + label { font-weight: 700; }
+
+/* IQ plane (superconducting level 3) */
+.iq-view { max-width: 560px; }
+.iq-svg .iq-threshold { stroke: var(--text); stroke-width: 2; stroke-dasharray: 8 4; }
+.iq-svg .iq-centre { fill: #ffffff; stroke: var(--text); stroke-width: 2.5; }
+.iq-svg .iq-centre-mark { stroke: var(--text); stroke-width: 2; }
+.iq-svg .iq-label { font-size: 13px; font-weight: 700; fill: var(--text); paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }
+
 /* Charts */
 .chart { margin: 16px 0; max-width: 680px; }
 .chart figcaption { font-weight: 600; margin-bottom: 4px; }

@@ -1,21 +1,32 @@
-// Level 4, "Trust but verify": trapped-ion readout with confidence. The level 2 grid with
-// every lit detector shaded by the confidence of the measurements that produced it; each
-// shot decoded in mode "hard" and in mode "soft" with the same seed, their matchings side
-// by side; a running tally over 20 shots; the stage-2 curves of hard against soft
-// logical error against tau. With FEATURES.liveRun the shots can come from a fresh run.
+// Level 4, "Trust but verify": readout with confidence. The level 2 grid with every lit
+// detector shaded by the confidence of the measurements that produced it; each shot
+// decoded in mode "hard" and in mode "soft" with the same seed, their matchings side by
+// side; a running tally over 20 shots; the curves of hard against soft logical error
+// against tau. The platform toggle is shared with level 3: the trapped ion uses
+// createIonReadout and stage2, the superconducting qubit (FEATURES.superconducting)
+// createScReadout and stage3. With FEATURES.liveRun the shots can come from a fresh run.
 
-import { createIonReadout, decodeShot } from './bridge_core.js';
-import { bankD3R3, stage2, paramsIon } from './bridge_data.js';
+import { decodeShot } from './bridge_core.js';
+import { bankD3R3 } from './bridge_data.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import { buildGraph, pFromLlr, xorP } from '../core/graph.js';
 import { createChart, svgEl, formatNumber } from './charts.js';
 import { describeCorrections, P_GATE } from './level1.js';
-import { tauGrid, defaultTauIndex, formatTau, optimaInfo } from './level3.js';
+import {
+  tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
+} from './level3.js';
 import { mountLiveRun } from './liverun.js';
 
 const SEED = 20261013;
 const SHOTS_PER_SET = 20;
+
+const INTRO = {
+  'trapped-ion': 'A photon count far from the threshold is a confident reading; one close to it is a guess. ',
+  superconducting: 'An IQ point far from the threshold is a confident reading; one close to it (for example from a qubit that decayed during the readout) is a guess. ',
+};
+const INTRO_TAIL = 'Hard decoding treats every reading as equally reliable. Soft decoding uses each reading\'s confidence (its log-likelihood ratio), '
+  + 'so a path through doubtful readings costs less. Both decoders below see the same readings of the same shot.';
 
 // Confidence of detector (k, j): 1 - 2 p, where p is the chance that the readouts behind
 // it give the wrong parity (xor of the error probabilities pFromLlr(llr) of those
@@ -114,8 +125,12 @@ function drawGrid(graph, res, conf, title) {
 }
 
 export function mountLevel4(container) {
-  const grid = tauGrid();
-  let idx = defaultTauIndex(grid);
+  // Each platform keeps its own slider position.
+  const positions = new Map();
+  let plat = currentPlatform();
+  let grid = tauGrid(plat);
+  let idx = defaultTauIndex(grid, 0.1, plat);
+  positions.set(plat.id, idx);
   let source = { bank: bankD3R3, label: 'stored IonQ simulator bank' };
   let shots = expandShots(source.bank);
   let graph = buildGraph(source.bank.d, source.bank.r);
@@ -125,15 +140,15 @@ export function mountLevel4(container) {
 
   container.replaceChildren();
   container.appendChild(el('h2', {}, 'Level 4: Trust but verify'));
-  container.appendChild(el('p', { class: 'intro' },
-    'A photon count far from the threshold is a confident reading; one close to it is a guess. '
-    + 'Hard decoding treats every reading as equally reliable. Soft decoding uses each reading\'s confidence (its log-likelihood ratio), '
-    + 'so a path through doubtful readings costs less. Both decoders below see the same readings of the same shot.'));
+  mountPlatformToggle(container, 'l4');
+  const intro = el('p', { class: 'intro' }, INTRO[plat.id] + INTRO_TAIL);
+  container.appendChild(intro);
 
   const row = el('div', { class: 'control-row' });
-  const label = el('label', { for: 'l4-tau' }, 'Detection time τ: ');
+  const labelText = document.createTextNode(`${plat.tauName} τ: `);
+  const label = el('label', { for: 'l4-tau' });
   const out = el('output', { for: 'l4-tau' }, formatTau(grid[idx]));
-  label.appendChild(out);
+  label.append(labelText, out);
   const input = el('input', { id: 'l4-tau', type: 'range', min: '0', max: String(grid.length - 1), step: '1', value: String(idx) });
   row.append(label, input);
   container.appendChild(row);
@@ -165,33 +180,40 @@ export function mountLevel4(container) {
   container.appendChild(tallyText);
 
   // Chart: hard against soft for one distance.
-  const ds = [...new Set(stage2.series.map((s) => s.d))].sort((a, b) => a - b);
-  let dSel = ds.includes(3) ? 3 : ds[0];
+  let dSel = 3;
   const dRow = el('div', { class: 'control-row' });
   const dLabel = el('label', { for: 'l4-d' }, 'Distance shown in the chart: ');
   const dSelect = el('select', { id: 'l4-d' });
-  for (const d of ds) {
-    const o = el('option', { value: String(d) }, `d = ${d}`);
-    if (d === dSel) o.selected = true;
-    dSelect.appendChild(o);
+  function fillDistances() {
+    const ds = [...new Set(plat.results.series.map((s) => s.d))].sort((a, b) => a - b);
+    if (!ds.includes(dSel)) dSel = ds.includes(3) ? 3 : ds[0];
+    dSelect.replaceChildren(...ds.map((d) => {
+      const o = el('option', { value: String(d) }, `d = ${d}`);
+      if (d === dSel) o.selected = true;
+      return o;
+    }));
   }
+  fillDistances();
   dRow.append(dLabel, dSelect);
   container.appendChild(dRow);
-  const chartOpts = () => ({
-    title: `Hard against soft decoding: logical error against detection time (stage 2, trapped ion, d = ${dSel})${stage2.fixture ? ' — placeholder data' : ''}`,
-    xLabel: 'Detection time τ (µs)', yLabel: 'Logical error probability',
-    series: stage2.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1))
-      .map((s) => ({ name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: stage2.x.values, y: s.pL, lo: s.lo, hi: s.hi })),
-    logX: true, logY: true, yFloor: 1e-7,
-    vlines: [{ x: grid[idx], label: `τ = ${formatTau(grid[idx])}` }],
-  });
+  const chartOpts = () => {
+    const res = plat.results;
+    return {
+      title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${res.fixture ? ' — placeholder data' : ''}`,
+      xLabel: `${plat.tauName} τ (µs)`, yLabel: 'Logical error probability',
+      series: res.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1))
+        .map((s) => ({ name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi })),
+      logX: true, logY: true, yFloor: 1e-7,
+      vlines: [{ x: grid[idx], label: `τ = ${formatTau(grid[idx])}` }],
+    };
+  };
   const chart = createChart(chartOpts());
   container.appendChild(chart.root);
   const optList = el('ul', { class: 'optima' });
   container.appendChild(optList);
   function renderChart() {
     chart.update(chartOpts());
-    const lines = ['hard', 'soft'].flatMap((mode) => optimaInfo(stage2, mode, [dSel]).lines.filter((l) => l.includes('τ_log')));
+    const lines = ['hard', 'soft'].flatMap((mode) => optimaInfo(plat.results, mode, [dSel]).lines.filter((l) => l.includes('τ_log')));
     optList.replaceChildren(...lines.map((t) => el('li', {}, t)));
   }
 
@@ -208,7 +230,7 @@ export function mountLevel4(container) {
 
   function decodeBoth() {
     const tau = grid[idx];
-    const readout = createIonReadout(paramsIon, tau);
+    const readout = plat.create(plat.params, tau);
     const { bank } = source;
     const args = { shotBits: shots[current.index], layout: bank.layout, d: bank.d, r: bank.r, readout, pGate: P_GATE };
     // The same seed for both modes, so both decoders see identical readings.
@@ -240,7 +262,7 @@ export function mountLevel4(container) {
       pnl.verdict.textContent = `${kept ? '✓ Logical value kept' : '✗ Logical value lost'} (${res.corrected}). Correction: ${corr.length ? corr.map((c) => c.text).join('; ') : 'none'}.${res.exact ? '' : ' (Matching not exact.)'}`;
     }
     const same = pathKey(both.hard) === pathKey(both.soft);
-    shotText.textContent = `Shot ${tally.n} of ${SHOTS_PER_SET} (bank shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
+    shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (bank shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
       + `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}. ${same ? 'Both decoders chose the same matching.' : 'The decoders chose different matchings.'}`;
     return { ...both, same };
   }
@@ -269,10 +291,8 @@ export function mountLevel4(container) {
     input.setAttribute('aria-valuetext', formatTau(grid[idx]));
   }
 
-  input.addEventListener('input', () => {
-    idx = Number(input.value);
-    setTau();
-    // Redraw the same shot at the new τ; the tally restarts because the readout changed.
+  // Redraws the same shot with the new readout; the tally restarts because the readout changed.
+  function redrawShot() {
     resetTally();
     tally.n = 1;
     const res = renderShot();
@@ -284,6 +304,26 @@ export function mountLevel4(container) {
     nextBtn.textContent = 'Next shot';
     renderTally();
     renderChart();
+  }
+
+  input.addEventListener('input', () => {
+    idx = Number(input.value);
+    positions.set(plat.id, idx);
+    setTau();
+    redrawShot();
+  });
+  onPlatformChange((p) => {
+    plat = p;
+    grid = tauGrid(p);
+    if (!positions.has(p.id)) positions.set(p.id, defaultTauIndex(grid, 0.1, p));
+    idx = positions.get(p.id);
+    intro.textContent = INTRO[p.id] + INTRO_TAIL;
+    labelText.textContent = `${p.tauName} τ: `;
+    input.max = String(grid.length - 1);
+    input.value = String(idx);
+    setTau();
+    fillDistances();
+    redrawShot();
   });
   dSelect.addEventListener('change', () => {
     dSel = Number(dSelect.value);

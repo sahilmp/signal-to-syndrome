@@ -1,26 +1,88 @@
-// Level 3, "Listen longer?": trapped-ion readout. A detection-time slider over the tau grid
-// of paramsIon; photon-count histograms for bright and dark with the threshold; the
-// assignment error; the stage-2 curves of logical error against tau (hard mode) with the
-// optima; and a "Batch" button that runs runPoint on 200 shots of bankD3R3.
+// Level 3, "Listen longer?": readout time against logical error, for the trapped ion and
+// (with FEATURES.superconducting) the superconducting qubit. A platform toggle shared with
+// level 4; a readout-time slider over the platform's tau grid. Trapped ion: photon-count
+// histograms for bright and dark with the threshold. Superconducting: the IQ plane
+// (iqview.js) and the stage-3 assignment-error curve. Both: the assignment error, the
+// curves of logical error against tau (hard mode) with the optima, and a "Batch" button
+// that runs runPoint on 200 shots of bankD3R3.
 
-import { createIonReadout, runPoint } from './bridge_core.js';
-import { bankD3R3, stage2, paramsIon } from './bridge_data.js';
+import { createIonReadout, createScReadout, runPoint } from './bridge_core.js';
+import { bankD3R3, stage2, stage3, paramsIon, paramsSc } from './bridge_data.js';
+import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import { createChart, svgEl, formatNumber, SERIES_STYLES } from './charts.js';
+import { drawIqView } from './iqview.js';
 import { P_GATE } from './level1.js';
 import { sampleBank } from './level2.js';
 
 const SEED = 20261012;
 const HIST_SAMPLES = 5000;
+const IQ_SAMPLES = 1500;
 const BATCH_SHOTS = 200;
 
 // Parameter cards store { value, source }; plain values are accepted too.
 export const cardValue = (p) => (p !== null && typeof p === 'object' && !Array.isArray(p) && 'value' in p ? p.value : p);
 
-export function tauGrid() {
-  const grid = cardValue(paramsIon.tau_grid_us);
-  if (!Array.isArray(grid) || grid.length === 0) throw new Error('paramsIon has no tau_grid_us');
+// The readout platforms of levels 3 and 4, each behind its FEATURES flag.
+export const PLATFORMS = [
+  {
+    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: stage2, stage: 2,
+    create: createIonReadout, tauName: 'Detection time',
+  },
+  {
+    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: stage3, stage: 3,
+    create: createScReadout, tauName: 'Integration time',
+  },
+];
+export const ION = PLATFORMS[0];
+
+export const enabledPlatforms = () => PLATFORMS.filter((p) => FEATURES[p.flag] === true);
+
+// The platform choice is shared by levels 3 and 4: setPlatform notifies every mounted level.
+let currentPlatformId = null;
+const platformListeners = new Set();
+export function currentPlatform() {
+  const en = enabledPlatforms();
+  return en.find((p) => p.id === currentPlatformId) || en[0] || ION;
+}
+export function setPlatform(id) {
+  if (id === currentPlatform().id || !enabledPlatforms().some((p) => p.id === id)) return;
+  currentPlatformId = id;
+  for (const fn of platformListeners) fn(currentPlatform());
+}
+export function onPlatformChange(fn) {
+  platformListeners.add(fn);
+}
+
+// Radio group listing only the enabled platforms; arrow keys move between them. With one
+// platform it is a plain line of text. `prefix` keeps the ids unique per level.
+export function mountPlatformToggle(container, prefix) {
+  const en = enabledPlatforms();
+  if (en.length < 2) {
+    container.appendChild(el('p', { class: 'hint' }, `Platform: ${currentPlatform().label.toLowerCase()}.`));
+    return;
+  }
+  const fs = el('fieldset', { class: 'platform-toggle' });
+  fs.appendChild(el('legend', {}, 'Platform'));
+  const inputs = en.map((p) => {
+    const id = `${prefix}-platform-${p.id}`;
+    const input = el('input', { type: 'radio', name: `${prefix}-platform`, id, value: p.id });
+    input.checked = p.id === currentPlatform().id;
+    input.addEventListener('change', () => { if (input.checked) setPlatform(p.id); });
+    const label = el('label', { for: id }, p.label);
+    const wrap = el('span', { class: 'platform-option' });
+    wrap.append(input, label);
+    fs.appendChild(wrap);
+    return input;
+  });
+  onPlatformChange((p) => { for (const i of inputs) i.checked = i.value === p.id; });
+  container.appendChild(fs);
+}
+
+export function tauGrid(platform = ION) {
+  const grid = cardValue(platform.params.tau_grid_us);
+  if (!Array.isArray(grid) || grid.length === 0) throw new Error(`the ${platform.label.toLowerCase()} parameter card has no tau_grid_us`);
   return grid.map(Number);
 }
 
@@ -28,10 +90,10 @@ export const formatTau = (tau) => `${Number(tau.toPrecision(6))} µs`;
 
 // Index of the first grid point whose assignment error is below `target`, so that the
 // levels open where readout errors are common enough to see.
-export function defaultTauIndex(grid, target = 0.1) {
+export function defaultTauIndex(grid, target = 0.1, platform = ION) {
   for (let i = 0; i < grid.length; i++) {
     try {
-      if (createIonReadout(paramsIon, grid[i]).averageAssignmentError() < target) return i;
+      if (platform.create(platform.params, grid[i]).averageAssignmentError() < target) return i;
     } catch {
       // A grid point the model rejects is skipped.
     }
@@ -196,32 +258,55 @@ function el(tag, attrs = {}, text = null) {
   return e;
 }
 
+const INTRO = {
+  'trapped-ion': 'A trapped ion is read out by shining a laser on it and counting the photons it scatters: the bright state glows, the dark state stays (almost) dark. '
+    + 'Counting for longer separates the two histograms, so fewer readings fall on the wrong side of the threshold. '
+    + 'But a longer readout also makes every round slower and gives the ion more time to change state, so the logical error does not keep falling.',
+  superconducting: 'A superconducting qubit is read out through a microwave resonator: the reflected signal lands at one point of the IQ plane for |0⟩ and at another for |1⟩. '
+    + 'Integrating the signal for longer averages away the amplifier noise, so the two clusters separate. '
+    + 'But the qubit can decay from |1⟩ to |0⟩ while it is being read, which smears points from the |1⟩ cluster towards |0⟩, and a longer readout also leaves the other qubits idle for longer. '
+    + 'So the logical error has an optimum integration time.',
+};
+
 export function mountLevel3(container) {
-  const grid = tauGrid();
-  let idx = defaultTauIndex(grid);
   const shots = expandShots(bankD3R3);
   const batchBank = sampleBank(bankD3R3, shots, BATCH_SHOTS, SEED + 1);
-  let batch = null; // { tau, pt }
+  // Each platform keeps its own slider position (and its last batch result).
+  const state = new Map();
+  let plat = currentPlatform();
+  let grid = [];
+  let idx = 0;
+  const platState = (p) => {
+    if (!state.has(p.id)) {
+      const g = tauGrid(p);
+      state.set(p.id, { grid: g, idx: defaultTauIndex(g, 0.1, p), batch: null });
+    }
+    return state.get(p.id);
+  };
 
   container.replaceChildren();
   container.appendChild(el('h2', {}, 'Level 3: Listen longer?'));
-  container.appendChild(el('p', { class: 'intro' },
-    'A trapped ion is read out by shining a laser on it and counting the photons it scatters: the bright state glows, the dark state stays (almost) dark. '
-    + 'Counting for longer separates the two histograms, so fewer readings fall on the wrong side of the threshold. '
-    + 'But a longer readout also makes every round slower and gives the ion more time to change state, so the logical error does not keep falling.'));
+  mountPlatformToggle(container, 'l3');
+  const intro = el('p', { class: 'intro' });
+  container.appendChild(intro);
 
   const row = el('div', { class: 'control-row' });
-  const label = el('label', { for: 'l3-tau' }, 'Detection time τ: ');
-  const out = el('output', { for: 'l3-tau' }, formatTau(grid[idx]));
-  label.appendChild(out);
-  const input = el('input', { id: 'l3-tau', type: 'range', min: '0', max: String(grid.length - 1), step: '1', value: String(idx) });
+  const labelText = document.createTextNode('');
+  const label = el('label', { for: 'l3-tau' });
+  const out = el('output', { for: 'l3-tau' });
+  label.append(labelText, out);
+  const input = el('input', { id: 'l3-tau', type: 'range', min: '0', step: '1' });
   row.append(label, input);
   container.appendChild(row);
 
   const assign = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(assign);
-  const histBox = el('div');
-  container.appendChild(histBox);
+  const visualBox = el('div');
+  container.appendChild(visualBox);
+
+  // Superconducting only: the stage-3 assignment-error U-curve.
+  const assignChart = createChart({ title: '', xLabel: 'Integration time τ (µs)', yLabel: 'Assignment error', series: [], logX: true, logY: true, yFloor: 1e-6 });
+  container.appendChild(assignChart.root);
 
   const batchRow = el('div', { class: 'control-row' });
   const batchBtn = el('button', { type: 'button' }, 'Batch');
@@ -231,66 +316,120 @@ export function mountLevel3(container) {
   const batchOut = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(batchOut);
 
-  const hard = stage2.series.filter((s) => s.mode === 'hard').sort((a, b) => a.d - b.d);
-  const ds = hard.map((s) => s.d);
-  const optima = optimaInfo(stage2, 'hard', ds);
-  const series = hard.map((s) => ({ name: `d = ${s.d}, r = ${s.r}`, x: stage2.x.values, y: s.pL, lo: s.lo, hi: s.hi }));
-  const chartBase = {
-    title: `Logical error against detection time (stage 2, trapped ion, hard decoding)${stage2.fixture ? ' — placeholder data' : ''}`,
-    xLabel: 'Detection time τ (µs)', yLabel: 'Logical error probability',
-    series, logX: true, logY: true, yFloor: 1e-7,
-  };
-  const chart = createChart({ ...chartBase, vlines: [] });
+  const chart = createChart({ title: '', xLabel: '', yLabel: 'Logical error probability', series: [], logX: true, logY: true, yFloor: 1e-7 });
   container.appendChild(chart.root);
   const optList = el('ul', { class: 'optima' });
-  for (const t of optima.lines) optList.appendChild(el('li', {}, t));
   container.appendChild(optList);
 
-  function render() {
-    const tau = grid[idx];
-    out.textContent = formatTau(tau);
-    input.setAttribute('aria-valuetext', formatTau(tau));
-    let readout;
-    try {
-      readout = createIonReadout(paramsIon, tau);
-    } catch (err) {
-      assign.textContent = `The readout model rejected τ = ${formatTau(tau)}: ${err.message}`;
-      histBox.replaceChildren();
-      batchBtn.disabled = true;
+  let chartBase = null;
+  let optima = null;
+  let assignBase = null;
+
+  // Everything that depends on the platform but not on τ.
+  function setPlatformView(p) {
+    plat = p;
+    const st = platState(p);
+    grid = st.grid;
+    idx = st.idx;
+    intro.textContent = INTRO[p.id];
+    labelText.textContent = `${p.tauName} τ: `;
+    input.max = String(grid.length - 1);
+    input.value = String(idx);
+    const res = p.results;
+    const tag = `stage ${p.stage}, ${p.label.toLowerCase()}`;
+    const hard = res.series.filter((s) => s.mode === 'hard').sort((a, b) => a.d - b.d);
+    optima = optimaInfo(res, 'hard', hard.map((s) => s.d));
+    chartBase = {
+      title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
+      xLabel: `${p.tauName} τ (µs)`, yLabel: 'Logical error probability',
+      series: hard.map((s) => ({ name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi })),
+      logX: true, logY: true, yFloor: 1e-7,
+    };
+    optList.replaceChildren(...optima.lines.map((t) => el('li', {}, t)));
+
+    const a = p.id === 'superconducting' ? res.assignment : null;
+    assignChart.root.hidden = !a;
+    assignBase = a ? {
+      title: `Assignment error against integration time (${tag})${res.fixture ? ' — placeholder data' : ''}`,
+      xLabel: 'Integration time τ (µs)', yLabel: 'Assignment error', logX: true, logY: true, yFloor: 1e-6,
+      series: [
+        { name: 'Model (belief)', x: res.x.values, y: a.belief },
+        { name: 'Simulated (empirical)', x: res.x.values, y: a.empirical, lo: a.lo, hi: a.hi },
+      ],
+    } : null;
+    render();
+  }
+
+  function renderVisual(readout, tau, rng) {
+    if (plat.id === 'superconducting') {
+      const s0 = readout.iqSamples(0, IQ_SAMPLES, rng);
+      const s1 = readout.iqSamples(1, IQ_SAMPLES, rng);
+      visualBox.replaceChildren(drawIqView({ samples0: s0, samples1: s1, readout, rng, tau, tauText: formatTau }));
       return;
     }
-    batchBtn.disabled = false;
-    const rng = createRng(SEED + idx);
     const brightBit = paramsIon.bright_is_bit === 0 ? 0 : 1;
     const bright = readout.countHistogram(brightBit, HIST_SAMPLES, rng);
     const dark = readout.countHistogram(1 - brightBit, HIST_SAMPLES, rng);
     const threshold = findThreshold(readout, tau, rng);
-    const eps = readout.averageAssignmentError();
-    assign.textContent = `At τ = ${formatTau(tau)} the assignment error (average chance of reading the wrong state) is ${formatNumber(eps)}.`;
-    histBox.replaceChildren(drawHistogram(bright, dark, threshold, tau));
+    visualBox.replaceChildren(drawHistogram(bright, dark, threshold, tau));
+  }
 
-    const showBatch = batch && batch.tau === tau;
-    if (!showBatch) batchOut.textContent = '';
+  function render() {
+    const tau = grid[idx];
+    const st = platState(plat);
+    out.textContent = formatTau(tau);
+    input.setAttribute('aria-valuetext', formatTau(tau));
+    const tauLine = { x: tau, label: `τ = ${formatTau(tau)}` };
+    if (assignBase) {
+      const phys = optima.vlines.filter((v) => v.label.includes('τ_phys')).map((v) => ({ x: v.x, label: 'τ_phys' }));
+      assignChart.update({ ...assignBase, vlines: [tauLine, ...phys] });
+    }
+    let readout;
+    try {
+      readout = plat.create(plat.params, tau);
+    } catch (err) {
+      assign.textContent = `The readout model rejected τ = ${formatTau(tau)}: ${err.message}`;
+      visualBox.replaceChildren();
+      batchBtn.disabled = true;
+      chart.update({ ...chartBase, vlines: [tauLine, ...optima.vlines], points: [] });
+      return;
+    }
+    batchBtn.disabled = false;
+    const rng = createRng(SEED + idx);
+    const eps = readout.averageAssignmentError();
+    const snr = plat.id === 'superconducting' && typeof readout.snr === 'function' ? readout.snr() : null;
+    assign.textContent = `At τ = ${formatTau(tau)} the assignment error (average chance of reading the wrong state) is ${formatNumber(eps)}`
+      + `${Number.isFinite(snr) ? `; the signal-to-noise ratio is ${formatNumber(snr)}` : ''}.`;
+    try {
+      renderVisual(readout, tau, rng);
+    } catch (err) {
+      visualBox.replaceChildren(el('p', { class: 'status error' }, `The readout picture could not be drawn: ${err.message}`));
+    }
+
+    const batch = st.batch && st.batch.tau === tau ? st.batch : null;
+    batchOut.textContent = batch ? batch.text : '';
     chart.update({
       ...chartBase,
-      vlines: [{ x: tau, label: `τ = ${formatTau(tau)}` }, ...optima.vlines],
-      points: showBatch ? [{ name: `Batch, d = 3 (${batch.pt.n} shots)`, x: tau, y: batch.pt.wilson.p, lo: batch.pt.wilson.lo, hi: batch.pt.wilson.hi }] : [],
+      vlines: [tauLine, ...optima.vlines],
+      points: batch ? [{ name: `Batch, d = 3 (${batch.pt.n} shots)`, x: tau, y: batch.pt.wilson.p, lo: batch.pt.wilson.lo, hi: batch.pt.wilson.hi }] : [],
     });
   }
 
   batchBtn.addEventListener('click', () => {
     const tau = grid[idx];
-    const pt = runPoint({ bank: batchBank, readout: createIonReadout(paramsIon, tau), mode: 'hard', pGate: P_GATE, seed: SEED + 2, maxShots: BATCH_SHOTS });
-    batch = { tau, pt };
+    const pt = runPoint({ bank: batchBank, readout: plat.create(plat.params, tau), mode: 'hard', pGate: P_GATE, seed: SEED + 2, maxShots: BATCH_SHOTS });
     const w = pt.wilson;
-    render();
-    batchOut.textContent = `Batch at τ = ${formatTau(tau)} (d = 3, r = 3, ${pt.n} shots, hard decoding): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
+    const text = `Batch at τ = ${formatTau(tau)} (${plat.label.toLowerCase()}, d = 3, r = 3, ${pt.n} shots, hard decoding): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
       + `p = ${formatNumber(w.p)} (95% interval ${formatNumber(w.lo)} to ${formatNumber(w.hi)}).${pt.nonExact ? ` ${pt.nonExact} matchings were not exact.` : ''}`;
+    platState(plat).batch = { tau, pt, text };
+    render();
   });
 
   input.addEventListener('input', () => {
     idx = Number(input.value);
+    platState(plat).idx = idx;
     render();
   });
-  render();
+  onPlatformChange(setPlatformView);
+  setPlatformView(plat);
 }

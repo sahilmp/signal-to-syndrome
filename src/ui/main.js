@@ -12,10 +12,14 @@ import { mountDiagnostics } from './diag.js';
 const LEVELS = [
   { id: 'level1', flag: 'level1', label: 'Level 1: Be the decoder', mount: mountLevel1 },
   { id: 'level2', flag: 'level2', label: 'Level 2: Time is a dimension', mount: mountLevel2 },
-  // Trapped-ion levels; level 4 also holds the live-run panel (FEATURES.liveRun).
-  { id: 'level3', flag: 'ion', label: 'Level 3: Listen longer?', mount: mountLevel3 },
-  { id: 'level4', flag: 'ion', label: 'Level 4: Trust but verify', mount: mountLevel4 },
+  // Readout-platform levels, shown when the trapped ion or the superconducting platform is
+  // on; their shared platform toggle lists only the enabled platforms. Level 4 also holds
+  // the live-run panel (FEATURES.liveRun).
+  { id: 'level3', flags: ['ion', 'superconducting'], label: 'Level 3: Listen longer?', mount: mountLevel3 },
+  { id: 'level4', flags: ['ion', 'superconducting'], label: 'Level 4: Trust but verify', mount: mountLevel4 },
 ];
+
+const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
 
 function start() {
   const root = document.getElementById('s2s-app');
@@ -23,7 +27,7 @@ function start() {
   const version = pkg.version;
   for (const v of root.querySelectorAll('[data-s2s="version"]')) v.textContent = version;
 
-  const enabled = LEVELS.filter((l) => FEATURES[l.flag] === true);
+  const enabled = LEVELS.filter(isEnabled);
   const selector = root.querySelector('[data-s2s="levels"]');
   const main = root.querySelector('[data-s2s="main"]');
   const mounted = new Map();
