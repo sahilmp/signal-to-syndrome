@@ -7,6 +7,7 @@ import { mountLevel1 } from './level1.js';
 import { mountLevel2 } from './level2.js';
 import { mountLevel3 } from './level3.js';
 import { mountLevel4 } from './level4.js';
+import { mountLevel5 } from './level5.js';
 import { mountDiagnostics } from './diag.js';
 
 const LEVELS = [
@@ -17,6 +18,8 @@ const LEVELS = [
   // the live-run panel (FEATURES.liveRun).
   { id: 'level3', flags: ['ion', 'superconducting'], label: 'Level 3: Listen longer?', mount: mountLevel3 },
   { id: 'level4', flags: ['ion', 'superconducting'], label: 'Level 4: Trust but verify', mount: mountLevel4 },
+  // Platform comparison: both platforms side by side, from the stage 2-4 results.
+  { id: 'level5', flag: 'level5', label: 'Level 5: Two platforms', mount: mountLevel5 },
 ];
 
 const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
