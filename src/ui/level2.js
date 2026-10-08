@@ -48,9 +48,10 @@ function drawGrid(graph, res) {
   const nc = d - 1;
   const colW = 110;
   const rowH = 64;
-  const left = 110;
+  // Margins leave room for the larger labels of narrow screens (style.css).
+  const left = 124;
   const top = 56;
-  const width = left + colW * (nc + 1) + 40;
+  const width = left + colW * (nc + 1) + 50;
   const height = top + rowH * r + 40;
   const cx = (c) => left + c * colW; // c = 0 left boundary, 1..nc checks, nc+1 right boundary
   const cy = (k) => top + k * rowH;

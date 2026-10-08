@@ -21,14 +21,63 @@ export function svgEl(tag, attrs = {}, parent = null) {
 }
 
 // Okabe-Ito colours (designed to stay distinguishable with colour-vision deficiency);
-// each series also gets its own marker shape, so colour is never the only cue.
+// each series also gets its own marker shape, so colour is never the only cue. The last
+// two are darkened (from #CC79A7 and #56B4E9) to reach 3:1 on white and on --panel.
 export const SERIES_STYLES = [
   { color: '#0072B2', shape: 'circle' },
   { color: '#D55E00', shape: 'square' },
   { color: '#009E73', shape: 'triangle' },
-  { color: '#CC79A7', shape: 'diamond' },
-  { color: '#56B4E9', shape: 'cross' },
+  { color: '#B8649A', shape: 'diamond' },
+  { color: '#2B8CC4', shape: 'cross' },
 ];
+
+// Below 600 px the SVG charts are drawn taller, with wider margins (here) and larger
+// text (style.css, same query), so that their labels stay readable at 360 px.
+const NARROW_QUERY = '(max-width: 600px)';
+export const isNarrow = () => typeof matchMedia === 'function' && matchMedia(NARROW_QUERY).matches;
+export function onNarrowChange(fn) {
+  if (typeof matchMedia === 'function') matchMedia(NARROW_QUERY).addEventListener('change', fn);
+}
+
+// Legend as HTML under the SVG, so it wraps and keeps full-size text on narrow screens.
+// entries: [{ name, color, shape, filled = true, swatch? }]; swatch(svg) draws a custom key.
+export function htmlLegend(entries) {
+  const ul = document.createElement('ul');
+  ul.className = 'chart-legend';
+  for (const e of entries) {
+    const li = document.createElement('li');
+    const svg = svgEl('svg', { width: 18, height: 14, viewBox: '0 0 18 14', 'aria-hidden': 'true', focusable: 'false' });
+    if (e.swatch) e.swatch(svg);
+    else drawMarker(svg, e.shape, 9, 7, 5, e.color, e.filled !== false);
+    li.append(svg, e.name);
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+// Wraps a values table in a keyboard-focusable scroll box, so a wide table scrolls inside
+// its box instead of widening the page at 360 px.
+export function scrollBox(table, label) {
+  const box = document.createElement('div');
+  box.className = 'table-scroll';
+  box.tabIndex = 0;
+  box.setAttribute('role', 'region');
+  box.setAttribute('aria-label', label);
+  box.appendChild(table);
+  return box;
+}
+
+// Vertical-marker labels, one row each so that close markers do not overprint; a label
+// that would run past the right edge is drawn to the left of its line.
+export function drawVlineLabels(svg, items, top, right, narrow) {
+  const fontPx = narrow ? 22 : 12;
+  items.forEach(({ x, label }, i) => {
+    const y = top + (fontPx + 2) * (i + 1);
+    const fits = x + 4 + 0.6 * fontPx * label.length <= right;
+    const t = svgEl('text', { x: fits ? x + 4 : x - 4, y, 'text-anchor': fits ? 'start' : 'end', class: 'vline-label' }, svg);
+    t.textContent = label;
+  });
+}
 export const HIGHLIGHT = { color: '#1a1a1a', shape: 'diamond' };
 
 let chartCounter = 0;
@@ -105,10 +154,14 @@ export function createChart(opts) {
   const holder = document.createElement('div');
   holder.className = 'chart-svg';
   root.appendChild(holder);
+  const legendHolder = document.createElement('div');
+  root.appendChild(legendHolder);
   const details = document.createElement('details');
   details.className = 'chart-data';
   const summary = document.createElement('summary');
   summary.textContent = 'Chart values as a table';
+  // The chart title tells apart the summaries of several charts on one level.
+  summary.setAttribute('aria-describedby', figcaption.id);
   details.appendChild(summary);
   const tableHolder = document.createElement('div');
   details.appendChild(tableHolder);
@@ -119,8 +172,10 @@ export function createChart(opts) {
     current = { ...current, ...o };
     const {
       title, xLabel, yLabel, series = [], points = [], vlines = [],
-      logX = false, logY = false, width = 640, height = 380, yFloor = 1e-6,
+      logX = false, logY = false, width = 640, yFloor = 1e-6,
     } = current;
+    const narrow = isNarrow();
+    const height = (current.height ?? 380) + (narrow ? 100 : 0);
     figcaption.textContent = title;
 
     // Data ranges; on a log axis non-positive values are clamped to the floor.
@@ -148,9 +203,9 @@ export function createChart(opts) {
       yMax = Math.max(...ys) * 1.05 || 1;
     }
 
-    const m = { left: 70, right: 16, top: 16, bottom: 52 };
-    const legendH = 22 * Math.ceil((series.length + points.length) / 3);
-    const H = height + legendH;
+    const m = narrow ? { left: 104, right: 20, top: 16, bottom: 80 } : { left: 70, right: 16, top: 16, bottom: 52 };
+    const tickGap = narrow ? 28 : 19;
+    const H = height;
     const sx = makeScale(xMin, xMax, m.left, width - m.right, logX);
     const sy = makeScale(yMin, yMax, height - m.bottom, m.top, logY);
 
@@ -168,32 +223,30 @@ export function createChart(opts) {
       if (t < yMin * (1 - 1e-9) || t > yMax * (1 + 1e-9)) continue;
       const y = sy(t);
       svgEl('line', { x1: m.left, x2: width - m.right, y1: y, y2: y, class: 'grid' }, axes);
-      const lab = svgEl('text', { x: m.left - 8, y: y + 4, 'text-anchor': 'end', class: 'tick' }, axes);
+      const lab = svgEl('text', { x: m.left - 8, y: y + (narrow ? 7 : 4), 'text-anchor': 'end', class: 'tick' }, axes);
       lab.textContent = formatTick(t, logY);
     }
     for (const t of xt) {
       if (t < xMin - 1e-12 || t > xMax + 1e-12) continue;
       const x = sx(t);
       svgEl('line', { x1: x, x2: x, y1: height - m.bottom, y2: height - m.bottom + 5, class: 'axis' }, axes);
-      const lab = svgEl('text', { x, y: height - m.bottom + 19, 'text-anchor': 'middle', class: 'tick' }, axes);
+      const lab = svgEl('text', { x, y: height - m.bottom + tickGap, 'text-anchor': 'middle', class: 'tick' }, axes);
       lab.textContent = formatTick(t, logX);
     }
     svgEl('line', { x1: m.left, x2: width - m.right, y1: height - m.bottom, y2: height - m.bottom, class: 'axis' }, axes);
     svgEl('line', { x1: m.left, x2: m.left, y1: m.top, y2: height - m.bottom, class: 'axis' }, axes);
     const xl = svgEl('text', { x: (m.left + width - m.right) / 2, y: height - 12, 'text-anchor': 'middle', class: 'axis-label' }, axes);
     xl.textContent = xLabel;
-    const yl = svgEl('text', { x: 16, y: (m.top + height - m.bottom) / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 16 ${(m.top + height - m.bottom) / 2})` }, axes);
+    const ylx = narrow ? 20 : 16;
+    const yl = svgEl('text', { x: ylx, y: (m.top + height - m.bottom) / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 ${ylx} ${(m.top + height - m.bottom) / 2})` }, axes);
     yl.textContent = yLabel;
 
     // Vertical marker lines.
     for (const v of vlines) {
       const x = sx(v.x);
       svgEl('line', { x1: x, x2: x, y1: m.top, y2: height - m.bottom, class: 'vline' }, svg);
-      if (v.label) {
-        const t = svgEl('text', { x: x + 4, y: m.top + 12, class: 'vline-label' }, svg);
-        t.textContent = v.label;
-      }
     }
+    drawVlineLabels(svg, vlines.filter((v) => v.label).map((v) => ({ x: sx(v.x), label: v.label })), m.top - 2, width - m.right, narrow);
 
     // Series: line, error bars, markers.
     const errBar = (g, x, lo, hi, color) => {
@@ -221,26 +274,19 @@ export function createChart(opts) {
       else drawMarker(g, HIGHLIGHT.shape, sx(p.x), sy(yMin), 6, HIGHLIGHT.color, false);
     }
 
-    // Legend under the plot, three entries per row.
-    const legend = svgEl('g', { class: 'legend' }, svg);
+    // Legend under the plot, as HTML.
     const entries = [
       ...series.map((s, si) => ({ name: s.name, ...SERIES_STYLES[si % SERIES_STYLES.length], filled: true })),
       ...points.map((p) => ({ name: p.name, ...HIGHLIGHT, filled: false })),
     ];
-    const colW = (width - m.left) / 3;
-    entries.forEach((e, i) => {
-      const lx = m.left + (i % 3) * colW;
-      const ly = height + 6 + 22 * Math.floor(i / 3);
-      drawMarker(legend, e.shape, lx + 6, ly, 5, e.color, e.filled);
-      const t = svgEl('text', { x: lx + 18, y: ly + 4, class: 'legend-text' }, legend);
-      t.textContent = e.name;
-    });
 
     holder.replaceChildren(svg);
-    tableHolder.replaceChildren(valuesTable(current));
+    legendHolder.replaceChildren(...(entries.length ? [htmlLegend(entries)] : []));
+    tableHolder.replaceChildren(scrollBox(valuesTable(current), `Values of the chart: ${title}`));
   }
 
   render(opts);
+  onNarrowChange(() => render({}));
   return { root, update: render };
 }
 

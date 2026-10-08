@@ -96,7 +96,7 @@ export function mountLevel1(container) {
     qubitButtons.push(b);
     board.appendChild(b);
     if (i < d - 1) {
-      const c = el('span', { class: 'check', role: 'img' });
+      const c = el('span', { class: 'check', role: 'img', 'aria-label': `Check ${i + 1}` }, `Check ${i + 1}`);
       checkLights.push(c);
       board.appendChild(c);
     }
@@ -168,11 +168,16 @@ export function mountLevel1(container) {
 
     const corrections = describeCorrections(graph, res.paths);
     const decoderQubits = new Set(corrections.filter((c) => c.kind === 'data').map((c) => c.index));
+    // The picks are written on the buttons, so the coloured rings are never the only cue;
+    // the visible text becomes the accessible name.
     qubitButtons.forEach((b, i) => {
       b.disabled = true;
-      if (decoderQubits.has(i)) b.classList.add('decoder-pick');
-      if (guess === i) b.classList.add('player-pick');
+      b.removeAttribute('aria-label');
       b.textContent = `Data qubit ${i + 1}: read ${res.hardData[i]}`;
+      const tags = [];
+      if (guess === i) { b.classList.add('player-pick'); tags.push('your pick'); }
+      if (decoderQubits.has(i)) { b.classList.add('decoder-pick'); tags.push('decoder\'s pick'); }
+      if (tags.length) b.append(' ', el('span', { class: 'pick-tag' }, tags.join(', ')));
     });
     noneBtn.disabled = true;
     nextBtn.disabled = false;

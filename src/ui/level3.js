@@ -11,7 +11,9 @@ import { bankD3R3, stage2, stage3, paramsIon, paramsSc } from './bridge_data.js'
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
-import { createChart, svgEl, formatNumber, SERIES_STYLES } from './charts.js';
+import {
+  createChart, svgEl, formatNumber, SERIES_STYLES, isNarrow, onNarrowChange, htmlLegend, scrollBox, drawVlineLabels,
+} from './charts.js';
 import { drawIqView } from './iqview.js';
 import { P_GATE } from './level1.js';
 import { sampleBank } from './level2.js';
@@ -169,9 +171,10 @@ function drawHistogram(bright, dark, threshold, tau) {
 
   const nMax = Math.max(bright.length, dark.length, Math.ceil(threshold.x) + 2);
   const yMax = Math.max(1, ...bright, ...dark);
+  const narrow = isNarrow();
   const W = 640;
-  const H = 300;
-  const m = { left: 64, right: 16, top: 16, bottom: 72 };
+  const H = narrow ? 400 : 276;
+  const m = narrow ? { left: 84, right: 20, top: 16, bottom: 76 } : { left: 64, right: 16, top: 16, bottom: 52 };
   const plotW = W - m.left - m.right;
   const plotH = H - m.top - m.bottom;
   const bw = plotW / nMax;
@@ -189,16 +192,17 @@ function drawHistogram(bright, dark, threshold, tau) {
     const v = (yMax * f) / 4;
     const y = sy(v);
     svgEl('line', { x1: m.left, x2: W - m.right, y1: y, y2: y, class: 'grid' }, axes);
-    svgEl('text', { x: m.left - 8, y: y + 4, 'text-anchor': 'end', class: 'tick' }, axes).textContent = String(Math.round(v));
+    svgEl('text', { x: m.left - 8, y: y + (narrow ? 7 : 4), 'text-anchor': 'end', class: 'tick' }, axes).textContent = String(Math.round(v));
   }
-  const step = Math.max(1, Math.ceil(nMax / 12));
+  const step = Math.max(1, Math.ceil(nMax / (narrow ? 8 : 12)));
   for (let n = 0; n < nMax; n += step) {
-    svgEl('text', { x: sx(n) + bw / 2, y: H - m.bottom + 18, 'text-anchor': 'middle', class: 'tick' }, axes).textContent = String(n);
+    svgEl('text', { x: sx(n) + bw / 2, y: H - m.bottom + (narrow ? 28 : 18), 'text-anchor': 'middle', class: 'tick' }, axes).textContent = String(n);
   }
   svgEl('line', { x1: m.left, x2: W - m.right, y1: H - m.bottom, y2: H - m.bottom, class: 'axis' }, axes);
   svgEl('line', { x1: m.left, x2: m.left, y1: m.top, y2: H - m.bottom, class: 'axis' }, axes);
-  svgEl('text', { x: m.left + plotW / 2, y: H - m.bottom + 38, 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = 'Photons counted';
-  svgEl('text', { x: 16, y: m.top + plotH / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 16 ${m.top + plotH / 2})` }, axes).textContent = 'Samples';
+  svgEl('text', { x: m.left + plotW / 2, y: H - 12, 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = 'Photons counted';
+  const ylx = narrow ? 20 : 16;
+  svgEl('text', { x: ylx, y: m.top + plotH / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 ${ylx} ${m.top + plotH / 2})` }, axes).textContent = 'Samples';
 
   // Dark first (behind), then bright; each bar takes half the bin.
   for (let n = 0; n < nMax; n++) {
@@ -209,13 +213,7 @@ function drawHistogram(bright, dark, threshold, tau) {
   }
   const tx = sx(threshold.x + 0.5);
   svgEl('line', { x1: tx, x2: tx, y1: m.top, y2: H - m.bottom, class: 'vline' }, svg);
-  svgEl('text', { x: Math.min(tx + 4, W - 80), y: m.top + 12, class: 'vline-label' }, svg).textContent = 'Threshold';
-
-  const ly = H - 16;
-  svgEl('rect', { x: m.left, y: ly - 10, width: 14, height: 12, fill: SERIES_STYLES[0].color }, svg);
-  svgEl('text', { x: m.left + 20, y: ly, class: 'legend-text' }, svg).textContent = 'Bright (ion in the bright state), solid bars';
-  svgEl('rect', { x: m.left + 300, y: ly - 10, width: 14, height: 12, fill: `url(#${id}-hatch)`, stroke: SERIES_STYLES[1].color, 'stroke-width': 1.5 }, svg);
-  svgEl('text', { x: m.left + 320, y: ly, class: 'legend-text' }, svg).textContent = 'Dark, hatched bars';
+  drawVlineLabels(svg, [{ x: tx, label: 'Threshold' }], m.top - 2, W - m.right, narrow);
 
   const sum = (h) => h.reduce((s, v, n) => s + v * n, 0) / Math.max(1, h.reduce((s, v) => s + v, 0));
   desc.textContent = `Histogram of photon counts. Bright: mean ${formatNumber(sum(bright))} photons; dark: mean ${formatNumber(sum(dark))} photons. Threshold: ${threshold.text}. Counts are listed in the table below.`;
@@ -223,11 +221,22 @@ function drawHistogram(bright, dark, threshold, tau) {
   holder.className = 'chart-svg';
   holder.appendChild(svg);
   fig.appendChild(holder);
+  // The hatch pattern lives in the chart SVG; each legend key draws its own copy.
+  const hatchKey = (key) => {
+    const p = svgEl('pattern', { id: `${id}-hatch-key`, patternUnits: 'userSpaceOnUse', width: 6, height: 6, patternTransform: 'rotate(45)' }, svgEl('defs', {}, key));
+    svgEl('line', { x1: 0, y1: 0, x2: 0, y2: 6, stroke: SERIES_STYLES[1].color, 'stroke-width': 2 }, p);
+    svgEl('rect', { x: 2, y: 1, width: 14, height: 12, fill: `url(#${id}-hatch-key)`, stroke: SERIES_STYLES[1].color, 'stroke-width': 1.5 }, key);
+  };
+  fig.appendChild(htmlLegend([
+    { name: 'Bright (ion in the bright state), solid bars', swatch: (key) => svgEl('rect', { x: 2, y: 1, width: 14, height: 12, fill: SERIES_STYLES[0].color }, key) },
+    { name: 'Dark, hatched bars', swatch: hatchKey },
+  ]));
 
   const details = document.createElement('details');
   details.className = 'chart-data';
   const summary = document.createElement('summary');
   summary.textContent = 'Histogram values as a table';
+  summary.setAttribute('aria-describedby', cap.id);
   details.appendChild(summary);
   const table = document.createElement('table');
   const head = table.createTHead().insertRow();
@@ -243,7 +252,7 @@ function drawHistogram(bright, dark, threshold, tau) {
     const tr = body.insertRow();
     for (const v of [n, bright[n] || 0, dark[n] || 0]) tr.insertCell().textContent = String(v);
   }
-  details.appendChild(table);
+  details.appendChild(scrollBox(table, 'Histogram values'));
   fig.appendChild(details);
   return fig;
 }
@@ -431,5 +440,7 @@ export function mountLevel3(container) {
     render();
   });
   onPlatformChange(setPlatformView);
+  // The histogram and the IQ plane are redrawn for the new layout (the charts redraw themselves).
+  onNarrowChange(() => render());
   setPlatformView(plat);
 }

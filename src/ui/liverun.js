@@ -126,12 +126,17 @@ export function mountLiveRun(container, { onBank }) {
 
   let lastSeed = 0;
   let timer = null;
+  let running = false;
 
+  // While a job runs the button is marked aria-disabled rather than disabled, so that it
+  // keeps the keyboard focus; a press during the run does nothing (one job per run).
   btn.addEventListener('click', async () => {
+    if (running) return;
+    running = true;
     const seed = nextSeed(lastSeed, Date.now());
     lastSeed = seed;
     seedOut.textContent = `Seed ${seed}`;
-    btn.disabled = true;
+    btn.setAttribute('aria-disabled', 'true');
     status.className = 'status';
     status.textContent = `Job running on the IonQ simulator (seed ${seed}, ${LIVE_SHOTS} shots). Expect tens of seconds to a few minutes.`;
     const t0 = performance.now();
@@ -154,7 +159,8 @@ export function mountLiveRun(container, { onBank }) {
       status.textContent = `The live run failed: ${err && err.name ? `${err.name}: ` : ''}${String(err && err.message ? err.message : err).slice(0, 300)}. The stored bank is still in use.`;
     } finally {
       clearInterval(timer);
-      btn.disabled = false;
+      btn.removeAttribute('aria-disabled');
+      running = false;
     }
   });
 }

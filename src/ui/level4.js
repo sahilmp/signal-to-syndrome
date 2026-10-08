@@ -67,7 +67,7 @@ function drawGrid(graph, res, conf, title) {
   const rowH = 60;
   const left = 96;
   const top = 56;
-  const width = left + colW * (nc + 1) + 30;
+  const width = left + colW * (nc + 1) + 44;
   const height = top + rowH * r + 34;
   const cx = (c) => left + c * colW;
   const cy = (k) => top + k * rowH;

@@ -59,13 +59,15 @@
   background: var(--accent);
   color: var(--accent-text);
 }
-#s2s-app button:disabled {
+#s2s-app button:disabled,
+#s2s-app button[aria-disabled="true"] {
   cursor: default;
   background: #e5e7eb;
-  color: #374151;          /* 9.4:1 on #e5e7eb */
+  color: #374151;          /* 8.3:1 on #e5e7eb */
   border-color: #9ca3af;
 }
-#s2s-app input[type="range"] { width: min(320px, 100%); accent-color: var(--accent); }
+/* min-height gives the slider a 32 px tall target (the thumb alone is 16 px) */
+#s2s-app input[type="range"] { width: min(320px, 100%); min-height: 32px; accent-color: var(--accent); }
 
 /* Visible focus ring on every focusable element */
 #s2s-app :focus-visible,
@@ -107,6 +109,7 @@
 #s2s-app .qubit:disabled { background: var(--bg); color: var(--text); border-color: var(--border); }
 #s2s-app .qubit.decoder-pick { border: 4px solid var(--match); }
 #s2s-app .qubit.player-pick { box-shadow: 0 0 0 4px var(--accent); }
+#s2s-app .qubit .pick-tag { display: block; font-size: 0.85rem; font-weight: 700; }
 .check {
   display: inline-flex;
   align-items: center;
@@ -231,10 +234,14 @@
 .chart-svg-el .axis { stroke: var(--text); stroke-width: 1.2; }
 .chart-svg-el .tick { font-size: 12px; fill: var(--text); }
 .chart-svg-el .axis-label { font-size: 13px; fill: var(--text); }
-.chart-svg-el .legend-text { font-size: 12px; fill: var(--text); }
 .chart-svg-el .vline { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 4 3; }
-.chart-svg-el .vline-label { font-size: 12px; fill: var(--text); }
+.chart-svg-el .vline-label { font-size: 12px; fill: var(--text); paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 2px 16px; list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.85rem; }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend svg { flex: none; }
+.chart-legend .iq-threshold { stroke: var(--text); stroke-width: 2; stroke-dasharray: 5 3; }
 .chart-data { margin-top: 6px; }
+.chart-data .table-scroll { margin: 6px 0 0; }
 .chart-data table, .diagnostics dl { font-size: 0.85rem; }
 .chart-data table { border-collapse: collapse; margin-top: 6px; }
 .chart-data th, .chart-data td { border: 1px solid #c4c8cf; padding: 2px 8px; text-align: right; }
@@ -258,7 +265,24 @@
   .diagnostics dl { grid-template-columns: 1fr; }
   #s2s-app .qubit { min-width: 96px; }
   .l4-pair { grid-template-columns: 1fr; }
+  /* SVG text is in viewBox units and shrinks with the drawing; at 360 px these sizes render
+     at about 11-14 px. charts.js uses the same query to widen the margins. */
+  .chart-svg-el .tick,
+  .chart-svg-el .axis-label,
+  .chart-svg-el .vline-label { font-size: 22px; }
+  .iq-svg .iq-label { font-size: 20px; }
+  .grid-svg .grid-label { font-size: 18px; }
+  .grid-svg .grid-sublabel { font-size: 16px; }
 }
 @media (max-width: 800px) {
   .l5-pair { grid-template-columns: 1fr; }
+}
+
+/* Nothing on the page animates; this keeps it so if motion is added later. */
+@media (prefers-reduced-motion: reduce) {
+  #s2s-app *, #s2s-app *::before, #s2s-app *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

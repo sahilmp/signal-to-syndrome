@@ -3,7 +3,9 @@
 // threshold line. A qubit that decays from |1⟩ to |0⟩ during the integration gives a
 // point between the clusters, so decays show as a smear from the |1⟩ cluster towards |0⟩.
 
-import { svgEl, formatNumber, SERIES_STYLES } from './charts.js';
+import {
+  svgEl, formatNumber, SERIES_STYLES, isNarrow, htmlLegend, scrollBox,
+} from './charts.js';
 
 const median = (xs) => {
   const s = Float64Array.from(xs).sort();
@@ -85,10 +87,11 @@ export function drawIqView({ samples0, samples1, readout, rng, tau, tauText }) {
   const span = 1.08 * Math.max(iMax - iMin, qMax - qMin, 1e-9);
   const iMid = (iMin + iMax) / 2;
   const qMid = (qMin + qMax) / 2;
+  const narrow = isNarrow();
   const W = 520;
-  const m = { left: 56, right: 16, top: 16, bottom: 48 };
+  const m = narrow ? { left: 44, right: 12, top: 16, bottom: 52 } : { left: 56, right: 16, top: 16, bottom: 48 };
   const P = W - m.left - m.right;
-  const H = m.top + P + m.bottom + 44;
+  const H = m.top + P + m.bottom;
   const sx = (i) => m.left + ((i - (iMid - span / 2)) / span) * P;
   const sy = (q) => m.top + (1 - (q - (qMid - span / 2)) / span) * P;
 
@@ -100,8 +103,9 @@ export function drawIqView({ samples0, samples1, readout, rng, tau, tauText }) {
 
   const axes = svgEl('g', { class: 'axes' }, svg);
   svgEl('rect', { x: m.left, y: m.top, width: P, height: P, fill: 'none', class: 'axis' }, axes);
-  svgEl('text', { x: m.left + P / 2, y: m.top + P + 30, 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = 'In-phase signal I (arbitrary units)';
-  svgEl('text', { x: 16, y: m.top + P / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 16 ${m.top + P / 2})` }, axes).textContent = 'Quadrature Q';
+  svgEl('text', { x: m.left + P / 2, y: m.top + P + (narrow ? 36 : 30), 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = 'In-phase signal I (arbitrary units)';
+  const ylx = narrow ? 22 : 16;
+  svgEl('text', { x: ylx, y: m.top + P / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 ${ylx} ${m.top + P / 2})` }, axes).textContent = 'Quadrature Q';
 
   // |0⟩: filled circles; |1⟩: outlined squares. Shape, not only colour, tells them apart.
   const g = svgEl('g', { 'clip-path': `url(#${id}-clip)` }, svg);
@@ -129,13 +133,6 @@ export function drawIqView({ samples0, samples1, readout, rng, tau, tauText }) {
     t.textContent = name;
   }
 
-  const ly = m.top + P + 56;
-  svgEl('circle', { cx: m.left + 6, cy: ly - 4, r: 4, fill: st0.color }, svg);
-  svgEl('text', { x: m.left + 16, y: ly, class: 'legend-text' }, svg).textContent = 'Prepared in |0⟩ (dots)';
-  svgEl('rect', { x: m.left + 170, y: ly - 9, width: 9, height: 9, fill: 'none', stroke: st1.color, 'stroke-width': 1.5 }, svg);
-  svgEl('text', { x: m.left + 186, y: ly, class: 'legend-text' }, svg).textContent = 'Prepared in |1⟩ (squares)';
-  svgEl('line', { x1: m.left + 340, x2: m.left + 362, y1: ly - 4, y2: ly - 4, class: 'iq-threshold' }, svg);
-  svgEl('text', { x: m.left + 368, y: ly, class: 'legend-text' }, svg).textContent = 'Threshold';
 
   const thrText = thr.fitted ? 'fitted to the model\'s own decisions' : 'midway between the centres';
   desc.textContent = `Scatter of ${samples0.length} IQ samples per state. |0⟩ centre at I = ${formatNumber(c0.i)}, Q = ${formatNumber(c0.q)}; `
@@ -147,13 +144,20 @@ export function drawIqView({ samples0, samples1, readout, rng, tau, tauText }) {
   holder.className = 'chart-svg';
   holder.appendChild(svg);
   fig.appendChild(holder);
+  fig.appendChild(htmlLegend([
+    { name: 'Prepared in |0⟩ (dots)', swatch: (key) => svgEl('circle', { cx: 9, cy: 7, r: 4, fill: st0.color }, key) },
+    { name: 'Prepared in |1⟩ (squares)', swatch: (key) => svgEl('rect', { x: 4.5, y: 2.5, width: 9, height: 9, fill: 'none', stroke: st1.color, 'stroke-width': 1.5 }, key) },
+    { name: 'Threshold', swatch: (key) => svgEl('line', { x1: 0, x2: 18, y1: 7, y2: 7, class: 'iq-threshold' }, key) },
+  ]));
 
   const summaryP = document.createElement('p');
   summaryP.className = 'hint';
   summaryP.textContent = `On the wrong side of the threshold: ${wrong0} of ${samples0.length} |0⟩ samples (${formatNumber(wrong0 / samples0.length)}) and `
     + `${wrong1} of ${samples1.length} |1⟩ samples (${formatNumber(wrong1 / samples1.length)}). Threshold ${thrText}.`;
   fig.appendChild(summaryP);
-  fig.appendChild(projectionTable(samples0, samples1, proj, axis.len, thr.t));
+  const details = projectionTable(samples0, samples1, proj, axis.len, thr.t);
+  details.querySelector('summary').setAttribute('aria-describedby', cap.id);
+  fig.appendChild(details);
   return fig;
 }
 
@@ -199,6 +203,6 @@ function projectionTable(samples0, samples1, proj, len, tThr) {
     const a = lo + 0.25 * b;
     for (const v of [`${formatNumber(a)} to ${formatNumber(a + 0.25)}`, String(h0[b]), String(h1[b])]) tr.insertCell().textContent = v;
   }
-  details.appendChild(table);
+  details.appendChild(scrollBox(table, 'IQ samples, binned'));
   return details;
 }
