@@ -1,0 +1,12 @@
+{
+  "schema": "s2s-params/1",
+  "platform": "superconducting",
+  "chi_over_2pi_MHz": { "value": 1.0, "source": "representative transmon value (plan section 7.4 default), not one device; published dispersive shifts span ~0.5-8 MHz, e.g. |chi|/2pi = 7.9 MHz in Walter et al., Phys. Rev. Applied 7, 054020 (2017), arXiv:1701.06933" },
+  "kappa_over_2pi_MHz": { "value": 2.0, "source": "chosen as kappa = 2 chi, the optimum of kappa |delta alpha|^2 at fixed nbar (plan section 7); Walter et al., Phys. Rev. Applied 7, 054020 (2017) use the same design rule with a Purcell filter, kappa_eff/2pi = 37.5 MHz" },
+  "nbar": { "value": 5, "source": "UNSOURCED (illustrative): a few photons, below typical critical photon numbers; plan section 7.4 default" },
+  "eta": { "value": 0.3, "source": "representative heterodyne chain with a quantum-limited amplifier (plan section 7.4 default); Walter et al., Phys. Rev. Applied 7, 054020 (2017) report eta = 0.66 with a phase-sensitive parametric amplifier, so 0.3 is conservative" },
+  "T1_us": { "value": 50, "source": "representative transmon T1 (plan section 7.4 default), within the published range from 7.6 us (Walter et al., Phys. Rev. Applied 7, 054020 (2017)) to a few hundred us in current devices" },
+  "detection": "heterodyne",
+  "ringup": true,
+  "tau_grid_us": { "value": [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 3.0], "source": "spans published integration times: 48-88 ns (Walter et al. 2017) up to the few-us regime where T1 decay dominates" }
+}

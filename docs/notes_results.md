@@ -152,7 +152,77 @@ Tied grid minima (several grid points with the same lowest error count) now give
 
 ## Stage 3: superconducting readout
 
-Not measured yet (CC-12). To record: V4, V8, V10; F1-sc and F2-sc; τ*_phys and τ*_log.
+Source: `data/results/stage3_sc.json` and the console output of `node tools/sweep.mjs --stage 3` (Thu 8 Oct 2026, 534 s; identical to the 17:35 trial run with the same values in a scratch copy, DECISIONS Person A, CC-A7 addendum). Readout: `createScReadout(params/sc.json, τ)` with the plan §7.4 values, χ/2π = 1 MHz, κ/2π = 2 MHz (κ = 2χ), n̄ = 5, η = 0.3, T1 = 50 µs, heterodyne, **ring-up on**. These are representative values, not one device; n̄ is UNSOURCED (illustrative), and Walter et al., PRApplied 7, 054020 (2017) is cited for comparison (χ/2π 7.9 MHz, κ/2π 37.5 MHz, η 0.66, T1 7.6 µs). Banks, pooling, pGate, R = 4 (n = 32 000 per point) and the bootstrap as in Stage 2. 26 non-exact matchings in the whole run.
+
+### Validation (V4, V8, V10)
+
+| Check | Result | Outcome |
+|---|---|---|
+| V4, idle-injection rule against an explicit X gate | `tests/v4.test.js`: all 24 `v4_*.json` banks (9 at d = 3, 15 at d = 5) equal `applyX` on the error-free bits, bit for bit; `npm test` 151/151 | **Pass** |
+| V8, T1 = 1e12 µs, ring-up off: empirical assignment error (200 000 truth samples per τ) against ½ erfc(SNR / 2√2) | Within 4 SE at all 12 τ. E.g. τ = 0.05: SNR 1.94, 0.166 against 0.165; τ = 0.3: 8.70e-3 against 8.70e-3; τ = 1: 7.1e-6 against 1.0e-5 | **Pass** |
+| V10, llr calibration, card values with ring-up off (belief equals truth only then) | \|llr\| in [0, 1): 0.3802 observed against 0.3792 predicted; **[1, 2): 0.1856 against 0.1853 (m = 103 788)**; [2, 4): 0.0513 against 0.0518; [4, 8): 0.00397 against 0.00398 | **Pass** |
+| llr calibration with ring-up on, as in the card (information, not a check) | [0, 1): 0.476 against 0.381; [1, 2): 0.414 against 0.188; [2, 4): 0.263 against 0.054; [4, 8): 0.056 against 0.006 | **Fails in every bin**, see the ring-up mismatch below |
+
+### Ring-up mismatch (belief model against truth)
+
+The belief model in `sc.js` ignores ring-up (CC-A6 design: steady-state means), but the sampler, following the card, rings the resonator up over about 2/κ ≈ 0.16 µs. At short τ the real signal is therefore much smaller than the belief model assumes. The F1 belief and empirical curves disagree beyond 4 SE for τ ≤ 0.7 µs and agree from τ = 1 µs. Consequences:
+
+- **τ*_phys has two values.** From the belief curve it is 0.587 µs (the value stored in `optima.tauPhys`); from the empirical curve it is **0.906 µs**. The empirical value is the physical one, the error a real readout of this card would show. Both are reported below.
+- **Soft weights at short τ are miscalibrated** (overconfident). Soft still beats hard everywhere (C2 below), so the miscalibration costs gain but does not reverse it.
+- Not changed here: putting ring-up into the belief model is a separate task in `src/core/readout/sc.js` and would change every Stage 3 number.
+
+### F1-sc: assignment error against τ (ring-up on)
+
+| τ (µs) | 0.05 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.7 | **1** | 1.4 | 2 | 3 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Belief (no ring-up) | 0.166 | 0.085 | 0.027 | 0.010 | 5.0e-3 | 3.6e-3 | 3.6e-3 | 5.0e-3 | 7.0e-3 | 9.9e-3 | 0.015 |
+| Empirical (Wilson 95%) | 0.491 | 0.448 | 0.299 | 0.146 | 0.058 | 0.0229 [0.0223, 0.0236] | 5.68e-3 [5.36, 6.02]e-3 | **5.02e-3 [4.72, 5.34]e-3** | 7.13e-3 [6.78, 7.51]e-3 | 9.78e-3 [9.35e-3, 0.0102] | 0.0143 [0.0138, 0.0148] |
+| Idle flip ½(1 − e^(−τ/T1)) | 5.0e-4 | 1.0e-3 | 2.0e-3 | 3.0e-3 | 4.0e-3 | 5.0e-3 | 7.0e-3 | 9.9e-3 | 0.0138 | 0.0196 | 0.0291 |
+
+- **U-curve: yes.** The empirical error falls from 0.49 (photon-starved and still ringing up) to a minimum near 1 µs, then rises because T1 decay during the window grows (3.0e-3 → 0.014 from 0.7 to 3 µs). **τ*_phys = 0.906 µs (empirical) / 0.587 µs (belief).**
+- Unlike the ion arm, the idle flip probability is of the same order as the readout error from τ ≈ 0.7 µs on, and larger beyond 1 µs.
+
+### F2-sc: logical error against τ (r = 3, Wilson 95%)
+
+| τ (µs) | d3 hard | d3 soft | d5 hard | d5 soft | d7 hard | d7 soft |
+|---|---|---|---|---|---|---|
+| 0.05 | 0.486 | 0.486 | 0.482 | 0.480 | 0.478 | 0.472 |
+| 0.2 | 0.264 [0.259, 0.269] | 0.229 [0.224, 0.233] | 0.230 [0.226, 0.235] | 0.171 [0.167, 0.175] | 0.202 [0.197, 0.206] | 0.134 [0.130, 0.137] |
+| 0.3 | 0.0892 [0.0861, 0.0924] | 0.0673 [0.0646, 0.0700] | 0.0494 [0.0471, 0.0518] | 0.0262 [0.0245, 0.0280] | 0.0298 [0.0280, 0.0317] | 0.0122 [0.0110, 0.0134] |
+| 0.4 | 0.0246 [0.0230, 0.0264] | 0.0196 [0.0181, 0.0211] | 0.0077 [0.0068, 0.0087] | 0.0047 [0.0040, 0.0055] | 0.0026 [0.0021, 0.0032] | 0.0012 [0.0009, 0.0016] |
+| 0.5 | 0.0277 [0.0259, 0.0295] | 0.0132 [0.0120, 0.0145] | 0.0043 [0.0036, 0.0051] | 0.0022 [0.0018, 0.0028] | 0.0010 [0.0007, 0.0014] | 0.0005 [0.0003, 0.0009] |
+| 0.7 | 0.0226 [0.0211, 0.0243] | 0.0131 [0.0119, 0.0144] | 0.0032 [0.0027, 0.0039] | 0.0022 [0.0018, 0.0028] | 0.0008 [0.0005, 0.0011] | 0.0006 [0.0004, 0.0009] |
+| 1 | 0.0236 [0.0220, 0.0253] | 0.0158 [0.0145, 0.0173] | 0.0037 [0.0031, 0.0044] | 0.0025 [0.0020, 0.0031] | 0.0008 [0.0006, 0.0012] | 0.0006 [0.0004, 0.0009] |
+| 2 | 0.0282 [0.0264, 0.0301] | 0.0275 [0.0257, 0.0293] | 0.0062 [0.0054, 0.0071] | 0.0058 [0.0050, 0.0067] | 0.0018 [0.0014, 0.0023] | 0.0013 [0.0010, 0.0018] |
+| 3 | 0.0358 [0.0338, 0.0379] | 0.0352 [0.0332, 0.0372] | 0.0093 [0.0083, 0.0104] | 0.0079 [0.0070, 0.0090] | 0.0026 [0.0021, 0.0032] | 0.0020 [0.0016, 0.0026] |
+
+Full series (all 12 grid points) are in `stage3_sc.json`. Distance helps at every τ ≥ 0.3 µs; below that the readout is near a coin toss and every d sits near 0.5.
+
+### C2 (soft at or below hard at every τ): **holds**
+
+Soft is at or below hard (point estimates) at **36 of 36** points and above hard beyond the intervals at none. It is strictly below beyond the intervals at many points, most strongly in the ring-up/photon-limited range 0.2–0.5 µs (d = 7 at 0.3 µs: 0.0122 [0.0110, 0.0134] against 0.0298 [0.0280, 0.0317]; d = 3 at 0.5 µs: 0.0132 against 0.0277). From 2 µs on, where T1 decay dominates, soft and hard converge (intervals overlap at d = 3). Contrast with the ion arm, where soft loses at long τ: here readout and idle errors stay comparable to the gate noise (pGate ≈ 0.013) over the whole grid, so the near-tie regime that hurt soft on the ion arm does not arise.
+
+### τ*_log per distance (C1, superconducting part)
+
+| d | Mode | τ*_log (µs) | 95% bootstrap interval | Replicates at an edge | Tied |
+|---|---|---|---|---|---|
+| 3 | hard | 0.793 | [0.436, 0.854] | 0% | 1% |
+| 3 | soft | 0.601 | [0.574, 0.668] | 0% | 2.5% |
+| 5 | hard | 0.756 | [0.688, 0.875] | 0% | 0% |
+| 5 | soft | 0.592 | [0.569, 0.857] | 0% | 7.5% |
+| 7 | hard | 0.783 | [0.579, 0.990] | 0% | 7% |
+| 7 | soft | 0.582 | [0.553, 1.311] | 0% | 12.5% |
+
+- **Every case has an interior τ*_log** (no replicate at a grid edge).
+- **Against the empirical τ*_phys = 0.906 µs:** τ*_log lies below it beyond the interval at d = 3 and d = 5 in both modes (upper bounds 0.854, 0.668, 0.875, 0.857 µs). At d = 7 both intervals contain 0.906 µs (upper bounds 0.990 and 1.311), so the shift is not resolved there.
+- **Against the belief τ*_phys = 0.587 µs:** every interval contains or lies above it, so with the belief value there is no shift. The belief value is wrong at short τ (ring-up mismatch above), so the empirical value is the one to compare with.
+- Soft optima (≈ 0.59 µs) sit earlier than hard optima (≈ 0.78 µs) at every d: the soft decoder tolerates a shorter, less certain readout because it knows which readings are uncertain.
+
+**C1, superconducting part: holds at d = 3 and 5, not resolved at d = 7,** when τ*_phys is taken from the empirical assignment curve. The logical optimum is shorter than the readout optimum because every extra µs of readout also costs idle flips on the data qubits (½(1 − e^(−τ/T1)) ≈ 1% per round at 1 µs), which the single-qubit readout error does not count. This conclusion rests on the empirical τ*_phys; with the ring-up-free belief curve it would not hold.
+
+### Provenance caveat
+
+`stage3_sc.json` records commit `89b23b3`, which was HEAD at the run, but `params/sc.json` was created afterwards and was not yet committed. The card is copied into the results file (`params`), so the run is reproducible from it; commit `params/sc.json` together with the results.
 
 ## Hypotheses C1–C4
 
