@@ -2,13 +2,14 @@
 //
 //   node tools/sweep.mjs --stage 1   flat readout over epsilon; writes data/results/stage1_flat.json
 //   node tools/sweep.mjs --stage 2   trapped-ion readout over tau; writes data/results/stage2_ion.json
+//   node tools/sweep.mjs --stage 3   superconducting readout over tau; writes data/results/stage3_sc.json
 //   node tools/sweep.mjs --diag      prints only the V9 fingerprint of data/banks/rep_d3_r3_L0.json
 //
 // Banks: every data/banks/rep_*.json (the v4_*.json validation banks are never read).
 // pGate is calibrated per bank from its raw bits (readout off) with estimatePGate.
 
 import { execSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateBank, expandShots, split } from '../src/core/bank.js';
 import { computeDetectors } from '../src/core/detectors.js';
@@ -17,6 +18,8 @@ import { wilson } from '../src/core/stats.js';
 import { createRng } from '../src/core/rng.js';
 import { createFlatReadout } from '../src/core/readout/flat.js';
 import { createIonReadout } from '../src/core/readout/ion.js';
+import { createScReadout } from '../src/core/readout/sc.js';
+import { erfc } from '../src/core/special.js';
 import { runPoint, diagnostic, decodeShot } from '../src/core/sweep.js';
 import { findMinimum, minimumWithBootstrap } from '../src/core/optimum.js';
 
@@ -473,6 +476,281 @@ function stage2() {
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
 
+// ---- Stage 3: superconducting dispersive readout over the integration time tau ----
+
+const SC_PARAMS = 'params/sc.json';
+const STAGE3_D = [3, 5, 7]; // d = 7 only if its banks exist
+const STAGE3_R = 3;
+const STAGE3_MODES = ['hard', 'soft'];
+const BOOT_SEED3 = 302;
+const F1_SEED3 = 301;
+const V8_T1_US = 1e12;
+// Seed of one readout draw: distinct for every (d, logical, tau index, draw), and outside
+// the Stage 1 and 2 ranges. Hard and soft use the same seed, so they see the same readout samples.
+const seedFor3 = (d, logical, tauIndex, draw) => 3000000 + 10000 * d + 1000 * logical + 10 * tauIndex + draw;
+
+// llr calibration: for every sample with |llr| in a bin, the decision sign(llr) is wrong with
+// average probability 1 / (1 + e^|llr|) if the llr is calibrated; observed vs predicted, 4 SE.
+function llrCalibration(bins) {
+  return V10_BINS.map(([lo, hi], b) => {
+    const { m, wrong, qSum } = bins[b];
+    if (m === 0) return { bin: [lo, hi], m, observed: null, predicted: null, pass: null };
+    const q = qSum / m;
+    const se = Math.sqrt((q * (1 - q)) / m);
+    return { bin: [lo, hi], m, wrong, observed: round(wrong / m), predicted: round(q), pass: Math.abs(wrong / m - q) <= 4 * se };
+  });
+}
+function addToBins(bins, llr, bit) {
+  const a = Math.abs(llr);
+  const b = V10_BINS.findIndex(([lo, hi]) => a >= lo && a < hi);
+  if (b < 0) return;
+  bins[b].m++;
+  bins[b].qSum += 1 / (1 + Math.exp(a));
+  if ((llr > 0 ? 1 : 0) !== bit) bins[b].wrong++;
+}
+
+function stage3() {
+  const t0 = Date.now();
+  if (!existsSync(SC_PARAMS)) throw new Error(`${SC_PARAMS} not found: create the superconducting parameter card first (team checklist Appendix T6)`);
+  const card = JSON.parse(readFileSync(SC_PARAMS, 'utf8'));
+  const taus = fieldValue(card, 'tau_grid_us');
+  const ringup = fieldValue(card, 'ringup');
+  const banks = loadRepBanks();
+  const byKey = new Map(banks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
+  const distances = STAGE3_D.filter((d) => byKey.has(`${d},${STAGE3_R},0`) && byKey.has(`${d},${STAGE3_R},1`));
+  for (const d of [3, 5]) if (!distances.includes(d)) throw new Error(`missing banks for d=${d}, r=${STAGE3_R}`);
+  const readouts = taus.map((tau) => createScReadout(card, tau));
+  // V8 card: no decay, no ring-up (Gaussian readout). V10 card: no ring-up, so the belief
+  // model (linear mean during a decay, no ring-up) is the truth model.
+  const v8Card = { ...card, T1_us: V8_T1_US, ringup: false };
+  const v10Card = { ...card, ringup: false };
+
+  // F1-sc: belief (model) assignment error and empirical error from truth samples (ringup as
+  // in the card), plus llr calibration of the same samples. Equal priors: the bit alternates.
+  const assignment = { belief: [], empirical: [], lo: [], hi: [] };
+  const f1Detail = [];
+  const binsCard = V10_BINS.map(() => ({ m: 0, wrong: 0, qSum: 0 }));
+  const binsV10 = V10_BINS.map(() => ({ m: 0, wrong: 0, qSum: 0 }));
+  const v8 = [];
+  const rngF1 = createRng(F1_SEED3);
+  taus.forEach((tau, t) => {
+    const ro = readouts[t];
+    let errors = 0;
+    for (let s = 0; s < F1_SAMPLES; s++) {
+      const bit = s & 1;
+      const { hard, llr } = ro.measure(bit, rngF1);
+      if (hard !== bit) errors++;
+      addToBins(binsCard, llr, bit);
+    }
+    const belief = ro.averageAssignmentError();
+    const w = wilson(errors, F1_SAMPLES);
+    const se = Math.sqrt((belief * (1 - belief)) / F1_SAMPLES);
+    assignment.belief.push(round(belief));
+    assignment.empirical.push(round(w.p));
+    assignment.lo.push(round(w.lo));
+    assignment.hi.push(round(w.hi));
+    f1Detail.push({
+      tau, snr: round(ro.snr()), idleFlip: round(ro.idleFlipProbability()),
+      errors, agree4SE: Math.abs(w.p - belief) <= 4 * se + 1e-12,
+    });
+
+    // V8: T1 = 1e12 us, ring-up off; empirical error against 0.5 erfc(SNR / (2 sqrt 2)),
+    // within 4 binomial SE, sqrt(p (1 - p) / n), n = F1_SAMPLES.
+    const ro8 = createScReadout(v8Card, tau);
+    const analytic = 0.5 * erfc(ro8.snr() / (2 * Math.SQRT2));
+    const rng8 = createRng(F1_SEED3 + 1000 + t);
+    let e8 = 0;
+    for (let s = 0; s < F1_SAMPLES; s++) {
+      const bit = s & 1;
+      if (ro8.measure(bit, rng8).hard !== bit) e8++;
+    }
+    const se8 = Math.sqrt((analytic * (1 - analytic)) / F1_SAMPLES);
+    v8.push({
+      tau, snr: round(ro8.snr()), analytic: round(analytic), empirical: round(e8 / F1_SAMPLES), errors: e8,
+      pass: Math.abs(e8 / F1_SAMPLES - analytic) <= 4 * se8 + 1e-12,
+    });
+
+    // V10 samples: card values with ring-up off (belief equals truth).
+    const ro10 = createScReadout(v10Card, tau);
+    const rng10 = createRng(F1_SEED3 + 2000 + t);
+    for (let s = 0; s < F1_SAMPLES; s++) {
+      const bit = s & 1;
+      addToBins(binsV10, ro10.measure(bit, rng10).llr, bit);
+    }
+  });
+  const v10Rows = llrCalibration(binsV10);
+  const cardCalRows = llrCalibration(binsCard);
+
+  // F2-sc: per bank, R readout draws per quantum shot; hard and soft share the draws.
+  const cal = new Map();
+  const perShot = new Map(); // `${d},${mode}` -> per grid point Float64Array of pooled per-shot mean error
+  const series = [];
+  const perLogical = [];
+  const seeds = {};
+  const used = [];
+  let nonExactTotal = 0;
+  for (const d of distances) {
+    const nShots = [0, 1].map((logical) => expandShots(byKey.get(`${d},${STAGE3_R},${logical}`).bank).length);
+    const nPooled = nShots[0] + nShots[1];
+    for (const mode of STAGE3_MODES) perShot.set(`${d},${mode}`, taus.map(() => new Float64Array(nPooled)));
+    for (const logical of [0, 1]) {
+      const { file, bank } = byKey.get(`${d},${STAGE3_R},${logical}`);
+      used.push(file);
+      if (!cal.has(file)) cal.set(file, calibrate(bank));
+      const pGate = cal.get(file).p;
+      const shots = expandShots(bank);
+      const offset = logical === 0 ? 0 : nShots[0];
+      seeds[file] = [];
+      const rows = Object.fromEntries(STAGE3_MODES.map((mode) => [mode, { d, r: STAGE3_R, logical, mode, bank: file, pGate: round(pGate), k: [], n: [] }]));
+      taus.forEach((tau, t) => {
+        const tauSeeds = [];
+        for (const mode of STAGE3_MODES) {
+          const target = perShot.get(`${d},${mode}`)[t];
+          let k = 0;
+          for (let draw = 0; draw < READOUT_DRAWS; draw++) {
+            const seed = seedFor3(d, logical, t, draw);
+            if (mode === STAGE3_MODES[0]) tauSeeds.push(seed);
+            const rng = createRng(seed);
+            for (let s = 0; s < shots.length; s++) {
+              const res = decodeShot({
+                shotBits: shots[s], layout: bank.layout, d, r: bank.r,
+                readout: readouts[t], mode, pGate, rng, logical: bank.logical,
+              });
+              if (!res.exact) nonExactTotal++;
+              if (res.logicalError) {
+                k++;
+                target[offset + s] += 1 / READOUT_DRAWS;
+              }
+            }
+          }
+          rows[mode].k.push(k);
+          rows[mode].n.push(shots.length * READOUT_DRAWS);
+        }
+        seeds[file].push(tauSeeds);
+      });
+      for (const mode of STAGE3_MODES) perLogical.push(rows[mode]);
+    }
+    for (const mode of STAGE3_MODES) {
+      const [l0, l1] = perLogical.filter((row) => row.d === d && row.mode === mode);
+      const ws = taus.map((_, t) => wilson(l0.k[t] + l1.k[t], l0.n[t] + l1.n[t]));
+      series.push({
+        d, r: STAGE3_R, mode,
+        pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)),
+        n: taus.map((_, t) => l0.n[t] + l1.n[t]),
+      });
+    }
+  }
+
+  // Optima. tau*_phys from the belief curve; tau*_log per distance and mode from the
+  // per-shot values, bootstrapped over pooled quantum shots.
+  const tauPhys = findMinimum(taus, assignment.belief, { logX: true });
+  const tauPhysEmp = findMinimum(taus, assignment.empirical, { logX: true });
+  const tauLog = [];
+  for (const d of distances) {
+    for (const mode of STAGE3_MODES) {
+      const m = minimumWithBootstrap(taus, perShot.get(`${d},${mode}`), BOOT_B, createRng(BOOT_SEED3 + 10 * d + (mode === 'soft' ? 1 : 0)));
+      tauLog.push({ d, mode, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied });
+    }
+  }
+
+  // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
+  const c2 = [];
+  for (const d of distances) {
+    const hard = series.find((s) => s.d === d && s.mode === 'hard');
+    const soft = series.find((s) => s.d === d && s.mode === 'soft');
+    taus.forEach((tau, t) => {
+      c2.push({ d, tau, hard: hard.pL[t], soft: soft.pL[t], softAtOrBelow: soft.pL[t] <= hard.pL[t], softAboveBeyondIntervals: soft.lo[t] > hard.hi[t] });
+    });
+  }
+
+  const runtimeS = (Date.now() - t0) / 1000;
+  const result = {
+    schema: 's2s-results/1',
+    stage: 3,
+    platform: 'superconducting',
+    x: { name: 'tau_us', values: taus },
+    series,
+    assignment,
+    optima: {
+      tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
+      tauLog: tauLog.map(({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
+    },
+    params: {
+      card,
+      distances, r: STAGE3_R, modes: STAGE3_MODES, logical_states: 'pooled (L0 + L1)',
+      readoutDrawsPerShot: READOUT_DRAWS, bootstrapB: BOOT_B, f1Samples: F1_SAMPLES,
+      readout: 'createScReadout(card, tau)', pGate: 'estimatePGate per bank, readout off',
+    },
+    readout: {
+      ringup,
+      snr: f1Detail.map((f) => f.snr),
+      idleFlip: f1Detail.map((f) => f.idleFlip),
+      tauPhysYMin: round(tauPhys.yMin),
+      tauPhysEmpirical: { xMin: round(tauPhysEmp.xMin), atEdge: tauPhysEmp.atEdge },
+      empiricalAgreesWithBelief4SE: f1Detail.map((f) => f.agree4SE),
+      llrCalibrationAsCard: { ringup, rows: cardCalRows },
+    },
+    validation: {
+      V8: { T1_us: V8_T1_US, ringup: false, samples: F1_SAMPLES, rows: v8, pass: v8.every((v) => v.pass) },
+      V10: { ringup: false, note: 'card values with ring-up off (belief equals truth)', samplesPerTau: F1_SAMPLES, rows: v10Rows, pass: v10Rows.every((v) => v.pass !== false) },
+      C2: c2,
+      perLogical: perLogical.map((row) => ({ ...row, pL: row.k.map((k, t) => round(k / row.n[t])) })),
+    },
+    provenance: {
+      tool: 'tools/sweep.mjs --stage 3',
+      commit: gitCommit(),
+      date: new Date().toISOString(),
+      node: process.version,
+      params: SC_PARAMS,
+      banks: used,
+      bankJobIds: Object.fromEntries(used.map((f) => [f, byKey.get(`${f.match(/_d(\d+)_/)[1]},${STAGE3_R},${f.match(/_L(\d)/)[1]}`).bank.job_id ?? 'unknown'])),
+      pGate: Object.fromEntries(used.map((f) => [f, round(cal.get(f).p)])),
+      seeds,
+      seedRule: 'seed = 3000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft share it); F1 seed 301; V8 seed 1301 + tauIndex; V10 seed 2301 + tauIndex; bootstrap seed 302 + 10*d + (soft ? 1 : 0)',
+      nonExact: nonExactTotal,
+      runtime_s: runtimeS,
+    },
+  };
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const out = join(RESULTS_DIR, 'stage3_sc.json');
+  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+
+  const g = (v) => v.toExponential(2);
+  console.log(`V8: Gaussian assignment error (T1 = ${V8_T1_US} us, ring-up off), ${F1_SAMPLES} truth samples per tau, against 0.5 erfc(SNR / (2 sqrt 2)) (4 SE)`);
+  for (const v of v8) console.log(`  tau ${String(v.tau).padStart(4)}  SNR ${v.snr.toFixed(3)}  analytic ${g(v.analytic)}  empirical ${g(v.empirical)}  ${v.pass ? 'PASS' : 'FAIL'}`);
+  console.log(`V8 overall: ${result.validation.V8.pass ? 'PASS' : 'FAIL'}`);
+  const printCal = (rows) => {
+    for (const v of rows) {
+      console.log(`  |llr| in [${v.bin[0]}, ${v.bin[1]}): m ${v.m}${v.m ? `  observed ${fmt(v.observed)}  predicted ${fmt(v.predicted)}  ${v.pass ? 'PASS' : 'FAIL'}` : '  (empty)'}`);
+    }
+  };
+  console.log('\nV10: llr calibration, card values with ring-up off (belief equals truth), samples pooled over the tau grid');
+  printCal(v10Rows);
+  console.log(`V10 overall: ${result.validation.V10.pass ? 'PASS' : 'FAIL'}`);
+  console.log(`\nllr calibration with ring-up as in the card (ringup = ${ringup}; belief ignores ring-up, so this is information, not a check)`);
+  printCal(cardCalRows);
+  console.log(`\nF1-sc: assignment error by tau (ringup = ${ringup}; belief, empirical [Wilson 95%])`);
+  taus.forEach((tau, t) => {
+    const f = f1Detail[t];
+    console.log(`  tau ${String(tau).padStart(4)}  SNR ${f.snr.toFixed(3)}  belief ${g(assignment.belief[t])}  empirical ${g(assignment.empirical[t])} [${g(assignment.lo[t])}, ${g(assignment.hi[t])}]${f.agree4SE ? '' : ' (DIFFERS > 4 SE)'}  idle flip ${g(f.idleFlip)}`);
+  });
+  const edge = (m) => (m.atEdge ? ` (no interior minimum: lowest at the grid ${m.xMin === taus[0] ? 'start' : 'end'})` : '');
+  console.log(`tau*_phys = ${fmt(tauPhys.xMin, 3)} us, error ${g(tauPhys.yMin)}${edge(tauPhys)}`);
+  console.log(`tau*_phys from the empirical curve = ${fmt(tauPhysEmp.xMin, 3)} us${edge(tauPhysEmp)}`);
+  console.log(`\nF2-sc: logical error by tau, r = ${STAGE3_R}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
+  for (const s of series) console.log(`  d = ${s.d} ${s.mode.padEnd(4)}: ${s.pL.map((p) => fmt(p)).join(' ')}`);
+  console.log(`  tau grid: ${taus.join(' ')}`);
+  console.log(`\nC2: soft at or below hard (point estimates) at ${c2.filter((c) => c.softAtOrBelow).length} of ${c2.length} points; soft above hard beyond the intervals at ${c2.filter((c) => c.softAboveBeyondIntervals).length}`);
+  for (const c of c2.filter((x) => !x.softAtOrBelow)) console.log(`  soft > hard: d = ${c.d}, tau ${c.tau}: soft ${fmt(c.soft)} hard ${fmt(c.hard)}`);
+  console.log(`\ntau*_log (bootstrap B = ${BOOT_B} over quantum shots, 95% percentile interval):`);
+  for (const m of tauLog) {
+    const where = m.atEdge ? `no interior minimum (lowest at tau ${m.xMin})` : `${fmt(m.xMin, 3)} us [${fmt(m.lo, 3)}, ${fmt(m.hi, 3)}]`;
+    console.log(`  d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%, tied ${(100 * m.fractionTied).toFixed(1)}%`);
+  }
+  console.log(`\nnon-exact matchings: ${nonExactTotal}`);
+  console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
+}
+
 function diag() {
   console.log(diagnostic(loadBank(DIAG_BANK)));
 }
@@ -484,7 +762,9 @@ if (args.includes('--diag')) {
   stage1();
 } else if (args[0] === '--stage' && args[1] === '2') {
   stage2();
+} else if (args[0] === '--stage' && args[1] === '3') {
+  stage3();
 } else {
-  console.error('usage: node tools/sweep.mjs --stage 1 | --stage 2 | --diag');
+  console.error('usage: node tools/sweep.mjs --stage 1 | --stage 2 | --stage 3 | --diag');
   process.exit(1);
 }
