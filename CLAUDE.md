@@ -65,7 +65,7 @@ An open-source lab, published and runnable on Qollab, showing how qubit-readout 
 - idle.js (A): applyX(m, x, d, r, i, k); injectIdle(m, x, d, r, p, rng).
 - calibrate.js (A): estimatePGate(detectorArrays, d, r) -> { p, rate, nDetectors, nShots }.
 - stats.js (A): wilson(k, n, z = 1.96) -> { p, lo, hi }; bootstrap(nItems, statFn, B, rng) -> { mean, lo, hi }.
-- sweep.js (A): decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng }) -> { logicalError, corrected, flip, nDefects, exact, detectors, paths, hardAnc, hardData, llrAnc, llrData } (hardAnc and llrAnc have r rows of length d-1); runPoint({ bank, readout, mode, pGate, seed, maxShots }) -> { k, n, wilson, nonExact }; diagnostic(bank) -> 8-character hexadecimal string.
+- sweep.js (A): decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng, logical = 0 }) -> { logicalError, corrected, flip, nDefects, exact, detectors, paths, hardAnc, hardData, llrAnc, llrData } (hardAnc and llrAnc have r rows of length d-1; logical is the prepared logical state that logicalError compares against); runPoint({ bank, readout, mode, pGate, seed, maxShots }) -> { k, n, wilson, nonExact }; diagnostic(bank) -> 8-character hexadecimal string.
 - optimum.js (A): findMinimum(xs, ys, { logX }); minimumWithBootstrap(xs, perShotMatrix, B, rng).
 - metrics.js (A): perRound, perRoundToTotal, cycleTime, perMicrosecond, breakEven.
 
