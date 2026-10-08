@@ -1,0 +1,68 @@
+{
+  "backend": "ionq_simulator",
+  "bit_order": "qiskit-little-endian",
+  "checksum": {
+    "n_keys": 1,
+    "sha256": "d2f331def73ba75253c28262b1f6b385595c2e1f8894675483ccc95db7e67f73",
+    "total_shots": 100
+  },
+  "code": "repetition",
+  "counts": {
+    "8c00": 100
+  },
+  "d": 5,
+  "date": "2026-10-08T11:39:44Z",
+  "detector_rate": 0.125,
+  "inject": [
+    [
+      3,
+      1
+    ]
+  ],
+  "job_id": "01a11b4f-b786-7b85-98f7-aa7e89178c32",
+  "key_encoding": "hex",
+  "layout": {
+    "ancilla": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        4,
+        5,
+        6,
+        7
+      ],
+      [
+        8,
+        9,
+        10,
+        11
+      ]
+    ],
+    "data": [
+      12,
+      13,
+      14,
+      15,
+      16
+    ]
+  },
+  "logical": 0,
+  "mode": "fresh-ancilla",
+  "n_clbits": 17,
+  "n_qubits": 17,
+  "native_ops": {
+    "gpi": 1,
+    "gpi2": 98,
+    "measure": 17,
+    "ms": 24
+  },
+  "noise_model": "ideal",
+  "r": 3,
+  "sampler_seed": 1366329564,
+  "schema": "s2s-bank/1",
+  "shots": 100
+}

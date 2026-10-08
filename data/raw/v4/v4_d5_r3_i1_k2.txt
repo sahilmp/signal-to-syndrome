@@ -1,0 +1,4 @@
+BEGIN_BANK v4_d5_r3_i1_k2 chunks=1 sha256=22ae49037aba4d0a629f6cd04fb173bc8949370cc6c8598f0d0514c7d3ab471e
+--- chunk 1/1 ---
+{"backend":"ionq_simulator","bit_order":"qiskit-little-endian","checksum":{"n_keys":1,"sha256":"57b011aca58a5e64565e11b6a7f328067ceacb9516bb5955fba148ab0771cce7","total_shots":100},"code":"repetition","counts":{"2000":100},"d":5,"date":"2026-10-08T11:33:56Z","detector_rate":0.125,"inject":[[1,2]],"job_id":"01a11b4a-67a5-7ca2-ae9b-9a2332c5aea3","key_encoding":"hex","layout":{"ancilla":[[0,1,2,3],[4,5,6,7],[8,9,10,11]],"data":[12,13,14,15,16]},"logical":0,"mode":"fresh-ancilla","n_clbits":17,"n_qubits":17,"native_ops":{"gpi":1,"gpi2":98,"measure":17,"ms":24},"noise_model":"ideal","r":3,"sampler_seed":1520817678,"schema":"s2s-bank/1","shots":100}
+END_BANK v4_d5_r3_i1_k2
