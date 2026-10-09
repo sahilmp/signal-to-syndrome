@@ -141,7 +141,8 @@ function makeScale(lo, hi, a, b, log) {
 }
 
 // series: [{ name, x: [], y: [], lo?: [], hi?: [] }]
-// points: [{ name, x, y, lo?, hi? }] drawn with HIGHLIGHT style (for example a live estimate)
+// points: [{ name, x, y, lo?, hi?, shape?, color? }] drawn as open markers, in the HIGHLIGHT
+// style unless shape or color is given (for example a live estimate)
 // vlines: [{ x, label }] vertical marker lines
 // Returns { root, update(opts) } where root is a <figure> holding the SVG and its table.
 export function createChart(opts) {
@@ -269,15 +270,17 @@ export function createChart(opts) {
     });
     for (const p of points) {
       const g = svgEl('g', { class: 'highlight' }, svg);
-      if (Number.isFinite(p.lo) && Number.isFinite(p.hi)) errBar(g, sx(p.x), p.lo, p.hi, HIGHLIGHT.color);
-      if (Number.isFinite(p.y) && (!logY || p.y > 0)) drawMarker(g, HIGHLIGHT.shape, sx(p.x), sy(p.y), 6, HIGHLIGHT.color, false);
-      else drawMarker(g, HIGHLIGHT.shape, sx(p.x), sy(yMin), 6, HIGHLIGHT.color, false);
+      const shape = p.shape ?? HIGHLIGHT.shape;
+      const color = p.color ?? HIGHLIGHT.color;
+      if (Number.isFinite(p.lo) && Number.isFinite(p.hi)) errBar(g, sx(p.x), p.lo, p.hi, color);
+      if (Number.isFinite(p.y) && (!logY || p.y > 0)) drawMarker(g, shape, sx(p.x), sy(p.y), 6, color, false);
+      else drawMarker(g, shape, sx(p.x), sy(yMin), 6, color, false);
     }
 
     // Legend under the plot, as HTML.
     const entries = [
       ...series.map((s, si) => ({ name: s.name, ...SERIES_STYLES[si % SERIES_STYLES.length], filled: true })),
-      ...points.map((p) => ({ name: p.name, ...HIGHLIGHT, filled: false })),
+      ...points.map((p) => ({ name: p.name, shape: p.shape ?? HIGHLIGHT.shape, color: p.color ?? HIGHLIGHT.color, filled: false })),
     ];
 
     holder.replaceChildren(svg);

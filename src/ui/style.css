@@ -210,7 +210,9 @@
 .l5-table th, .l5-table td { border: 1px solid #c4c8cf; padding: 3px 8px; text-align: left; vertical-align: top; }
 .l5-table thead th { background: var(--panel); }
 .l5-table tbody th { font-weight: 600; }
+.l5-table tr.l5-baseline th, .l5-table tr.l5-baseline td { background: var(--panel); border-bottom-width: 2px; }
 .l5-card td:last-child { min-width: 24ch; }
+.l5-card td:nth-child(2) { min-width: 9ch; }
 .l5-table .verdict-flips { font-weight: 700; }
 .l5-table .verdict-undetermined { font-style: italic; }
 .l5-table .hint-cell { color: var(--muted); }
@@ -222,9 +224,6 @@
   color: var(--focus);       /* #b3261e: 6.5:1 on white */
   letter-spacing: 0.03em;
 }
-.l5-key { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 0.9rem; margin: 0 0 12px; }
-.l5-key dt { font-weight: 700; }
-.l5-key dd { margin: 0; }
 
 /* Charts */
 .chart { margin: 16px 0; max-width: 680px; }

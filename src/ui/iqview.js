@@ -105,7 +105,7 @@ export function drawIqView({ samples0, samples1, readout, rng, tau, tauText }) {
   svgEl('rect', { x: m.left, y: m.top, width: P, height: P, fill: 'none', class: 'axis' }, axes);
   svgEl('text', { x: m.left + P / 2, y: m.top + P + (narrow ? 36 : 30), 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = 'In-phase signal I (arbitrary units)';
   const ylx = narrow ? 22 : 16;
-  svgEl('text', { x: ylx, y: m.top + P / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 ${ylx} ${m.top + P / 2})` }, axes).textContent = 'Quadrature Q';
+  svgEl('text', { x: ylx, y: m.top + P / 2, 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 ${ylx} ${m.top + P / 2})` }, axes).textContent = 'Quadrature Q (arbitrary units)';
 
   // |0⟩: filled circles; |1⟩: outlined squares. Shape, not only colour, tells them apart.
   const g = svgEl('g', { 'clip-path': `url(#${id}-clip)` }, svg);

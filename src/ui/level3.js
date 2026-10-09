@@ -6,7 +6,7 @@
 // curves of logical error against tau (hard mode) with the optima, and a "Batch" button
 // that runs runPoint on 200 shots of bankD3R3.
 
-import { createIonReadout, createScReadout, runPoint } from './bridge_core.js';
+import { createIonReadout, createScReadout, runPoint, findMinimum } from './bridge_core.js';
 import { bankD3R3, stage2, stage3, paramsIon, paramsSc } from './bridge_data.js';
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
@@ -26,7 +26,10 @@ const BATCH_SHOTS = 200;
 // Parameter cards store { value, source }; plain values are accepted too.
 export const cardValue = (p) => (p !== null && typeof p === 'object' && !Array.isArray(p) && 'value' in p ? p.value : p);
 
-// The readout platforms of levels 3 and 4, each behind its FEATURES flag.
+// The readout platforms of levels 3 and 4, each behind its FEATURES flag. physFromEmpirical:
+// the belief model's tauPhys (results.optima) is not the simulated one, because the belief
+// model ignores resonator ring-up (DECISIONS, A28 item 2), so tau_phys is located on
+// assignment.empirical instead and the belief value is quoted beside it.
 export const PLATFORMS = [
   {
     id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: stage2, stage: 2,
@@ -34,7 +37,7 @@ export const PLATFORMS = [
   },
   {
     id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: stage3, stage: 3,
-    create: createScReadout, tauName: 'Integration time',
+    create: createScReadout, tauName: 'Integration time', physFromEmpirical: true,
   },
 ];
 export const ION = PLATFORMS[0];
@@ -88,7 +91,29 @@ export function tauGrid(platform = ION) {
   return grid.map(Number);
 }
 
-export const formatTau = (tau) => `${Number(tau.toPrecision(6))} µs`;
+// Three significant figures are enough for every readout time on the page (A28 item 6).
+export const formatTau = (tau) => `${Number(tau.toPrecision(3))} µs`;
+
+// A tau_log whose curve has fewer logical errors than this at its lowest grid point is
+// "not resolved": with k < 10 errors the relative standard error 1/sqrt(k) exceeds 30%, so
+// neighbouring grid points cannot be told apart (ion d = 7: 3 and 8 errors of 32 000;
+// docs/notes_results.md, Stage 2; DECISIONS, A28 item 5).
+export const MIN_ERRORS_RESOLVED = 10;
+
+// Logical errors at the lowest grid point of the results curve for (d, mode), or null.
+export function errorsAtMinimum(results, d, mode) {
+  const s = (results.series || []).find((u) => u.d === d && u.mode === mode);
+  if (!s || !Array.isArray(s.n)) return null;
+  let best = -1;
+  s.pL.forEach((p, i) => { if (Number.isFinite(p) && (best < 0 || p < s.pL[best])) best = i; });
+  return best < 0 ? null : { k: Math.round(s.pL[best] * s.n[best]), n: s.n[best] };
+}
+export function isResolved(results, d, mode) {
+  const c = errorsAtMinimum(results, d, mode);
+  return !c || c.k >= MIN_ERRORS_RESOLVED;
+}
+// Shot counts with a thin space as thousands separator, as in the notes (32 000).
+export const formatCount = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '\u2009');
 
 // Index of the first grid point whose assignment error is below `target`, so that the
 // levels open where readout errors are common enough to see.
@@ -103,25 +128,75 @@ export function defaultTauIndex(grid, target = 0.1, platform = ION) {
   return 0;
 }
 
+// tau_phys of a stage-2 or stage-3 results file: { xMin, atEdge, empirical, belief }, or null.
+// With physFromEmpirical (see PLATFORMS) it is the minimum of assignment.empirical (log x),
+// and belief carries optima.tauPhys for comparison; otherwise it is optima.tauPhys.
+export function physicalOptimum(results, { physFromEmpirical = false } = {}) {
+  const belief = results.optima?.tauPhys || null;
+  const emp = results.assignment?.empirical;
+  if (physFromEmpirical && Array.isArray(emp) && emp.length === results.x?.values?.length) {
+    const m = findMinimum(results.x.values, emp, { logX: true });
+    return { xMin: m.xMin, atEdge: m.atEdge, empirical: true, belief };
+  }
+  return belief ? { xMin: belief.xMin, atEdge: belief.atEdge, empirical: false, belief: null } : null;
+}
+
+const sig3 = (v) => formatNumber(Number(v.toPrecision(3)));
+
+// The assignment-error sentence under the slider. With physFromEmpirical the model ignores
+// ring-up, so its value can be far from what the IQ plot shows (A28 item 1); the simulated
+// value from the results (assignment.empirical at this grid point) leads, and the model's
+// value and signal-to-noise ratio are labelled as such.
+export function assignmentText(plat, readout, tau) {
+  const eps = readout.averageAssignmentError();
+  const a = plat.results.assignment;
+  const i = plat.results.x?.values?.findIndex((x) => Math.abs(x - tau) <= 1e-9 * Math.max(1, tau)) ?? -1;
+  const snr = typeof readout.snr === 'function' ? readout.snr() : null;
+  const snrText = Number.isFinite(snr) ? `, signal-to-noise ratio ${sig3(snr)}` : '';
+  if (plat.physFromEmpirical && a && i >= 0 && Number.isFinite(a.empirical?.[i])) {
+    const ci = Number.isFinite(a.lo?.[i]) && Number.isFinite(a.hi?.[i]) ? ` (95% interval ${sig3(a.lo[i])} to ${sig3(a.hi[i])})` : '';
+    return `At τ = ${formatTau(tau)} the simulated assignment error (average chance of reading the wrong state, with ring-up) is ${sig3(a.empirical[i])}${ci}. `
+      + `The readout model, which ignores ring-up and is used for the soft-decoding weights, predicts ${sig3(eps)}${snrText}.`;
+  }
+  if (plat.physFromEmpirical) {
+    return `At τ = ${formatTau(tau)} the readout model (no ring-up) predicts an assignment error of ${sig3(eps)}${snrText}; `
+      + 'the simulated value is only available at the grid points of the results.';
+  }
+  return `At τ = ${formatTau(tau)} the assignment error (average chance of reading the wrong state) is ${sig3(eps)}${snrText}.`;
+}
+
 // Text for the optima of a stage-2 or stage-3 results file: tauPhys and tauLog per d
 // for one mode, "no interior minimum" when the minimum sits at the edge of the grid.
-export function optimaInfo(results, mode, ds) {
+export function optimaInfo(results, mode, ds, { physFromEmpirical = false } = {}) {
   const o = results.optima || {};
   const lines = [];
   const vlines = [];
-  if (o.tauPhys) {
-    if (o.tauPhys.atEdge) lines.push('Physical optimum τ_phys (lowest assignment error): no interior minimum.');
+  const phys = physicalOptimum(results, { physFromEmpirical });
+  if (phys) {
+    const what = phys.empirical ? 'lowest simulated assignment error' : 'lowest assignment error';
+    if (phys.atEdge) lines.push(`Physical optimum τ_phys (${what}): no interior minimum.`);
     else {
-      lines.push(`Physical optimum τ_phys (lowest assignment error): ${formatTau(o.tauPhys.xMin)}.`);
-      vlines.push({ x: o.tauPhys.xMin, label: 'τ_phys' });
+      lines.push(`Physical optimum τ_phys (${what}): ${formatTau(phys.xMin)}.`);
+      vlines.push({ x: phys.xMin, label: 'τ_phys' });
+    }
+    if (phys.belief && !phys.belief.atEdge) {
+      lines.push(`The readout model's own estimate, which ignores resonator ring-up, is ${formatTau(phys.belief.xMin)}; `
+        + 'the logical optima are compared with the simulated value.');
     }
   }
   for (const t of (o.tauLog || []).filter((t) => t.mode === mode && ds.includes(t.d)).sort((a, b) => a.d - b.d)) {
     if (t.atEdge) lines.push(`Logical optimum τ_log for d = ${t.d} (${mode}): no interior minimum.`);
     else {
       const ci = Number.isFinite(t.lo) && Number.isFinite(t.hi) ? ` (95% interval ${formatTau(t.lo)} to ${formatTau(t.hi)})` : '';
-      lines.push(`Logical optimum τ_log for d = ${t.d} (${mode}): ${formatTau(t.xMin)}${ci}.`);
-      vlines.push({ x: t.xMin, label: `τ_log d${t.d}` });
+      if (isResolved(results, t.d, mode)) {
+        lines.push(`Logical optimum τ_log for d = ${t.d} (${mode}): ${formatTau(t.xMin)}${ci}.`);
+        vlines.push({ x: t.xMin, label: `τ_log d${t.d}` });
+      } else {
+        // An unresolved optimum gets no marker, so the chart does not present it as located.
+        const c = errorsAtMinimum(results, t.d, mode);
+        lines.push(`Logical optimum τ_log for d = ${t.d} (${mode}): not resolved. The lowest point has only ${c.k} logical error${c.k === 1 ? '' : 's'} `
+          + `of ${formatCount(c.n)} shots; the estimate ${formatTau(t.xMin)}${ci} is not drawn.`);
+      }
     }
   }
   // Optima at the same τ share one marker, so their labels do not overprint.
@@ -273,6 +348,7 @@ const INTRO = {
     + 'But a longer readout also makes every round slower and gives the ion more time to change state, so the logical error does not keep falling.',
   superconducting: 'A superconducting qubit is read out through a microwave resonator: the reflected signal lands at one point of the IQ plane for |0⟩ and at another for |1⟩. '
     + 'Integrating the signal for longer averages away the amplifier noise, so the two clusters separate. '
+    + 'The resonator first has to ring up, so below about 0.5 µs there is less signal than a fully rung-up resonator would give. '
     + 'But the qubit can decay from |1⟩ to |0⟩ while it is being read, which smears points from the |1⟩ cluster towards |0⟩, and a longer readout also leaves the other qubits idle for longer. '
     + 'So the logical error has an optimum integration time.',
 };
@@ -347,7 +423,7 @@ export function mountLevel3(container) {
     const res = p.results;
     const tag = `stage ${p.stage}, ${p.label.toLowerCase()}`;
     const hard = res.series.filter((s) => s.mode === 'hard').sort((a, b) => a.d - b.d);
-    optima = optimaInfo(res, 'hard', hard.map((s) => s.d));
+    optima = optimaInfo(res, 'hard', hard.map((s) => s.d), { physFromEmpirical: p.physFromEmpirical });
     chartBase = {
       title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${p.tauName} τ (µs)`, yLabel: 'Logical error probability',
@@ -405,10 +481,7 @@ export function mountLevel3(container) {
     }
     batchBtn.disabled = false;
     const rng = createRng(SEED + idx);
-    const eps = readout.averageAssignmentError();
-    const snr = plat.id === 'superconducting' && typeof readout.snr === 'function' ? readout.snr() : null;
-    assign.textContent = `At τ = ${formatTau(tau)} the assignment error (average chance of reading the wrong state) is ${formatNumber(eps)}`
-      + `${Number.isFinite(snr) ? `; the signal-to-noise ratio is ${formatNumber(snr)}` : ''}.`;
+    assign.textContent = assignmentText(plat, readout, tau);
     try {
       renderVisual(readout, tau, rng);
     } catch (err) {

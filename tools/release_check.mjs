@@ -18,8 +18,8 @@ const NEEDS = {
   level1: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1'],
   level2: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1'],
   ion: ['createIonReadout', 'stage2', 'paramsIon'],
-  superconducting: ['createScReadout', 'stage3', 'paramsSc'],
-  level5: ['stage2', 'stage3', 'stage4', 'paramsIon', 'paramsSc', 'paramsCycle'],
+  superconducting: ['createScReadout', 'findMinimum', 'stage3', 'paramsSc'],
+  level5: ['findMinimum', 'stage2', 'stage3', 'stage4', 'paramsIon', 'paramsSc', 'paramsCycle'],
   liveRun: [],
 };
 

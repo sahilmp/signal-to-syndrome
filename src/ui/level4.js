@@ -259,7 +259,7 @@ export function mountLevel4(container) {
       pnl.box.replaceChildren(svg);
       const kept = res.corrected === bank.logical;
       pnl.verdict.className = `verdict ${kept ? 'kept' : 'lost'}`;
-      pnl.verdict.textContent = `${kept ? '✓ Logical value kept' : '✗ Logical value lost'} (${res.corrected}). Correction: ${corr.length ? corr.map((c) => c.text).join('; ') : 'none'}.${res.exact ? '' : ' (Matching not exact.)'}`;
+      pnl.verdict.textContent = `${kept ? '✓ Logical value kept' : '✗ Logical value lost'}: decoded ${res.corrected}, prepared ${bank.logical}. Correction: ${corr.length ? corr.map((c) => c.text).join('; ') : 'none'}.${res.exact ? '' : ' (Matching not exact.)'}`;
     }
     const same = pathKey(both.hard) === pathKey(both.soft);
     shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (bank shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
