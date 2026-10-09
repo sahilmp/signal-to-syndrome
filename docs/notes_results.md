@@ -226,8 +226,64 @@ Soft is at or below hard (point estimates) at **36 of 36** points and above hard
 
 ## Hypotheses C1–C4
 
-Stage 1 bears on none of them directly; it fixes the gate-noise floor (pGate ≈ 0.013) against which the readout effects of Stages 2 and 3 are measured. C3 and C4 need Stage 3 and are not evaluated yet.
+Stage 1 bears on none of them directly; it fixes the gate-noise floor (pGate ≈ 0.013) against which the readout effects of Stages 2 and 3 are measured. The verdicts for all four, with Stage 4, are under "Verdicts" at the end of this section; the ion-arm paragraph below was written before Stage 4.
 
 ### Ion arm: C1 and C2
 
 Source: `data/results/stage2_ion.json` (Wilson 95% for pL and assignment error, n = 32 000 per point; 95% bootstrap with B = 200 for τ*_log). **On the ion arm C1 holds and C2 fails as stated.** For C1, the idle flip probability 0.5 (1 − e^(−τ/T1)) stays at or below 2.5e-5 over the whole 1–500 µs grid, about 20× below the readout error at its optimum, so idling cannot create an optimum; the optimum that does appear comes from dark→bright pumping during detection. The empirical assignment error falls to 5.7e-4 [4.8e-4, 6.9e-4] at τ = 20 µs and rises to 5.0e-3 [4.7e-3, 5.3e-3] at 500 µs (fitted τ*_phys = 23.5 µs), and the hard-mode logical optima are consistent with it: τ*_log = 31.6 µs [20.0, 81.2] at d = 3 (an exact tie between 20 and 50 µs) and 22.9 µs [14.1, 189] at d = 5, both intervals containing τ*_phys. The minimum is shallow, though: from 10 to 500 µs the d = 3 hard pL stays between 0.0035 [0.0029, 0.0042] and 0.0040 [0.0034, 0.0048], so beyond about 10 µs the gate-noise floor, not τ, sets the logical error; the d = 7 hard optimum (11.8 µs [11.2, 44.7]) rests on 3, 4 and 5 errors at τ = 10, 15 and 20 µs and is not resolved. For C2, soft is at or below hard at only 13 of the 39 (d, τ) points. It wins clearly where readout is photon-starved (τ ≤ 3 µs at every d, and also τ = 5 µs at d = 5 and 7): at τ = 1 µs, d = 7 soft gives 0.0499 [0.0475, 0.0523] against hard 0.394 [0.389, 0.400], and d = 3 gives 0.148 [0.144, 0.152] against 0.352 [0.347, 0.358], so the falsifier "no significant gain anywhere" is not met and the second half of C2 ("helps most where readouts are short and ambiguous") holds. From τ = 7 µs on, soft is worse: above hard beyond the intervals at 11 points, 9 of them at d = 3 (every τ from 7 to 500 µs; τ = 20 µs gives 0.0072 [0.0063, 0.0081] against 0.0035 [0.0029, 0.0042]) and 2 at d = 5, and with overlapping intervals at d = 7. The soft-mode τ*_log is therefore unresolved (at d = 3 and 5 the lowest point is the grid end, with 67–68% of bootstrap replicates there). Split by logical state, the soft loss is on L0 at short and intermediate τ and moves to L1 from about 50 µs, following which readings the llr makes cheap; that asymmetry is intrinsic to matching with correct priors and also appears on model-matched synthetic data, where soft nevertheless wins pooled. The pooled loss on the real banks therefore points to the decoder's uniform-pGate edge model (no correlated or diagonal circuit faults), not to the readout model, whose llr passes V10, nor to the soft decoder, which is exact on soft weights.
+
+### Verdicts (A28, Fri 9 Oct)
+
+Source: `data/results/stage4_comparison.json` (`conclusions`, `sensitivity`, `sensitivityBaseline`; `tools/sweep.mjs --stage 4`, 373 s, 38 non-exact matchings), with Stages 2 and 3 above. Per-round and per-µs values are at τ*_log (plan §16.5); intervals are Wilson 95% carried through, τ*_log intervals 95% bootstrap. Both arms decode the **same** IonQ-simulator banks with the same calibrated pGate (0.0124 to 0.0139), so every difference between the platforms comes from the readout model, the idle flips and the cycle time.
+
+**How to read the sensitivity sweep.** Each of the 28 rows reruns both arms at reduced statistics (R = 1, at most 1000 shots per bank, so n ≤ 2000 per point, no bootstrap). The reduced-statistics baseline at card values (`sensitivityBaseline`) is part of the comparison. Where a row agrees with that baseline but the baseline disagrees with the full-statistics result, the sweep lacks power for that conclusion. It does not confirm or refute the conclusion. This happens for C1 (superconducting part) and C2.
+
+| | Plan statement (short) | Verdict | Automated verdict (full statistics) | Sensitivity, 28 rows |
+|---|---|---|---|---|
+| C1 | SC: interior τ*_log < τ*_phys, idle-driven; ion: no idle-driven optimum | **Held** at d = 3 and 5; undetermined at d = 7 | flips (artefact, see below) | flips 28/28, same as baseline; not informative |
+| C2 | Soft at or below hard at every τ, most gain at short τ | **Refuted** as stated (fails on the ion arm, holds on SC) | flips | holds 28/28, same as baseline; too little power to see the ion loss |
+| C3 | Ion better per round, order reverses per µs | **Refuted** | flips | flips 27/28, undetermined 1/28 (κ × 2); never holds |
+| C4 | Break-even ε̄ (d = 5 beats d = 3) similar on both platforms | **Refuted** on the empirical ε̄ axis; undetermined on the belief axis | undetermined | undetermined 28/28 overall |
+
+#### C1: held at d = 3 and 5 (superconducting), held on the ion arm; d = 7 undetermined
+
+- **Superconducting.** Every case has an interior τ*_log (no bootstrap replicate at a grid edge). Against the empirical τ*_phys = 0.906 µs, τ*_log lies below it beyond the interval at d = 3 (hard 0.793 [0.436, 0.854], soft 0.601 [0.574, 0.668] µs) and d = 5 (hard 0.756 [0.688, 0.875], soft 0.592 [0.569, 0.857] µs). At d = 7 the intervals contain 0.906 µs (hard 0.783 [0.579, 0.990], soft 0.582 [0.553, 1.311] µs). Against the belief τ*_phys = 0.587 µs there is no shift. The verdict depends on the empirical value (ring-up mismatch, Stage 3).
+- **Ion.** The hard-mode optima at d = 3 and 5 (31.6 [20.0, 81.2] and 22.9 [14.1, 189] µs) contain τ*_phys = 23.5 µs, which is set by dark→bright pumping. The idle flip probability is at most 2.5e-5 on the grid, about 20× below the readout error at τ*_phys (5.7e-4) and about 500× below pGate. So none of the interior minima can be idle-driven.
+- **Why the automated verdict says "flips".** The CC-A8 rule calls the ion part "holds" only if the idle probability is below 1e-6 at **every** τ. 0.5 (1 − e^(−τ/T1)) passes 1e-6 between τ = 20 and 30 µs (2.5e-5 at 500 µs), so the rule fails on the long-τ grid points, where pL is flat and set by gate noise. The rule is stricter than the plan's falsifier ("the ion curve shows an idle-driven minimum"), and the plan's falsifier is not met. The same rule makes every sensitivity row "flips", including T1 × 2 (maximum idle probability 1.25e-5). The superconducting part is "undetermined" in every row and in the baseline, because the reduced runs have no bootstrap intervals. So the sweep does not test C1.
+- **Why it holds.** On the superconducting arm each extra µs of readout also costs about 1% idle flips per round on the data qubits, which the single-qubit assignment error does not count, so the logical optimum comes earlier. On the ion arm the idle flips are negligible and the optimum follows the readout itself.
+
+#### C2: refuted as stated (fails on the ion arm, holds on the superconducting arm)
+
+- **Superconducting:** soft at or below hard at 36 of 36 points, below beyond the intervals at 20, above at none (largest gain d = 7, 0.3 µs: 0.0122 [0.0110, 0.0134] against 0.0298 [0.0280, 0.0317]).
+- **Ion:** soft above hard beyond the intervals at 11 points (9 at d = 3, every τ from 7 to 500 µs; e.g. 20 µs: 0.0072 [0.0063, 0.0081] against 0.0035 [0.0029, 0.0042]) and below beyond the intervals at 11 (τ ≤ 3–5 µs; d = 7 at 1 µs: 0.0499 against 0.394). The second half of C2 holds on both arms: the gain is largest where readouts are short and ambiguous.
+- **Sensitivity:** "holds" in all 28 rows and in the baseline (ion: 0 points with soft above hard). At n ≤ 2000 per point the ion loss at d = 3 (about 7 against 14 expected errors at τ = 20 µs) is inside the intervals, so these rows cannot see it. The full-statistics refutation stands.
+- **Why:** once ion readout errors (≈ 6e-4) are far below pGate (≈ 0.013), almost every matching costs the same under the decoder's single uniform gate-noise model, and the small llr differences break those near-ties in a way that fits the simulator's real gate noise worse than hard weights do (Stage 2 "Diagnosis").
+
+#### C3: refuted (the ion arm is lower in both metrics)
+
+| d, mode | Per round, ion | Per round, SC | Per µs, ion | Per µs, SC |
+|---|---|---|---|---|
+| 3 hard | 1.20e-3 [1.00e-3, 1.44e-3] | 7.78e-3 [7.23e-3, 8.36e-3] | 5.92e-7 | 6.90e-3 |
+| 5 hard | 2.85e-4 [1.96e-4, 4.14e-4] | 1.11e-3 [9.2e-4, 1.34e-3] | 1.42e-7 | 1.02e-3 |
+| 7 hard | 3.6e-5 [1.3e-5, 9.8e-5] | 2.57e-4 [1.73e-4, 3.80e-4] | 1.8e-8 | 2.30e-4 |
+| 3 soft | 1.84e-3 [1.59e-3, 2.13e-3] | 4.41e-3 [4.01e-3, 4.86e-3] | 7.39e-7 | 4.72e-3 |
+| 5 soft | 3.86e-4 [2.80e-4, 5.32e-4] | 7.41e-4 [5.87e-4, 9.34e-4] | 1.55e-7 | 8.00e-4 |
+| 7 soft | 8.5e-5 [4.3e-5, 1.66e-4] | 1.87e-4 [1.18e-4, 2.95e-4] | 3.9e-8 | 2.04e-4 |
+
+Cycle times at τ*_log: ion 2002–2490 µs, SC 0.92–1.13 µs. Hand check of d = 3 hard: ion pL 0.003581 at r = 3 gives ½[1 − (1 − 0.007162)^(1/3)] = 1.196e-3 per round, and divided by 2021.6 µs gives 5.92e-7 per µs. For SC, pL 0.022965 gives 7.78e-3 per round, and divided by 1.1275 µs gives 6.90e-3 per µs. Both agree with the file.
+
+- Per round the ion arm is lower in 5 of 6 cases beyond the intervals (by 1.9× to 7×; d = 7 soft overlaps). The first half of C3 holds: the ion can beat the superconducting arm per round. Per µs the ion arm is lower by about 10⁴ in every case, so the ordering never reverses. This meets the falsifier ("the ordering is the same in both metrics across the sensitivity sweep"), and no sensitivity row reverses it (27 flips, 1 undetermined). The result does not depend on taking τ*_log: the lowest superconducting per-µs value on the grid (d = 3 hard, 3.7e-3 at 3 µs) is still about 7000× above the ion arm's.
+- **Why:** per round the ion arm wins because its readout error (≈ 6e-4) and idle flips (< 3e-5) are far below the superconducting arm's (≈ 5e-3 readout, ≈ 1% idle per round), and the gate noise is identical by construction. Dividing by a longer cycle can only lower a rate per µs, so the ion arm's slow cycle widens its lead instead of reversing it. The cost the hypothesis had in mind (a slow clock) would show up in a metric such as time to finish a fixed number of logical operations, not in errors per µs of storage.
+
+#### C4: refuted on the empirical ε̄ axis; undetermined on the belief axis
+
+- **Ion:** hard break-even ε̄ = 0.236 [0.210, 0.267] at τ = 1.56 µs (empirical axis 0.236 [0.210, 0.266]). In soft mode d = 5 is below d = 3 at every τ, so there is no break-even.
+- **Superconducting:** there is no crossing in either mode. d = 5 is below d = 3 at every grid point. At τ = 0.1 µs (empirical ε̄ = 0.448) it is still below beyond the intervals: hard 0.4377 [0.4323, 0.4432] against 0.4533 [0.4479, 0.4588]. The two curves merge only at the coin-toss limit (τ = 0.05 µs, ε̄ = 0.491: 0.4825 against 0.4862, overlapping). So the superconducting break-even lies above ε̄ ≈ 0.45 on the empirical axis, at least 0.18 above the ion's upper bound of 0.267. That is a difference far beyond the uncertainties, so the falsifier is met. On the belief axis the grid only reaches ε̄ = 0.166 (ring-up ignored), so the superconducting break-even is just bounded below (beyond the intervals at belief ε̄ = 0.085). That is compatible with 0.236, and the automated rule reports "undetermined" for this reason.
+- **Sensitivity:** "undetermined" in all 28 rows. The hard part shows "holds" at χ × 0.5 (ion 0.201, SC 0.163) and κ × 2 (0.201, 0.188). These superconducting crossings are on the belief axis, at reduced statistics, where both curves sit near 0.5, so they carry no weight.
+- **Why:** ε̄ is not a platform-neutral axis, because the ion error is one-sided. At short τ only bright ions are misread, as dark (e^(−0.472 · 1.56) = 0.48 at break-even), so ε̄ = 0.24 means about 0.48 on one state, where distance stops helping. The superconducting error is nearly symmetric (0.459 and 0.471 for |0⟩ and |1⟩ at 0.1 µs), and majority voting keeps helping until about 0.5. The second half of C4 does hold: the readout time needed differs by more than 15× (ion 1.56 µs against SC below 0.1 µs).
+
+#### Consequences for the project page and for Person B
+
+- The page must not show the automated C1 "flips" or the sensitivity rows without the caveats above. The C1 ion "flips" comes from the 1e-6 idle threshold. The sensitivity C2 "holds" reflects too little statistical power and is not robustness.
+- Stage 4 `breakEven.byMode` is per mode. Level 5 should use it rather than repeat the hard value for soft (CC-B9 handoff, item 3).
+- Superconducting τ*_phys: the page should quote the empirical 0.906 µs, or both values. `optima.tauPhys` holds the belief value 0.587 µs.
