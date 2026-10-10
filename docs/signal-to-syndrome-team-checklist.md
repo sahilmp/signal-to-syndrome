@@ -1112,7 +1112,7 @@ Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ### B48 · EDITOR · VERIFY · Sat 22:15 — Switch to SP6 data
 
 **Do:** after `ACK N5`, `N6`, `N7` (N7 is the provisional Stage 4): apply Appendix U3 rows 17–24 (24 only if B47 passed); build, check, preview with every switched flag on; produce `dist/local/preview.html` with every flag on in a scratch copy for N8 (send the file, do not commit the scratch flags). Join K3.
-- [ ] Done
+- [x] Done
 
 ### B49 · CLAUDE CODE · Sun 05:30 — CC-B17: Level 2 sandbox and the global basis toggle
 

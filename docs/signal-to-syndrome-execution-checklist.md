@@ -417,7 +417,7 @@ node tools/sweep.mjs --stage 4 --basis X
 
 **Do:** team checklist B48 and Appendix U3 rows 17–24; build a scratch preview with every flag on and send it to Person A (N8).
 **Pass:** `npm run check` passes with every switched flag on.
-- [ ] Done
+- [x] Done
 
 ### K3 · Both · Sat 22:30 — GATE SP6
 
