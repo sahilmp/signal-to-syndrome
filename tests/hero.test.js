@@ -4,7 +4,10 @@ import {
   heroCurves, heroOptima, bandInfo, liveSentence, sliderTau, snapIndex,
   BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL, HERO_DECODER, HERO_PLATFORMS,
 } from '../src/ui/hero.js';
-import stage3v1 from '../data/results/stage3_sc.json' with { type: 'json' };
+import { findMinimum } from '../src/core/optimum.js';
+// A v1-format superconducting Stage 3 file (no decoder field, no tauPhysEmpirical). The real
+// data/results/stage3_sc.json is a v2 file since Person A's A48 rerun (handoff N6).
+import stage3v1 from '../data/fixtures/stage3_sc.json' with { type: 'json' };
 
 // Synthetic v2 results: tau*_log (learned) = 2 [1.5, 2.5], tau*_phys (empirical) = 5, so
 // the logical optimum sits below the physical one and the band is [2, 5].
@@ -114,19 +117,27 @@ test('curves: learned d = 3 hard series and the simulated assignment error', () 
 
 // Catches: fails if the fallbacks for the v1 superconducting file (no decoder field, no
 // tauPhysEmpirical) break: the hero must use its naive d = 3 hard series and tau_log, and
-// locate tau*_phys on assignment.empirical with findMinimum (0.906 µs, DECISIONS A28 item 2),
-// not the belief optimum optima.tauPhys (0.587 µs).
+// locate tau*_phys on assignment.empirical with findMinimum, not the belief optimum
+// optima.tauPhys. Non-vacuous on the fixture: findMinimum gives 0.829 µs, the stored
+// optima.tauPhys is 0.7 µs, and the check below requires the two to differ.
 test('v1 stage-3 file: naive series, its tau_log, tau*_phys from findMinimum', () => {
+  assert.equal(stage3v1.fixture, true);
+  assert.equal(stage3v1.optima.tauPhysEmpirical, undefined);
+  assert.ok(stage3v1.series.every((u) => u.decoder === undefined), 'fixture must be v1 format');
   const c = heroCurves(stage3v1);
   assert.equal(c.decoder, 'naive');
   const s = stage3v1.series.find((u) => u.d === 3 && u.mode === 'hard');
   assert.deepEqual(c.logical.y, s.pL);
   const o = heroOptima(stage3v1, c.decoder);
   assert.equal(o.tauPhys.from, 'findMinimum');
-  assert.ok(Math.abs(o.tauPhys.xMin - 0.9057) < 1e-3, `tau_phys ${o.tauPhys.xMin}`);
-  assert.equal(o.tauLog.xMin, stage3v1.optima.tauLog.find((t) => t.d === 3 && t.mode === 'hard').xMin);
-  // tau*_log 0.793 [0.436, 0.854] lies below 0.906, outside the interval: a band.
-  assert.equal(bandInfo(o).kind, 'band');
+  const expectedPhys = findMinimum(stage3v1.x.values, stage3v1.assignment.empirical, { logX: true }).xMin;
+  assert.ok(Math.abs(expectedPhys - stage3v1.optima.tauPhys.xMin) > 1e-3, 'fixture cannot tell empirical from belief');
+  assert.ok(Math.abs(o.tauPhys.xMin - expectedPhys) < 1e-9, `tau_phys ${o.tauPhys.xMin}`);
+  const t = stage3v1.optima.tauLog.find((u) => u.d === 3 && u.mode === 'hard');
+  assert.equal(o.tauLog.xMin, t.xMin);
+  // In the fixture tau*_phys (0.829) lies inside tau*_log's interval [0.5, 1]: coincide.
+  assert.ok(expectedPhys >= t.lo && expectedPhys <= t.hi);
+  assert.equal(bandInfo(o).kind, 'coincide');
 });
 
 // Catches: fails if a missing learned series falls back to a v2 naive series by mistake

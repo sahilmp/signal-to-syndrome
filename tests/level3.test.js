@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   optimaInfo, PLATFORMS, assignmentText, formatTau, naiveResults, distanceMarkers, scoreBand, challengeResult,
+  crosstalkRows, crosstalkShift,
 } from '../src/ui/level3.js';
+import stage2v2 from '../data/results/stage2_ion.json' with { type: 'json' };
 import { budgetAt } from '../src/ui/budget.js';
 import { spreadLabels } from '../src/ui/charts.js';
 
@@ -173,4 +175,57 @@ test('spreadLabels: at least one gap apart, order kept, inside the bounds', () =
   assert.ok(Math.max(...low) <= 400 && Math.min(...low) >= 20);
   // Already apart: unchanged.
   assert.deepEqual(spreadLabels([10, 50], 14), [10, 50]);
+});
+
+// Crosstalk scan (CC-B20). Two entries with the point-estimate flag on: one resolved, one not.
+const scanEntry = (over) => ({
+  rate: 0, d: 3, mode: 'hard', tauLog: { xMin: 15.2, lo: 13.9, hi: 27.4, atEdge: false },
+  interiorBelowTauPhys: true, interiorBelowTauPhysResolved: false, ...over,
+});
+
+// Catches: fails if the shift column follows the raw point-estimate flag interiorBelowTauPhys
+// (DECISIONS E12: it flips with noise) instead of the resolved flag. Non-vacuous: the same
+// entry with the resolved flag true says "yes".
+test('crosstalkShift: point-estimate flag true but not resolved gives "not resolved"', () => {
+  assert.equal(crosstalkShift(scanEntry()), 'not resolved');
+  assert.equal(crosstalkShift(scanEntry({ interiorBelowTauPhysResolved: true })), 'yes');
+});
+
+// Catches: fails if shiftDelta, when present, is ignored in favour of the resolved flag: each
+// case sets the two to opposite values, so either fallback gives the other answer.
+test('crosstalkShift: reads shiftDelta.resolved when shiftDelta exists', () => {
+  assert.equal(crosstalkShift(scanEntry({ interiorBelowTauPhysResolved: true, shiftDelta: { diff: 1e-3, lo: -1e-4, hi: 2e-3, resolved: false } })), 'not resolved');
+  assert.equal(crosstalkShift(scanEntry({ interiorBelowTauPhysResolved: false, shiftDelta: { diff: 1e-3, lo: 1e-4, hi: 2e-3, resolved: true } })), 'yes');
+});
+
+// Catches: fails if a row is missing or duplicated, if d = 7 leaks in, if the card rate is not
+// labelled as the measured lower bound (or a scan rate is), or if any cell shows a raw boolean.
+test('crosstalkRows: one row per rate and (d, mode), card rate labelled, no raw booleans', () => {
+  const scan = {
+    rates_per_us: [0, 1.67e-5], cardRate_per_us: 1.67e-5, tauPhys: 23.4849,
+    entries: [
+      scanEntry(), scanEntry({ mode: 'soft' }), scanEntry({ d: 5 }), scanEntry({ d: 7 }),
+      scanEntry({ rate: 1.67e-5, interiorBelowTauPhys: false }),
+      scanEntry({ rate: 1.67e-5, d: 5, mode: 'soft', tauLog: { xMin: 500, lo: 10, hi: 500, atEdge: true } }),
+    ],
+  };
+  const rows = crosstalkRows(scan);
+  assert.deepEqual(rows.map((r) => `${r.rate}|${r.d}|${r.mode}`), [
+    '0 /µs (scan)|3|hard', '0 /µs (scan)|3|soft', '0 /µs (scan)|5|hard',
+    '1.67e-5 /µs (measured lower bound)|3|hard', '1.67e-5 /µs (measured lower bound)|5|soft',
+  ]);
+  assert.equal(rows[0].tauLog, '15.2 µs (13.9 µs to 27.4 µs)');
+  assert.equal(rows[0].tauPhys, '23.5 µs');
+  assert.match(rows[4].tauLog, /^no interior minimum/);
+  for (const r of rows) for (const v of Object.values(r)) assert.ok(v !== 'true' && v !== 'false', `raw boolean in ${JSON.stringify(r)}`);
+});
+
+// Catches: fails if the real Stage 2 scan (handoff N6) loses or duplicates rows, or if the
+// card rate is not found among its rates (every (d, mode) of it labelled as the lower bound).
+test('crosstalkRows: the real ion scan has one row per rate and (d, mode)', () => {
+  const scan = stage2v2.crosstalkScan;
+  const rows = crosstalkRows(scan);
+  assert.equal(rows.length, scan.rates_per_us.length * 4);
+  assert.equal(rows.filter((r) => r.rate.includes('measured lower bound')).length, 4);
+  assert.ok(rows.every((r) => r.shift === 'yes' || r.shift === 'not resolved'));
 });

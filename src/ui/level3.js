@@ -231,6 +231,68 @@ export function distanceMarkers(results, d, tau, { physFromEmpirical = false } =
   return [{ x: tau, label: `τ = ${formatTau(tau)}` }, ...optimaInfo(results, 'hard', [d], { physFromEmpirical }).vlines];
 }
 
+// Ion measurement-crosstalk scan (CC-B20, handoff N6), from crosstalkScan of the v2 stage-2
+// results: one row per rate in rates_per_us and (d, mode), d = 3 and 5, learned decoder.
+// The shift column says "yes" only when the shift is resolved: entry.shiftDelta.resolved
+// when shiftDelta exists, otherwise interiorBelowTauPhysResolved. The point-estimate flag
+// interiorBelowTauPhys flips with noise (DECISIONS E12) and is never shown.
+export const CROSSTALK_TITLE = 'Measurement crosstalk scan (d = 3 and 5, learned decoder)';
+export const CROSSTALK_SENTENCE = 'Crosstalk only moves the best readout time when it is far above the measured value.';
+export const CROSSTALK_COLUMNS = [
+  'Crosstalk rate', 'd', 'Decoding', 'Best readout time for the code (τ*_log, 95% interval)',
+  'Best readout time for one qubit (τ*_phys)', 'Shift below the single-qubit optimum',
+];
+const CARD_RATE = 1.67e-5;
+const sameRate = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+const formatRate = (r) => (r === 0 ? '0' : r.toExponential());
+
+export function crosstalkShift(entry) {
+  if (entry.shiftDelta && typeof entry.shiftDelta === 'object') return entry.shiftDelta.resolved === true ? 'yes' : 'not resolved';
+  return entry.interiorBelowTauPhysResolved === true ? 'yes' : 'not resolved';
+}
+
+export function crosstalkRows(scan) {
+  if (!scan || !Array.isArray(scan.entries)) return [];
+  const card = Number.isFinite(scan.cardRate_per_us) ? scan.cardRate_per_us : CARD_RATE;
+  const rates = Array.isArray(scan.rates_per_us) ? scan.rates_per_us : [...new Set(scan.entries.map((e) => e.rate))];
+  const rows = [];
+  for (const rate of rates) {
+    const entries = scan.entries
+      .filter((e) => sameRate(e.rate, rate) && (e.d === 3 || e.d === 5))
+      .sort((a, b) => a.d - b.d || (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1));
+    const rateText = sameRate(rate, card) ? `${formatRate(rate)} /µs (measured lower bound)` : `${formatRate(rate)} /µs (scan)`;
+    for (const e of entries) {
+      const t = e.tauLog || {};
+      const ci = Number.isFinite(t.lo) && Number.isFinite(t.hi) ? ` (${formatTau(t.lo)} to ${formatTau(t.hi)})` : '';
+      const tauLog = !Number.isFinite(t.xMin) ? 'not available'
+        : t.atEdge ? `no interior minimum (lowest at ${formatTau(t.xMin)}, the grid edge)${ci}` : `${formatTau(t.xMin)}${ci}`;
+      const phys = Number.isFinite(e.tauPhys) ? e.tauPhys : scan.tauPhys;
+      rows.push({
+        rate: rateText, d: String(e.d), mode: e.mode, tauLog,
+        tauPhys: Number.isFinite(phys) ? formatTau(phys) : 'not available',
+        shift: crosstalkShift(e),
+      });
+    }
+  }
+  return rows;
+}
+
+function crosstalkTable(results) {
+  const box = el('div', { class: 'crosstalk-scan' });
+  box.appendChild(el('p', {}, CROSSTALK_SENTENCE));
+  const table = el('table');
+  table.createCaption().textContent = `${CROSSTALK_TITLE}${results?.fixture ? ' — placeholder data' : ''}`;
+  const hr = table.createTHead().insertRow();
+  for (const c of CROSSTALK_COLUMNS) hr.appendChild(el('th', { scope: 'col' }, c));
+  const body = table.createTBody();
+  for (const r of crosstalkRows(results?.crosstalkScan)) {
+    const tr = body.insertRow();
+    for (const v of [r.rate, r.d, r.mode, r.tauLog, r.tauPhys, r.shift]) tr.insertCell().textContent = v;
+  }
+  box.appendChild(scrollBox(table, CROSSTALK_TITLE));
+  return box;
+}
+
 // Challenge score bands by pL(chosen) / pL(min) (U7.5).
 export const CHALLENGE_BANDS = [{ max: 1.1, text: 'spot on' }, { max: 1.5, text: 'close' }];
 export function scoreBand(ratio) {
@@ -502,6 +564,11 @@ export function mountLevel3(container) {
   }
   const optList = el('ul', { class: 'optima' });
   container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
+  // Trapped ion only, behind FEATURES.crosstalk: the crosstalk scan (CC-B20).
+  const crosstalkBox = FEATURES.crosstalk === true && ION.budgetResults?.crosstalkScan
+    ? explainMore([crosstalkTable(ION.budgetResults)], 'Explain more: measurement crosstalk')
+    : null;
+  if (crosstalkBox) container.appendChild(crosstalkBox);
   if (ux) {
     container.appendChild(takeawayCard('the readout time with the fewest wrong readings is not always the best for the code: '
       + 'a longer wait has its own cost.').node);
@@ -540,6 +607,7 @@ export function mountLevel3(container) {
       } : {}),
     };
     optList.replaceChildren(...optima.lines.map((t) => el('li', {}, t)));
+    if (crosstalkBox) crosstalkBox.hidden = p.id !== 'trapped-ion';
 
     const a = p.id === 'superconducting' ? res.assignment : null;
     assignChart.root.hidden = !a;
