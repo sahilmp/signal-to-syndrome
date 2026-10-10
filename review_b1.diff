@@ -1,0 +1,1396 @@
+﻿diff --git a/src/core/bank.js b/src/core/bank.js
+new file mode 100644
+index 0000000..6237b09
+--- /dev/null
++++ b/src/core/bank.js
+@@ -0,0 +1,120 @@
++// Shot banks (schema s2s-bank/1): validation, key decoding and splitting into
++// ancilla and data readouts. Classical bit 0 is the least significant bit of a key.
++
++const SCHEMA = 's2s-bank/1';
++const REQUIRED = [
++  'schema', 'code', 'd', 'r', 'logical', 'shots', 'n_clbits',
++  'layout', 'bit_order', 'key_encoding', 'counts', 'checksum',
++];
++const HEX_KEY = /^[0-9a-f]+$/;
++
++function fail(msg) {
++  throw new Error(`invalid s2s-bank/1 bank: ${msg}`);
++}
++
++function isNonNegInt(v) {
++  return Number.isInteger(v) && v >= 0;
++}
++
++// Throws with a clear message on the first problem; returns true otherwise.
++// Extra fields (for example "inject" or "fixture") are allowed.
++export function validateBank(obj) {
++  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) fail('not an object');
++  for (const f of REQUIRED) {
++    if (!(f in obj)) fail(`missing required field "${f}"`);
++  }
++  if (obj.schema !== SCHEMA) fail(`schema is "${obj.schema}", expected "${SCHEMA}"`);
++  if (obj.code !== 'repetition') fail(`code is "${obj.code}", expected "repetition"`);
++  if (obj.bit_order !== 'qiskit-little-endian') fail(`bit_order is "${obj.bit_order}", expected "qiskit-little-endian"`);
++  if (obj.key_encoding !== 'hex') fail(`key_encoding is "${obj.key_encoding}", expected "hex"`);
++
++  const { d, r, n_clbits: nClbits, shots } = obj;
++  if (!Number.isInteger(d) || d < 2) fail(`d must be an integer >= 2, got ${d}`);
++  if (!Number.isInteger(r) || r < 1) fail(`r must be an integer >= 1, got ${r}`);
++  if (obj.logical !== 0 && obj.logical !== 1) fail(`logical must be 0 or 1, got ${obj.logical}`);
++  if (!isNonNegInt(shots)) fail(`shots must be a non-negative integer, got ${shots}`);
++  const expectedClbits = (d - 1) * r + d;
++  if (nClbits !== expectedClbits) fail(`n_clbits is ${nClbits}, expected (d-1)*r + d = ${expectedClbits}`);
++  if (nClbits > 29) fail(`n_clbits is ${nClbits}, at most 29 is supported`);
++
++  // Layout: r rows of d-1 ancilla bits and d data bits, all distinct and in range.
++  const { layout } = obj;
++  if (!layout || !Array.isArray(layout.ancilla) || !Array.isArray(layout.data)) {
++    fail('layout must have arrays "ancilla" and "data"');
++  }
++  if (layout.ancilla.length !== r) fail(`layout.ancilla has ${layout.ancilla.length} rows, expected r = ${r}`);
++  if (layout.data.length !== d) fail(`layout.data has ${layout.data.length} entries, expected d = ${d}`);
++  const seen = new Set();
++  const checkBit = (b, where) => {
++    if (!Number.isInteger(b) || b < 0 || b >= nClbits) fail(`${where} = ${b} is not a classical bit in 0..${nClbits - 1}`);
++    if (seen.has(b)) fail(`${where} = ${b} is used twice in the layout`);
++    seen.add(b);
++  };
++  layout.ancilla.forEach((row, k) => {
++    if (!Array.isArray(row) || row.length !== d - 1) fail(`layout.ancilla[${k}] must have d-1 = ${d - 1} entries`);
++    row.forEach((b, j) => checkBit(b, `layout.ancilla[${k}][${j}]`));
++  });
++  layout.data.forEach((b, i) => checkBit(b, `layout.data[${i}]`));
++
++  // Counts: lowercase hex keys that fit in n_clbits, positive integer counts.
++  const { counts, checksum } = obj;
++  if (!counts || typeof counts !== 'object' || Array.isArray(counts)) fail('counts must be an object');
++  const limit = 2 ** nClbits;
++  let total = 0;
++  let nKeys = 0;
++  for (const [key, c] of Object.entries(counts)) {
++    if (!HEX_KEY.test(key)) fail(`count key "${key}" is not lowercase hexadecimal without prefix`);
++    if (parseInt(key, 16) >= limit) fail(`count key "${key}" does not fit in n_clbits = ${nClbits}`);
++    if (!Number.isInteger(c) || c <= 0) fail(`count for key "${key}" must be a positive integer, got ${c}`);
++    total += c;
++    nKeys++;
++  }
++
++  // Checksum totals. The sha256 guards the copy out of Qollab and is verified by
++  // tools/assemble_bank.mjs; src/core has no hashing, so only its type is checked here.
++  if (!checksum || typeof checksum !== 'object') fail('checksum must be an object');
++  if (checksum.total_shots !== total) fail(`checksum.total_shots is ${checksum.total_shots}, but the counts sum to ${total}`);
++  if (shots !== total) fail(`shots is ${shots}, but the counts sum to ${total}`);
++  if (checksum.n_keys !== nKeys) fail(`checksum.n_keys is ${checksum.n_keys}, but counts has ${nKeys} keys`);
++  if ('sha256' in checksum && typeof checksum.sha256 !== 'string') fail('checksum.sha256 must be a string');
++  return true;
++}
++
++// Element b of the result is classical bit b (bit 0 = least significant bit).
++export function bitsFromKey(hexKey, nClbits) {
++  if (typeof hexKey !== 'string' || !HEX_KEY.test(hexKey)) throw new Error(`bitsFromKey: "${hexKey}" is not lowercase hexadecimal`);
++  if (!Number.isInteger(nClbits) || nClbits < 1 || nClbits > 29) throw new Error(`bitsFromKey: nClbits must be in 1..29, got ${nClbits}`);
++  let value = parseInt(hexKey, 16);
++  if (value >= 2 ** nClbits) throw new Error(`bitsFromKey: key "${hexKey}" does not fit in ${nClbits} bits`);
++  const bits = new Uint8Array(nClbits);
++  for (let b = 0; b < nClbits; b++) {
++    bits[b] = value & 1;
++    value >>>= 1;
++  }
++  return bits;
++}
++
++// One Uint8Array per shot; keys in ascending numeric order, each repeated by its count.
++// Every shot gets its own array, so callers may modify one without affecting others.
++export function expandShots(bank) {
++  const keys = Object.keys(bank.counts).sort((a, b) => parseInt(a, 16) - parseInt(b, 16));
++  const shots = [];
++  for (const key of keys) {
++    const bits = bitsFromKey(key, bank.n_clbits);
++    for (let c = 0; c < bank.counts[key]; c++) shots.push(c === 0 ? bits : bits.slice());
++  }
++  return shots;
++}
++
++// m[k][j] = check j of round k, x[i] = data qubit i, read through the layout.
++export function split(shotBits, layout, d, r) {
++  const m = [];
++  for (let k = 0; k < r; k++) {
++    const row = new Uint8Array(d - 1);
++    for (let j = 0; j < d - 1; j++) row[j] = shotBits[layout.ancilla[k][j]];
++    m.push(row);
++  }
++  const x = new Uint8Array(d);
++  for (let i = 0; i < d; i++) x[i] = shotBits[layout.data[i]];
++  return { m, x };
++}
+diff --git a/src/core/detectors.js b/src/core/detectors.js
+new file mode 100644
+index 0000000..8553c12
+--- /dev/null
++++ b/src/core/detectors.js
+@@ -0,0 +1,18 @@
++// Detectors of the repetition-code memory. Layer k < r compares check j with the
++// previous round (m[-1] = 0); layer r compares the last round with the parity of
++// the data readout. Detector index = k*(d-1) + j.
++
++export function computeDetectors(m, x, d, r) {
++  const nc = d - 1;
++  const D = new Uint8Array(nc * (r + 1));
++  for (let k = 0; k < r; k++) {
++    for (let j = 0; j < nc; j++) {
++      const prev = k > 0 ? m[k - 1][j] : 0;
++      D[k * nc + j] = (m[k][j] ^ prev) & 1;
++    }
++  }
++  for (let j = 0; j < nc; j++) {
++    D[r * nc + j] = (x[j] ^ x[j + 1] ^ m[r - 1][j]) & 1;
++  }
++  return D;
++}
+diff --git a/src/core/graph.js b/src/core/graph.js
+new file mode 100644
+index 0000000..2cf69d9
+--- /dev/null
++++ b/src/core/graph.js
+@@ -0,0 +1,55 @@
++// Decoding graph of the repetition-code memory and edge-weight helpers.
++// Nodes: detectors 0..(d-1)*(r+1)-1 (index k*(d-1) + j) and the boundary node
++// B = (d-1)*(r+1). Space-like edges are data-qubit flips within a layer; time-like
++// edges are wrong reports of m[k][j]. Observable edges are flips of data qubit 0.
++
++const P_MIN = 1e-12;
++const P_MAX = 0.5;
++
++export function buildGraph(d, r) {
++  if (!Number.isInteger(d) || d < 3 || d % 2 === 0) throw new Error(`buildGraph: d must be an odd integer >= 3, got ${d}`);
++  if (!Number.isInteger(r) || r < 1) throw new Error(`buildGraph: r must be an integer >= 1, got ${r}`);
++  const nc = d - 1;
++  const nDetectors = nc * (r + 1);
++  const boundary = nDetectors;
++  const node = (k, j) => k * nc + j;
++  const edges = [];
++  const add = (e) => edges.push({ id: edges.length, ...e });
++
++  // Space-like: layer k = 0..r, one edge per data qubit. Fields that do not apply are null.
++  for (let k = 0; k <= r; k++) {
++    for (let i = 0; i < d; i++) {
++      const u = i === 0 ? node(k, 0) : node(k, i - 1);
++      const v = i === 0 ? boundary : i === d - 1 ? boundary : node(k, i);
++      add({ u, v, kind: 'space', layer: k, dataQubit: i, check: null, round: null, observable: i === 0 });
++    }
++  }
++  // Time-like: check j, round k = 0..r-1, joins layer k to layer k+1.
++  for (let k = 0; k < r; k++) {
++    for (let j = 0; j < nc; j++) {
++      add({ u: node(k, j), v: node(k + 1, j), kind: 'time', layer: null, dataQubit: null, check: j, round: k, observable: false });
++    }
++  }
++  return { d, r, nDetectors, boundary, edges };
++}
++
++// w = ln[(1-p)/p] with p clamped to [1e-12, 0.5].
++export function weightFromP(p) {
++  const q = Math.min(P_MAX, Math.max(P_MIN, p));
++  return Math.log((1 - q) / q);
++}
++
++// Soft weight of a single readout: |llr| (Infinity for perfect readout).
++export function weightFromLlr(llr) {
++  return Math.abs(llr);
++}
++
++// Probability that the hard decision is wrong given the llr.
++export function pFromLlr(llr) {
++  return 1 / (1 + Math.exp(Math.abs(llr)));
++}
++
++// Probability that exactly one of two independent flips occurs.
++export function xorP(a, b) {
++  return a + b - 2 * a * b;
++}
+diff --git a/src/core/logical.js b/src/core/logical.js
+new file mode 100644
+index 0000000..99f8c61
+--- /dev/null
++++ b/src/core/logical.js
+@@ -0,0 +1,9 @@
++// Logical decision: the decoder's flip corrects the raw readout of data qubit 0.
++
++export function correctedLogical(xHat0, flip) {
++  return (xHat0 ^ flip) & 1;
++}
++
++export function isLogicalError(corrected, logical) {
++  return ((corrected ^ logical) & 1) === 1;
++}
+diff --git a/src/core/matching.js b/src/core/matching.js
+new file mode 100644
+index 0000000..ee34b2a
+--- /dev/null
++++ b/src/core/matching.js
+@@ -0,0 +1,231 @@
++// Minimum-weight matching decoder. Each lit detector is matched either to another
++// lit detector or to the boundary, along shortest paths in the decoding graph.
++// Up to EXACT_MAX defects the matching is exact (dynamic programming over subsets);
++// above that a greedy matching is used and exact = false.
++
++const EXACT_MAX = 20;
++const BOUNDARY = 'B';
++
++// Adjacency lists, built once per graph: for node n, a flat list of [neighbour, edgeId].
++const adjacencyCache = new WeakMap();
++function adjacency(graph) {
++  let adj = adjacencyCache.get(graph);
++  if (adj) return adj;
++  adj = Array.from({ length: graph.nDetectors + 1 }, () => []);
++  for (const e of graph.edges) {
++    adj[e.u].push(e.v, e.id);
++    adj[e.v].push(e.u, e.id);
++  }
++  adjacencyCache.set(graph, adj);
++  return adj;
++}
++
++// Binary min-heap of [dist, node], ordered by dist then node index.
++function heapLess(a, b) {
++  return a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
++}
++function heapPush(h, item) {
++  h.push(item);
++  let i = h.length - 1;
++  while (i > 0) {
++    const p = (i - 1) >> 1;
++    if (!heapLess(h[i], h[p])) break;
++    [h[i], h[p]] = [h[p], h[i]];
++    i = p;
++  }
++}
++function heapPop(h) {
++  const top = h[0];
++  const last = h.pop();
++  if (h.length > 0) {
++    h[0] = last;
++    let i = 0;
++    for (;;) {
++      const l = 2 * i + 1;
++      const r = l + 1;
++      let m = i;
++      if (l < h.length && heapLess(h[l], h[m])) m = l;
++      if (r < h.length && heapLess(h[r], h[m])) m = r;
++      if (m === i) break;
++      [h[i], h[m]] = [h[m], h[i]];
++      i = m;
++    }
++  }
++  return top;
++}
++
++// Distances closer than this (relative) count as ties, so that floating-point
++// summation order does not decide between paths of equal weight.
++const TIE_TOL = 1e-12;
++function sameDist(a, b) {
++  return Math.abs(a - b) <= TIE_TOL * Math.max(1, Math.abs(a), Math.abs(b));
++}
++
++// Dijkstra from src over all nodes (boundary included). Ties are broken by lower
++// observable parity, then by lower predecessor index. Infinity edges are skipped.
++function dijkstra(graph, adj, weights, src) {
++  const n = graph.nDetectors + 1;
++  const dist = new Float64Array(n).fill(Infinity);
++  const parity = new Uint8Array(n);
++  const pred = new Int32Array(n).fill(-1);
++  const predEdge = new Int32Array(n).fill(-1);
++  const done = new Uint8Array(n);
++  const edges = graph.edges;
++  dist[src] = 0;
++  const heap = [[0, src]];
++  while (heap.length > 0) {
++    const [du, u] = heapPop(heap);
++    if (done[u] || du !== dist[u]) continue;
++    done[u] = 1;
++    const list = adj[u];
++    for (let t = 0; t < list.length; t += 2) {
++      const v = list[t];
++      if (done[v]) continue;
++      const id = list[t + 1];
++      const w = weights[id];
++      if (w === Infinity) continue;
++      const nd = du + w;
++      const np = parity[u] ^ (edges[id].observable ? 1 : 0);
++      let better;
++      if (dist[v] === Infinity) better = true;
++      else if (sameDist(nd, dist[v])) better = np < parity[v] || (np === parity[v] && u < pred[v]);
++      else better = nd < dist[v];
++      if (better) {
++        dist[v] = nd;
++        parity[v] = np;
++        pred[v] = u;
++        predEdge[v] = id;
++        heapPush(heap, [nd, v]);
++      }
++    }
++  }
++  return { dist, parity, predEdge, pred };
++}
++
++// Edge ids along the shortest-path tree from its source to target, in order source -> target.
++function pathEdges(tree, target) {
++  const out = [];
++  for (let v = target; tree.pred[v] !== -1; v = tree.pred[v]) out.push(tree.predEdge[v]);
++  return out.reverse();
++}
++
++function checkInputs(graph, weights, detectorBits) {
++  if (!weights || weights.length !== graph.edges.length) {
++    throw new Error(`decode: weights must have one entry per edge (${graph.edges.length}), got ${weights ? weights.length : weights}`);
++  }
++  for (let i = 0; i < weights.length; i++) {
++    if (!(weights[i] >= 0)) throw new Error(`decode: weight of edge ${i} must be non-negative, got ${weights[i]}`);
++  }
++  if (!detectorBits || detectorBits.length !== graph.nDetectors) {
++    throw new Error(`decode: detectorBits must have length ${graph.nDetectors}, got ${detectorBits ? detectorBits.length : detectorBits}`);
++  }
++}
++
++// Exact minimum-weight matching. dp[mask] is the cheapest way to resolve the defects
++// not in mask; the lowest unresolved defect goes to the boundary or to a higher
++// unresolved defect. choice[mask] = -1 for the boundary, else the partner index.
++function matchExact(n, pairCost, boundaryCost) {
++  const full = (1 << n) - 1;
++  const dp = new Float64Array(1 << n);
++  const choice = new Int8Array(1 << n);
++  dp[full] = 0;
++  for (let mask = full - 1; mask >= 0; mask--) {
++    let i = 0;
++    while (mask & (1 << i)) i++;
++    const mi = mask | (1 << i);
++    let best = boundaryCost[i] + dp[mi];
++    let bestJ = -1;
++    for (let j = i + 1; j < n; j++) {
++      if (mask & (1 << j)) continue;
++      const c = pairCost[i * n + j] + dp[mi | (1 << j)];
++      if (c < best) {
++        best = c;
++        bestJ = j;
++      }
++    }
++    dp[mask] = best;
++    choice[mask] = bestJ;
++  }
++  const pairs = [];
++  let mask = 0;
++  while (mask !== full) {
++    let i = 0;
++    while (mask & (1 << i)) i++;
++    const j = choice[mask];
++    pairs.push([i, j]);
++    mask |= 1 << i;
++    if (j >= 0) mask |= 1 << j;
++  }
++  return pairs;
++}
++
++// Greedy matching: take the cheapest remaining option (pair or boundary) whose
++// defects are all still unmatched. Ties go to the earlier option in the list.
++function matchGreedy(n, pairCost, boundaryCost) {
++  const options = [];
++  for (let i = 0; i < n; i++) {
++    options.push([boundaryCost[i], i, -1]);
++    for (let j = i + 1; j < n; j++) options.push([pairCost[i * n + j], i, j]);
++  }
++  options.forEach((o, idx) => o.push(idx));
++  options.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[3] - b[3]));
++  const used = new Uint8Array(n);
++  const pairs = [];
++  let left = n;
++  for (const [, i, j] of options) {
++    if (left === 0) break;
++    if (used[i] || (j >= 0 && used[j])) continue;
++    pairs.push([i, j]);
++    used[i] = 1;
++    left--;
++    if (j >= 0) {
++      used[j] = 1;
++      left--;
++    }
++  }
++  return pairs;
++}
++
++export function decode(graph, weights, detectorBits) {
++  checkInputs(graph, weights, detectorBits);
++  const lit = [];
++  for (let i = 0; i < detectorBits.length; i++) if (detectorBits[i]) lit.push(i);
++  const n = lit.length;
++  if (n === 0) return { flip: 0, nDefects: 0, exact: true, cost: 0, paths: [] };
++
++  const adj = adjacency(graph);
++  const B = graph.boundary;
++  const trees = lit.map((src) => dijkstra(graph, adj, weights, src));
++  const pairCost = new Float64Array(n * n);
++  const pairParity = new Uint8Array(n * n);
++  const boundaryCost = new Float64Array(n);
++  const boundaryParity = new Uint8Array(n);
++  for (let a = 0; a < n; a++) {
++    const t = trees[a];
++    boundaryCost[a] = t.dist[B];
++    boundaryParity[a] = t.parity[B];
++    for (let b = a + 1; b < n; b++) {
++      pairCost[a * n + b] = t.dist[lit[b]];
++      pairParity[a * n + b] = t.parity[lit[b]];
++    }
++  }
++
++  const exact = n <= EXACT_MAX;
++  const pairs = exact ? matchExact(n, pairCost, boundaryCost) : matchGreedy(n, pairCost, boundaryCost);
++
++  let flip = 0;
++  let cost = 0;
++  const paths = [];
++  for (const [i, j] of pairs) {
++    if (j < 0) {
++      flip ^= boundaryParity[i];
++      cost += boundaryCost[i];
++      paths.push({ a: lit[i], b: BOUNDARY, edges: pathEdges(trees[i], B) });
++    } else {
++      flip ^= pairParity[i * n + j];
++      cost += pairCost[i * n + j];
++      paths.push({ a: lit[i], b: lit[j], edges: pathEdges(trees[i], lit[j]) });
++    }
++  }
++  return { flip, nDefects: n, exact, cost, paths };
++}
+diff --git a/src/core/rng.js b/src/core/rng.js
+new file mode 100644
+index 0000000..ccfd531
+--- /dev/null
++++ b/src/core/rng.js
+@@ -0,0 +1,99 @@
++// Seeded random numbers. Every function in src/core that draws random numbers
++// takes an rng from createRng(seed); Math.random is never used.
++
++// ln(n!) via the Lanczos approximation of ln Gamma(n + 1) (g = 7, n = 9).
++const LANCZOS = [
++  0.99999999999980993, 676.5203681218851, -1259.1392167224028,
++  771.32342877765313, -176.61502916214059, 12.507343278686905,
++  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
++];
++function logFactorial(n) {
++  const x = n; // ln Gamma(x + 1)
++  let a = LANCZOS[0];
++  const t = x + 7.5;
++  for (let i = 1; i < 9; i++) a += LANCZOS[i] / (x + i);
++  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
++}
++
++export function createRng(seed) {
++  if (!Number.isFinite(seed)) throw new Error(`createRng: seed must be a finite number, got ${seed}`);
++  let state = Math.trunc(seed) >>> 0;
++  let spareNormal = null;
++
++  // mulberry32: uniform in [0, 1).
++  function uniform() {
++    state = (state + 0x6d2b79f5) >>> 0;
++    let t = state;
++    t = Math.imul(t ^ (t >>> 15), t | 1);
++    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  }
++
++  // Box-Muller; the second value of each pair is cached for the next call.
++  function normal() {
++    if (spareNormal !== null) {
++      const z = spareNormal;
++      spareNormal = null;
++      return z;
++    }
++    const u1 = 1 - uniform(); // (0, 1], so the log is finite
++    const u2 = uniform();
++    const rad = Math.sqrt(-2 * Math.log(u1));
++    const theta = 2 * Math.PI * u2;
++    spareNormal = rad * Math.sin(theta);
++    return rad * Math.cos(theta);
++  }
++
++  function exponential(rate) {
++    if (!(rate > 0) || !Number.isFinite(rate)) throw new Error(`exponential: rate must be positive and finite, got ${rate}`);
++    return -Math.log(1 - uniform()) / rate;
++  }
++
++  // Knuth's multiplication method; expected cost O(lambda), used for lambda < 30.
++  function poissonKnuth(lambda) {
++    const limit = Math.exp(-lambda);
++    let k = 0;
++    let p = 1;
++    do {
++      k++;
++      p *= uniform();
++    } while (p > limit);
++    return k - 1;
++  }
++
++  // PTRS: transformed rejection with squeeze (Hormann 1993), used for lambda >= 30.
++  function poissonPtrs(lambda) {
++    const slam = Math.sqrt(lambda);
++    const loglam = Math.log(lambda);
++    const b = 0.931 + 2.53 * slam;
++    const a = -0.059 + 0.02483 * b;
++    const invAlpha = 1.1239 + 1.1328 / (b - 3.4);
++    const vr = 0.9277 - 3.6224 / (b - 2);
++    for (;;) {
++      const u = uniform() - 0.5;
++      const v = uniform();
++      const us = 0.5 - Math.abs(u);
++      const k = Math.floor((2 * a / us + b) * u + lambda + 0.43);
++      if (us >= 0.07 && v <= vr) return k;
++      if (k < 0 || (us < 0.013 && v > us)) continue;
++      if (Math.log(v) + Math.log(invAlpha) - Math.log(a / (us * us) + b)
++          <= -lambda + k * loglam - logFactorial(k)) {
++        return k;
++      }
++    }
++  }
++
++  function poisson(lambda) {
++    if (!(lambda >= 0) || !Number.isFinite(lambda)) throw new Error(`poisson: lambda must be finite and >= 0, got ${lambda}`);
++    if (lambda === 0) return 0;
++    return lambda < 30 ? poissonKnuth(lambda) : poissonPtrs(lambda);
++  }
++
++  // Integer uniform on 0..n-1.
++  function int(n) {
++    if (!Number.isInteger(n) || n <= 0) throw new Error(`int: n must be a positive integer, got ${n}`);
++    return Math.floor(uniform() * n);
++  }
++
++  return { uniform, normal, exponential, poisson, int };
++}
+diff --git a/tests/bank.test.js b/tests/bank.test.js
+new file mode 100644
+index 0000000..03ce543
+--- /dev/null
++++ b/tests/bank.test.js
+@@ -0,0 +1,109 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { validateBank, bitsFromKey, expandShots, split } from '../src/core/bank.js';
++
++// d = 3, r = 2: n_clbits = (d-1)*r + d = 7, layout from the CLAUDE.md formula.
++function makeBank(extra = {}) {
++  return {
++    schema: 's2s-bank/1',
++    code: 'repetition',
++    d: 3,
++    r: 2,
++    logical: 0,
++    mode: 'fresh-ancilla',
++    shots: 10,
++    n_qubits: 7,
++    n_clbits: 7,
++    layout: { ancilla: [[0, 1], [2, 3]], data: [4, 5, 6] },
++    bit_order: 'qiskit-little-endian',
++    key_encoding: 'hex',
++    counts: { '0': 6, '40': 1, '1': 3 },
++    checksum: { total_shots: 10, n_keys: 3, sha256: 'not-checked-here' },
++    ...extra,
++  };
++}
++
++// Catches: fails if classical bit 0 is read from the left (most significant) end of the
++// key. Boundary pair: only bit 0 set and only bit n-1 set must give mirror-image results.
++test('bitsFromKey: only bit 0 set, and only bit n-1 set', () => {
++  const n = 7;
++  const low = bitsFromKey('1', n);
++  assert.deepEqual([...low], [1, 0, 0, 0, 0, 0, 0]);
++  const high = bitsFromKey('40', n); // 0x40 = 2^6 = bit n-1
++  assert.deepEqual([...high], [0, 0, 0, 0, 0, 0, 1]);
++  assert.equal(low.length, n);
++  assert.ok(low instanceof Uint8Array);
++});
++
++// Catches: fails if a key one bit too wide for n_clbits is silently truncated.
++// Boundary: 2^n - 1 fits in n bits, 2^n does not.
++test('bitsFromKey: largest key fits, one more is rejected', () => {
++  assert.deepEqual([...bitsFromKey('7f', 7)], [1, 1, 1, 1, 1, 1, 1]);
++  assert.throws(() => bitsFromKey('80', 7), /does not fit/);
++});
++
++// Catches: fails if counts are not expanded (one entry per key instead of per shot),
++// or keys are ordered as strings ("40" before "1" would still pass length, so order is checked).
++test('expandShots: length equals total shots, keys in ascending numeric order', () => {
++  const bank = makeBank({ counts: { '40': 1, '0': 6, 'a': 2, '1': 3 }, shots: 12, checksum: { total_shots: 12, n_keys: 4 } });
++  const shots = expandShots(bank);
++  assert.equal(shots.length, 12);
++  const values = shots.map((s) => s.reduce((acc, b, i) => acc + (b << i), 0));
++  assert.deepEqual(values, [0, 0, 0, 0, 0, 0, 1, 1, 1, 10, 10, 64]);
++});
++
++// Catches: fails if split swaps ancilla rows and columns, or reads data bits from the
++// wrong offset. Hand-built d = 3, r = 2 shot with a distinct pattern in every slot.
++test('split: hand-built d = 3, r = 2 shot', () => {
++  const layout = { ancilla: [[0, 1], [2, 3]], data: [4, 5, 6] };
++  // bit:          0  1  2  3  4  5  6
++  const shotBits = Uint8Array.from([1, 0, 0, 1, 1, 1, 0]);
++  const { m, x } = split(shotBits, layout, 3, 2);
++  assert.equal(m.length, 2);
++  assert.deepEqual([...m[0]], [1, 0]); // round 0: checks 0, 1
++  assert.deepEqual([...m[1]], [0, 1]); // round 1: checks 0, 1
++  assert.deepEqual([...x], [1, 1, 0]);
++  assert.ok(m[0] instanceof Uint8Array && x instanceof Uint8Array);
++});
++
++// Catches: fails if split ignores the layout and assumes the fixed formula.
++test('split: follows a permuted layout', () => {
++  const layout = { ancilla: [[6, 5], [4, 3]], data: [2, 1, 0] };
++  const shotBits = Uint8Array.from([1, 0, 0, 1, 1, 1, 0]);
++  const { m, x } = split(shotBits, layout, 3, 2);
++  assert.deepEqual([...m[0]], [0, 1]);
++  assert.deepEqual([...m[1]], [1, 1]);
++  assert.deepEqual([...x], [0, 0, 1]);
++});
++
++// Catches: fails if validateBank rejects extra fields such as "inject" (V4 banks)
++// or "fixture" (fixture banks).
++test('validateBank accepts extra "inject" and "fixture" fields', () => {
++  assert.equal(validateBank(makeBank({ inject: [[1, 0]] })), true);
++  assert.equal(validateBank(makeBank({ fixture: true })), true);
++});
++
++// Catches: fails if checksum totals are not compared with the counts.
++test('validateBank rejects a wrong total', () => {
++  const bad = makeBank({ checksum: { total_shots: 11, n_keys: 3 } });
++  assert.throws(() => validateBank(bad), /total_shots is 11, but the counts sum to 10/);
++  const badShots = makeBank({ shots: 9 });
++  assert.throws(() => validateBank(badShots), /shots is 9/);
++});
++
++// Catches: fails if missing fields, wrong schema, a wrong n_keys or an uppercase key slip through.
++test('validateBank rejects missing fields, wrong schema, wrong n_keys, bad keys', () => {
++  const missing = makeBank();
++  delete missing.layout;
++  assert.throws(() => validateBank(missing), /missing required field "layout"/);
++  assert.throws(() => validateBank(makeBank({ schema: 's2s-bank/2' })), /schema/);
++  assert.throws(() => validateBank(makeBank({ checksum: { total_shots: 10, n_keys: 2 } })), /n_keys/);
++  assert.throws(
++    () => validateBank(makeBank({ counts: { '0': 6, '4A': 4 }, checksum: { total_shots: 10, n_keys: 2 } })),
++    /not lowercase hexadecimal/,
++  );
++  assert.throws(
++    () => validateBank(makeBank({ counts: { '0': 6, '80': 4 }, checksum: { total_shots: 10, n_keys: 2 } })),
++    /does not fit/,
++  );
++});
+diff --git a/tests/detectors.test.js b/tests/detectors.test.js
+new file mode 100644
+index 0000000..558116e
+--- /dev/null
++++ b/tests/detectors.test.js
+@@ -0,0 +1,93 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { computeDetectors } from '../src/core/detectors.js';
++
++function zeros(d, r) {
++  return { m: Array.from({ length: r }, () => new Uint8Array(d - 1)), x: new Uint8Array(d) };
++}
++
++// Flip data qubit i before round k, by hand: checks i-1 and i (those that exist)
++// in rounds k..r-1, and the data readout x[i].
++function flipDataBefore(m, x, d, r, i, k) {
++  for (let kk = k; kk < r; kk++) {
++    if (i - 1 >= 0) m[kk][i - 1] ^= 1;
++    if (i <= d - 2) m[kk][i] ^= 1;
++  }
++  x[i] ^= 1;
++}
++
++function lit(D) {
++  const out = [];
++  D.forEach((v, idx) => { if (v) out.push(idx); });
++  return out;
++}
++
++const idx = (d, k, j) => k * (d - 1) + j;
++
++// Catches: fails if a detector is non-zero without errors (e.g. m[-1] taken as 1, or the
++// final layer omits m[r-1]), or the output has the wrong length or type.
++test('no errors gives all zeros', () => {
++  for (const [d, r] of [[3, 2], [5, 3], [7, 7]]) {
++    const { m, x } = zeros(d, r);
++    const D = computeDetectors(m, x, d, r);
++    assert.ok(D instanceof Uint8Array);
++    assert.equal(D.length, (d - 1) * (r + 1));
++    assert.deepEqual(lit(D), []);
++  }
++});
++
++// Catches: fails if detectors compare with the wrong round, use the wrong index
++// (k*(d-1) + j), or the final layer does not cancel a data flip that the last round saw.
++test('interior data flip before round k lights exactly D[k][i-1] and D[k][i]', () => {
++  const d = 5;
++  const r = 3;
++  for (let i = 1; i <= d - 2; i++) {
++    for (let k = 0; k < r; k++) {
++      const { m, x } = zeros(d, r);
++      flipDataBefore(m, x, d, r, i, k);
++      const D = computeDetectors(m, x, d, r);
++      assert.deepEqual(lit(D), [idx(d, k, i - 1), idx(d, k, i)], `i=${i}, k=${k}`);
++    }
++  }
++});
++
++// Catches: fails if the end qubits are treated like interior ones (e.g. reading check -1
++// or check d-1), which would light two detectors instead of one.
++test('end-qubit data flip lights exactly one detector', () => {
++  const d = 5;
++  const r = 3;
++  for (let k = 0; k < r; k++) {
++    let s = zeros(d, r);
++    flipDataBefore(s.m, s.x, d, r, 0, k);
++    assert.deepEqual(lit(computeDetectors(s.m, s.x, d, r)), [idx(d, k, 0)], `i=0, k=${k}`);
++    s = zeros(d, r);
++    flipDataBefore(s.m, s.x, d, r, d - 1, k);
++    assert.deepEqual(lit(computeDetectors(s.m, s.x, d, r)), [idx(d, k, d - 2)], `i=${d - 1}, k=${k}`);
++  }
++});
++
++// Catches: fails if a measurement error is not seen by both neighbouring layers
++// (missing XOR with the previous round).
++test('single wrong m[k][j] with k < r-1 lights D[k][j] and D[k+1][j]', () => {
++  const d = 5;
++  const r = 3;
++  for (let k = 0; k < r - 1; k++) {
++    for (let j = 0; j < d - 1; j++) {
++      const { m, x } = zeros(d, r);
++      m[k][j] = 1;
++      assert.deepEqual(lit(computeDetectors(m, x, d, r)), [idx(d, k, j), idx(d, k + 1, j)], `k=${k}, j=${j}`);
++    }
++  }
++});
++
++// Catches: fails if the final layer omits m[r-1][j], so a wrong last-round measurement
++// lights only one detector.
++test('wrong m[r-1][j] lights D[r-1][j] and final-layer D[r][j]', () => {
++  const d = 5;
++  const r = 3;
++  for (let j = 0; j < d - 1; j++) {
++    const { m, x } = zeros(d, r);
++    m[r - 1][j] = 1;
++    assert.deepEqual(lit(computeDetectors(m, x, d, r)), [idx(d, r - 1, j), idx(d, r, j)], `j=${j}`);
++  }
++});
+diff --git a/tests/graph.test.js b/tests/graph.test.js
+new file mode 100644
+index 0000000..a6fc25f
+--- /dev/null
++++ b/tests/graph.test.js
+@@ -0,0 +1,91 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { buildGraph, weightFromP, weightFromLlr, pFromLlr, xorP } from '../src/core/graph.js';
++
++const node = (d, k, j) => k * (d - 1) + j;
++
++// Catches: fails if a layer or a round is missing or doubled (e.g. space edges only for
++// layers 0..r-1, or time edges for r+1 rounds), or the boundary index is not (d-1)*(r+1).
++test('node and edge counts for (3,1), (5,3), (7,3)', () => {
++  for (const [d, r] of [[3, 1], [5, 3], [7, 3]]) {
++    const g = buildGraph(d, r);
++    assert.equal(g.d, d);
++    assert.equal(g.r, r);
++    assert.equal(g.nDetectors, (d - 1) * (r + 1));
++    assert.equal(g.boundary, (d - 1) * (r + 1));
++    const space = g.edges.filter((e) => e.kind === 'space');
++    const time = g.edges.filter((e) => e.kind === 'time');
++    assert.equal(space.length, d * (r + 1), `space d=${d} r=${r}`);
++    assert.equal(time.length, (d - 1) * r, `time d=${d} r=${r}`);
++    assert.equal(g.edges.length, space.length + time.length);
++    assert.equal(g.edges.filter((e) => e.observable).length, r + 1);
++    g.edges.forEach((e, idx) => assert.equal(e.id, idx, 'edge id must equal its index'));
++  }
++});
++
++// Catches: fails if the observable is attached to the wrong end of the chain (data qubit d-1)
++// or to an interior edge, so the decoder would report the parity of the wrong qubit.
++test('observable edges are exactly the data-qubit-0 edges, joining (k,0) to B', () => {
++  for (const [d, r] of [[3, 1], [5, 3], [7, 3]]) {
++    const g = buildGraph(d, r);
++    for (const e of g.edges) {
++      const isQ0 = e.kind === 'space' && e.dataQubit === 0;
++      assert.equal(e.observable, isQ0, `edge ${e.id}`);
++      if (isQ0) {
++        assert.deepEqual([e.u, e.v], [node(d, e.layer, 0), g.boundary]);
++      }
++    }
++  }
++});
++
++// Catches: fails if space edges join the wrong checks (off by one in i-1 / i), if the
++// right end qubit does not go to the boundary, or if time edges skip a layer.
++test('edge endpoints follow the conventions', () => {
++  const d = 5;
++  const r = 3;
++  const g = buildGraph(d, r);
++  for (const e of g.edges) {
++    if (e.kind === 'space') {
++      const i = e.dataQubit;
++      const k = e.layer;
++      if (i === 0) assert.deepEqual([e.u, e.v], [node(d, k, 0), g.boundary]);
++      else if (i === d - 1) assert.deepEqual([e.u, e.v], [node(d, k, d - 2), g.boundary]);
++      else assert.deepEqual([e.u, e.v], [node(d, k, i - 1), node(d, k, i)]);
++    } else {
++      assert.deepEqual([e.u, e.v], [node(d, e.round, e.check), node(d, e.round + 1, e.check)]);
++    }
++  }
++});
++
++// Catches: fails if even d or r = 0 is accepted silently. Boundary pair: d = 3 is accepted,
++// d = 4 is rejected; r = 1 is accepted, r = 0 is rejected.
++test('buildGraph rejects even d and r < 1', () => {
++  assert.doesNotThrow(() => buildGraph(3, 1));
++  assert.throws(() => buildGraph(4, 1), /odd/);
++  assert.throws(() => buildGraph(3, 0), /r must be/);
++});
++
++// Catches: fails if p is not clamped at 0.5 (weights would go negative) or at 1e-12
++// (p = 0 would give Infinity). Boundary pair: p = 0.5 gives 0 and p = 0.4 gives ln 1.5.
++test('weightFromP: formula and clamping', () => {
++  assert.equal(weightFromP(0.5), 0);
++  assert.ok(Math.abs(weightFromP(0.4) - Math.log(1.5)) < 1e-15);
++  assert.equal(weightFromP(0.7), 0);
++  assert.equal(weightFromP(0), Math.log((1 - 1e-12) / 1e-12));
++  assert.ok(Number.isFinite(weightFromP(0)));
++});
++
++// Catches: fails if the sign of the llr leaks into the weight or probability, or if perfect
++// readout (llr = +/-Infinity) gives NaN instead of weight Infinity and p = 0.
++test('weightFromLlr, pFromLlr and xorP', () => {
++  assert.equal(weightFromLlr(-2.5), 2.5);
++  assert.equal(weightFromLlr(Infinity), Infinity);
++  assert.equal(weightFromLlr(-Infinity), Infinity);
++  assert.equal(pFromLlr(0), 0.5);
++  assert.ok(Math.abs(pFromLlr(-3) - 1 / (1 + Math.exp(3))) < 1e-15);
++  assert.equal(pFromLlr(Infinity), 0);
++  assert.equal(pFromLlr(-Infinity), 0);
++  assert.ok(Math.abs(xorP(0.1, 0.2) - 0.26) < 1e-15);
++  assert.equal(xorP(0, 0.3), 0.3);
++  assert.equal(xorP(0.5, 0.3), 0.5);
++});
+diff --git a/tests/logical.test.js b/tests/logical.test.js
+new file mode 100644
+index 0000000..bc0d063
+--- /dev/null
++++ b/tests/logical.test.js
+@@ -0,0 +1,21 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { correctedLogical, isLogicalError } from '../src/core/logical.js';
++
++// Catches: fails if the flip is ignored, applied as OR/AND instead of XOR, or the result
++// is not reduced to a single bit.
++test('correctedLogical is xHat0 XOR flip', () => {
++  assert.equal(correctedLogical(0, 0), 0);
++  assert.equal(correctedLogical(0, 1), 1);
++  assert.equal(correctedLogical(1, 0), 1);
++  assert.equal(correctedLogical(1, 1), 0);
++});
++
++// Catches: fails if the comparison is inverted (reporting success as error) or only works
++// for logical = 0.
++test('isLogicalError compares the corrected value with the prepared logical', () => {
++  assert.equal(isLogicalError(0, 0), false);
++  assert.equal(isLogicalError(1, 1), false);
++  assert.equal(isLogicalError(1, 0), true);
++  assert.equal(isLogicalError(0, 1), true);
++});
+diff --git a/tests/matching.test.js b/tests/matching.test.js
+new file mode 100644
+index 0000000..3f6bb83
+--- /dev/null
++++ b/tests/matching.test.js
+@@ -0,0 +1,258 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { buildGraph } from '../src/core/graph.js';
++import { decode } from '../src/core/matching.js';
++import { correctedLogical, isLogicalError } from '../src/core/logical.js';
++import { createRng } from '../src/core/rng.js';
++
++const node = (d, k, j) => k * (d - 1) + j;
++
++function uniformWeights(g, w = 1) {
++  return new Float64Array(g.edges.length).fill(w);
++}
++
++function bitsWith(g, lit) {
++  const D = new Uint8Array(g.nDetectors);
++  for (const i of lit) D[i] ^= 1;
++  return D;
++}
++
++function spaceEdge(g, k, i) {
++  return g.edges.find((e) => e.kind === 'space' && e.layer === k && e.dataQubit === i);
++}
++
++// Detector bits and observable parity produced by flipping a set of edges (each edge
++// toggles its two endpoints; the boundary node is not a detector).
++function syndromeOf(g, edgeIds) {
++  const D = new Uint8Array(g.nDetectors);
++  let obs = 0;
++  for (const id of edgeIds) {
++    const e = g.edges[id];
++    if (e.u !== g.boundary) D[e.u] ^= 1;
++    if (e.v !== g.boundary) D[e.v] ^= 1;
++    if (e.observable) obs ^= 1;
++  }
++  return { D, obs };
++}
++
++// The decoder's paths must explain exactly the lit detectors, and flip and cost must be
++// the XOR of observable edges and the sum of weights along them.
++function assertPathsConsistent(g, w, D, res) {
++  const all = res.paths.flatMap((p) => p.edges);
++  const { D: D2, obs } = syndromeOf(g, all);
++  assert.deepEqual([...D2], [...D], 'paths do not reproduce the detector bits');
++  assert.equal(res.flip, obs, 'flip is not the observable parity of the paths');
++  const sum = all.reduce((s, id) => s + w[id], 0);
++  assert.ok(Math.abs(sum - res.cost) <= 1e-9 * Math.max(1, res.cost), `cost ${res.cost} vs path sum ${sum}`);
++  const ends = res.paths.flatMap((p) => (p.b === 'B' ? [p.a] : [p.a, p.b])).sort((x, y) => x - y);
++  const lit = [];
++  D.forEach((v, i) => { if (v) lit.push(i); });
++  assert.deepEqual(ends, lit, 'every lit detector must appear in exactly one pairing');
++}
++
++// Catches: fails if an empty syndrome produces a spurious flip, a non-zero cost or paths.
++test('no defects: flip 0, cost 0, no paths', () => {
++  const g = buildGraph(5, 3);
++  const res = decode(g, uniformWeights(g), new Uint8Array(g.nDetectors));
++  assert.deepEqual(res, { flip: 0, nDefects: 0, exact: true, cost: 0, paths: [] });
++});
++
++// Catches: fails if the observable parity is attached to the wrong boundary edge, or a
++// lone defect next to qubit 0 is sent the long way round. Boundary pair: (k,0) gives
++// flip 1 and (k,d-2) gives flip 0.
++test('lone defect at (k,0) gives flip 1; at (k,d-2) gives flip 0', () => {
++  for (const d of [3, 5, 7]) {
++    const r = 3;
++    const g = buildGraph(d, r);
++    const w = uniformWeights(g);
++    for (let k = 0; k <= r; k++) {
++      const left = decode(g, w, bitsWith(g, [node(d, k, 0)]));
++      assert.equal(left.flip, 1, `d=${d} k=${k} left`);
++      assert.equal(left.cost, 1);
++      const right = decode(g, w, bitsWith(g, [node(d, k, d - 2)]));
++      assert.equal(right.flip, 0, `d=${d} k=${k} right`);
++      assert.equal(right.cost, 1);
++    }
++  }
++});
++
++// Catches: fails if two adjacent interior defects are sent to the boundaries instead of
++// being paired through the data qubit between them.
++test('interior horizontal pair gives flip 0 with cost one space weight', () => {
++  const d = 5;
++  const g = buildGraph(d, 3);
++  const res = decode(g, uniformWeights(g), bitsWith(g, [node(d, 1, 1), node(d, 1, 2)]));
++  assert.equal(res.flip, 0);
++  assert.equal(res.cost, 1);
++  assert.equal(res.paths.length, 1);
++});
++
++// Catches: fails if time-like edges are missing or carry the wrong weight, so a single
++// wrong measurement is not paired across rounds.
++test('vertical pair gives flip 0 with cost equal to one time-like weight', () => {
++  const d = 5;
++  const g = buildGraph(d, 3);
++  for (const tw of [1, 1.7]) {
++    const w = new Float64Array(g.edges.map((e) => (e.kind === 'time' ? tw : 1)));
++    for (let j = 0; j < d - 1; j++) {
++      const res = decode(g, w, bitsWith(g, [node(d, 1, j), node(d, 2, j)]));
++      assert.equal(res.flip, 0, `j=${j} tw=${tw}`);
++      assert.equal(res.cost, tw, `j=${j} tw=${tw}`);
++    }
++  }
++});
++
++// Catches: fails if Infinity edges are treated as usable (or produce NaN costs): with the
++// qubit-0 edge removed, a defect at (k,0) must go to the right boundary with flip 0.
++test('Infinity edges are unusable', () => {
++  const d = 3;
++  const g = buildGraph(d, 1);
++  const w = uniformWeights(g);
++  w[spaceEdge(g, 0, 0).id] = Infinity;
++  const res = decode(g, w, bitsWith(g, [node(d, 0, 0)]));
++  assert.equal(res.flip, 0);
++  assert.equal(res.cost, 2);
++});
++
++// Catches: fails if the decoder does not pick the minimum-weight correction, or if the
++// distance is miscounted. Non-vacuous pair: the same two data flips (qubits 0 and 1 in one
++// layer) defeat d = 3 (weight 2 > (d-1)/2) but are corrected at d = 5 (weight 2 <= 2).
++test('distance: qubits 0 and 1 flipped fails at d = 3, is corrected at d = 5', () => {
++  for (const [d, expectError] of [[3, true], [5, false]]) {
++    const r = 2;
++    const k = 1;
++    const g = buildGraph(d, r);
++    const w = uniformWeights(g);
++    const err = [spaceEdge(g, k, 0).id, spaceEdge(g, k, 1).id];
++    const { D, obs } = syndromeOf(g, err);
++    assert.deepEqual([...D].flatMap((v, i) => (v ? [i] : [])), [node(d, k, 1)], 'one defect expected');
++    const res = decode(g, w, D);
++    const logical = 0;
++    const xHat0 = logical ^ obs; // the raw readout of data qubit 0 carries the true flip
++    const corrected = correctedLogical(xHat0, res.flip);
++    assert.equal(isLogicalError(corrected, logical), expectError, `d=${d}`);
++    if (d === 3) assert.deepEqual(res.paths[0].edges, [spaceEdge(g, k, 2).id], 'd=3 resolves through qubit 2');
++  }
++});
++
++// Floyd-Warshall over all nodes (boundary included), independent of the decoder's Dijkstra.
++function allPairs(g, w) {
++  const n = g.nDetectors + 1;
++  const dist = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : Infinity)));
++  for (const e of g.edges) {
++    if (w[e.id] < dist[e.u][e.v]) {
++      dist[e.u][e.v] = w[e.id];
++      dist[e.v][e.u] = w[e.id];
++    }
++  }
++  for (let m = 0; m < n; m++) {
++    for (let i = 0; i < n; i++) {
++      for (let j = 0; j < n; j++) {
++        if (dist[i][m] + dist[m][j] < dist[i][j]) dist[i][j] = dist[i][m] + dist[m][j];
++      }
++    }
++  }
++  return dist;
++}
++
++// Enumerates every matching of the list (each item to the boundary or to another item).
++function bruteMin(items, dist, B) {
++  if (items.length === 0) return 0;
++  const [first, ...rest] = items;
++  let best = dist[first][B] + bruteMin(rest, dist, B);
++  for (let t = 0; t < rest.length; t++) {
++    const others = rest.filter((_, s) => s !== t);
++    best = Math.min(best, dist[first][rest[t]] + bruteMin(others, dist, B));
++  }
++  return best;
++}
++
++// Catches: fails if the subset dynamic programming misses matchings, reconstructs a
++// different matching from the one it costed, or Dijkstra returns non-shortest paths.
++// 300 seeded instances, up to 8 defects, random weights in [0.1, 5).
++test('exactness: DP cost equals brute force on 300 random instances', () => {
++  const rng = createRng(20261010);
++  const shapes = [[3, 1], [3, 3], [5, 2], [5, 4], [7, 3]];
++  for (let trial = 0; trial < 300; trial++) {
++    const [d, r] = shapes[rng.int(shapes.length)];
++    const g = buildGraph(d, r);
++    const w = new Float64Array(g.edges.length);
++    for (let i = 0; i < w.length; i++) w[i] = 0.1 + 4.9 * rng.uniform();
++    const nDef = Math.min(rng.int(9), g.nDetectors);
++    const pool = Array.from({ length: g.nDetectors }, (_, i) => i);
++    for (let i = pool.length - 1; i > 0; i--) {
++      const j = rng.int(i + 1);
++      [pool[i], pool[j]] = [pool[j], pool[i]];
++    }
++    const lit = pool.slice(0, nDef).sort((a, b) => a - b);
++    const D = bitsWith(g, lit);
++    const res = decode(g, w, D);
++    const brute = bruteMin(lit, allPairs(g, w), g.boundary);
++    assert.equal(res.exact, true);
++    assert.equal(res.nDefects, nDef);
++    assert.ok(Math.abs(res.cost - brute) <= 1e-9 * Math.max(1, brute), `trial ${trial}: dp ${res.cost} vs brute ${brute}`);
++    assertPathsConsistent(g, w, D, res);
++  }
++});
++
++// Catches: fails if the exact path is attempted above 20 defects (2^n blow-up), or the
++// greedy fallback leaves a defect unmatched or reports a flip that its paths do not give.
++// Boundary pair: 20 defects is exact, 21 is not.
++test('more than 20 defects returns exact = false with a valid flip', () => {
++  const d = 15;
++  const r = 3;
++  const g = buildGraph(d, r);
++  const rng = createRng(77);
++  const w = new Float64Array(g.edges.length);
++  for (let i = 0; i < w.length; i++) w[i] = 0.5 + rng.uniform();
++  const pick = (n) => {
++    const lit = [];
++    for (let i = 0; i < g.nDetectors && lit.length < n; i += 2) lit.push(i);
++    return bitsWith(g, lit);
++  };
++  const at20 = decode(g, w, pick(20));
++  assert.equal(at20.nDefects, 20);
++  assert.equal(at20.exact, true);
++  assertPathsConsistent(g, w, pick(20), at20);
++  for (const n of [21, 25]) {
++    const D = pick(n);
++    const res = decode(g, w, D);
++    assert.equal(res.nDefects, n);
++    assert.equal(res.exact, false);
++    assert.ok(res.flip === 0 || res.flip === 1);
++    assertPathsConsistent(g, w, D, res);
++  }
++});
++
++// Catches: fails if paths list the wrong edges (e.g. node ids instead of edge ids, or a
++// path through the boundary) or the boundary is not labelled "B".
++test('paths: vertical pair uses the one time-like edge; lone (k,0) ends at "B" via the observable edge', () => {
++  const d = 5;
++  const g = buildGraph(d, 3);
++  const w = uniformWeights(g);
++  const k = 1;
++  const j = 2;
++  const vert = decode(g, w, bitsWith(g, [node(d, k, j), node(d, k + 1, j)]));
++  const timeEdge = g.edges.find((e) => e.kind === 'time' && e.round === k && e.check === j);
++  assert.equal(vert.paths.length, 1);
++  assert.deepEqual(vert.paths[0], { a: node(d, k, j), b: node(d, k + 1, j), edges: [timeEdge.id] });
++
++  const lone = decode(g, w, bitsWith(g, [node(d, k, 0)]));
++  assert.equal(lone.paths.length, 1);
++  assert.equal(lone.paths[0].a, node(d, k, 0));
++  assert.equal(lone.paths[0].b, 'B');
++  assert.deepEqual(lone.paths[0].edges, [spaceEdge(g, k, 0).id]);
++  assert.ok(g.edges[lone.paths[0].edges[0]].observable);
++});
++
++// Catches: fails if bad inputs (wrong weight length, negative weights, wrong detector
++// length) are decoded silently instead of rejected.
++test('decode rejects malformed inputs', () => {
++  const g = buildGraph(3, 1);
++  const D = new Uint8Array(g.nDetectors);
++  assert.throws(() => decode(g, new Float64Array(g.edges.length - 1), D), /weights/);
++  const neg = uniformWeights(g);
++  neg[0] = -1;
++  assert.throws(() => decode(g, neg, D), /non-negative/);
++  assert.throws(() => decode(g, uniformWeights(g), new Uint8Array(g.nDetectors + 1)), /detectorBits/);
++});
+diff --git a/tests/rng.test.js b/tests/rng.test.js
+new file mode 100644
+index 0000000..e1edee6
+--- /dev/null
++++ b/tests/rng.test.js
+@@ -0,0 +1,118 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { createRng } from '../src/core/rng.js';
++
++const N = 200000;
++
++function moments(draw, n) {
++  let s = 0;
++  let s2 = 0;
++  for (let i = 0; i < n; i++) {
++    const v = draw();
++    s += v;
++    s2 += v * v;
++  }
++  const mean = s / n;
++  const variance = (s2 - n * mean * mean) / (n - 1);
++  return { mean, variance };
++}
++
++// Catches: fails if the generator depends on hidden global state (e.g. Math.random
++// or a module-level counter), so that the same seed does not reproduce the same stream.
++test('same seed gives the same first 1000 uniforms', () => {
++  const a = createRng(12345);
++  const b = createRng(12345);
++  for (let i = 0; i < 1000; i++) {
++    const u = a.uniform();
++    assert.equal(u, b.uniform(), `draw ${i} differs`);
++    assert.ok(u >= 0 && u < 1, `draw ${i} = ${u} outside [0, 1)`);
++  }
++});
++
++// Catches: fails if the seed is ignored (every rng produces the same stream).
++test('different seeds give different streams', () => {
++  const a = createRng(1);
++  const b = createRng(2);
++  let same = 0;
++  for (let i = 0; i < 1000; i++) if (a.uniform() === b.uniform()) same++;
++  assert.ok(same < 5, `${same} of 1000 draws coincide`);
++});
++
++// Catches: fails if Box-Muller is wrong (missing sqrt, wrong log, or the cached second
++// value is dropped or returned twice), shifting the mean or scaling the variance.
++// Tolerance: SE(mean) = 1/sqrt(N); SE(var) = sqrt(2/N) for a normal. With N = 200000,
++// 4 SE = 0.0089 and 0.0126; we use 0.012 and 0.017 (about 5.4 SE).
++test('normal has mean 0 and variance 1', () => {
++  const rng = createRng(7);
++  const { mean, variance } = moments(rng.normal, N);
++  assert.ok(Math.abs(mean) < 0.012, `mean ${mean}`);
++  assert.ok(Math.abs(variance - 1) < 0.017, `variance ${variance}`);
++});
++
++// Catches: fails if the cached second Box-Muller value is correlated with the first
++// (e.g. returning the same value twice). Pair correlation SE = 1/sqrt(N/2); 4 SE = 0.0126.
++test('consecutive normals are uncorrelated', () => {
++  const rng = createRng(8);
++  const pairs = N / 2;
++  let sxy = 0;
++  for (let i = 0; i < pairs; i++) sxy += rng.normal() * rng.normal();
++  assert.ok(Math.abs(sxy / pairs) < 0.0126, `pair correlation ${sxy / pairs}`);
++});
++
++// Catches: fails if exponential uses the rate as a scale (mean 1/rate swapped for rate).
++// SE(mean) = (1/rate)/sqrt(N); with rate = 2, N = 200000, 4 SE = 0.0045; tolerance 0.005.
++test('exponential has mean 1/rate', () => {
++  const rng = createRng(9);
++  const { mean } = moments(() => rng.exponential(2), N);
++  assert.ok(Math.abs(mean - 0.5) < 0.005, `mean ${mean}`);
++});
++
++// Poisson tolerances: SE(mean) = sqrt(lambda/N); SE(var) = sqrt((lambda + 2*lambda^2)/N)
++// (fourth central moment lambda*(1 + 3*lambda)). We allow 5 SE.
++function checkPoisson(lambda, seed) {
++  const rng = createRng(seed);
++  const n = N;
++  const { mean, variance } = moments(() => rng.poisson(lambda), n);
++  const seMean = Math.sqrt(lambda / n);
++  const seVar = Math.sqrt((lambda + 2 * lambda * lambda) / n);
++  assert.ok(Math.abs(mean - lambda) < 5 * seMean, `lambda ${lambda}: mean ${mean}, tol ${5 * seMean}`);
++  assert.ok(Math.abs(variance - lambda) < 5 * seVar, `lambda ${lambda}: variance ${variance}, tol ${5 * seVar}`);
++}
++
++// Catches: fails if Knuth's method is off by one (returns k instead of k-1, mean lambda+1)
++// or compares against the wrong limit. Tolerance in the comment above checkPoisson.
++test('poisson mean and variance at lambda = 5 (Knuth branch)', () => {
++  checkPoisson(5, 21);
++});
++
++// Catches: fails if a PTRS constant or the acceptance test is wrong, which biases the
++// mean or variance at lambda >= 30. Tolerance in the comment above checkPoisson.
++test('poisson mean and variance at lambda = 50 (PTRS branch)', () => {
++  checkPoisson(50, 22);
++});
++
++// Catches: fails if lambda = 0 loops or returns a non-zero value, and if the branch
++// switch at lambda = 30 is broken (the boundary case must still give integer draws
++// with the right mean). Tolerance: 5 * sqrt(30/N).
++test('poisson at lambda = 0 returns 0; lambda = 30 uses PTRS correctly', () => {
++  const rng = createRng(23);
++  for (let i = 0; i < 100; i++) assert.equal(rng.poisson(0), 0);
++  const { mean } = moments(() => rng.poisson(30), N);
++  assert.ok(Math.abs(mean - 30) < 5 * Math.sqrt(30 / N), `mean ${mean}`);
++});
++
++// Catches: fails if int(n) can return n or a negative value, or is not uniform
++// over 0..n-1. Each count ~ Binomial(N, 1/n); SE = sqrt(N p (1-p)); tolerance 5 SE.
++test('int(n) is uniform on 0..n-1', () => {
++  const rng = createRng(31);
++  const n = 7;
++  const counts = new Array(n).fill(0);
++  for (let i = 0; i < N; i++) {
++    const v = rng.int(n);
++    assert.ok(Number.isInteger(v) && v >= 0 && v < n, `int(${n}) gave ${v}`);
++    counts[v]++;
++  }
++  const p = 1 / n;
++  const se = Math.sqrt(N * p * (1 - p));
++  for (const c of counts) assert.ok(Math.abs(c - N * p) < 5 * se, `count ${c}`);
++});
+diff --git a/validation/pymatching_check.py b/validation/pymatching_check.py
+new file mode 100644
+index 0000000..d259f1a
+--- /dev/null
++++ b/validation/pymatching_check.py
+@@ -0,0 +1,96 @@
++"""Independent cross-check of src/core/matching.js against PyMatching (validation V2).
++
++Usage: python validation/pymatching_check.py data/vectors/vectors_d3_r3.json ...
++
++For each vector file (written by tools/export_vectors.mjs) the decoding graph is
++rebuilt in PyMatching and every shot's syndrome is decoded. A prediction that
++differs from ourFlip on a shot where our decoder was exact is a tie when the two
++solution weights agree to 1e-9, otherwise a genuine mismatch. Mismatches on
++shots where our decoder was not exact (greedy) are reported but do not fail.
++Exit status 1 on any genuine mismatch.
++"""
++
++import json
++import sys
++
++import numpy as np
++import pymatching
++
++TIE_TOL = 1e-9
++
++
++def build_matching(data):
++    m = pymatching.Matching()
++    for e in data["edges"]:
++        fault_ids = {0} if e["observable"] else set()
++        if e["v"] == -1:
++            m.add_boundary_edge(e["u"], weight=e["weight"], fault_ids=fault_ids)
++        else:
++            m.add_edge(e["u"], e["v"], weight=e["weight"], fault_ids=fault_ids)
++    return m
++
++
++def check_file(path):
++    with open(path, encoding="utf-8") as f:
++        data = json.load(f)
++    m = build_matching(data)
++    n_det = data["nDetectors"]
++    if m.num_detectors != n_det:
++        raise SystemExit(f"{path}: PyMatching has {m.num_detectors} detectors, file says {n_det}")
++
++    stats = {"shots": 0, "agree": 0, "ties": 0, "genuine": 0, "nonExact": 0,
++             "nonExactMismatch": 0, "pmLogical": 0, "ourLogical": 0}
++    genuine_examples = []
++    for idx, shot in enumerate(data["shots"]):
++        syndrome = np.zeros(n_det, dtype=np.uint8)
++        syndrome[shot["lit"]] = 1
++        pred, weight = m.decode(syndrome, return_weight=True)
++        pm_flip = int(pred[0])
++        stats["shots"] += 1
++        stats["pmLogical"] += pm_flip != shot["trueFlip"]
++        stats["ourLogical"] += shot["ourFlip"] != shot["trueFlip"]
++        if not shot["ourExact"]:
++            stats["nonExact"] += 1
++        if pm_flip == shot["ourFlip"]:
++            stats["agree"] += 1
++            continue
++        if not shot["ourExact"]:
++            stats["nonExactMismatch"] += 1
++        elif abs(float(weight) - shot["ourCost"]) < TIE_TOL:
++            stats["ties"] += 1
++        else:
++            stats["genuine"] += 1
++            if len(genuine_examples) < 5:
++                genuine_examples.append((idx, shot["lit"], shot["ourCost"], float(weight)))
++    return data, stats, genuine_examples
++
++
++def main(paths):
++    if not paths:
++        print(__doc__)
++        return 2
++    print(f"pymatching {pymatching.__version__}")
++    header = f"{'file':<24} {'d':>2} {'r':>2} {'shots':>6} {'agree':>6} {'ties':>5} {'genuine':>7} " \
++             f"{'nonExact':>8} {'nonExMis':>8} {'pL ours':>8} {'pL PM':>8}"
++    print(header)
++    print("-" * len(header))
++    total_genuine = 0
++    for path in paths:
++        data, s, examples = check_file(path)
++        name = path.replace("\\", "/").split("/")[-1]
++        n = s["shots"]
++        print(f"{name:<24} {data['d']:>2} {data['r']:>2} {n:>6} {s['agree']:>6} {s['ties']:>5} "
++              f"{s['genuine']:>7} {s['nonExact']:>8} {s['nonExactMismatch']:>8} "
++              f"{s['ourLogical'] / n:>8.5f} {s['pmLogical'] / n:>8.5f}")
++        for idx, lit, ours, pm in examples:
++            print(f"    genuine mismatch: shot {idx}, lit {lit}, ourCost {ours:.12g}, pmWeight {pm:.12g}")
++        total_genuine += s["genuine"]
++    print("-" * len(header))
++    print("ties: predictions differ but solution weights agree within 1e-9; "
++          "nonExMis: mismatches on greedy (ourExact = false) shots, not failures")
++    print("RESULT:", "FAIL" if total_genuine else "PASS", f"({total_genuine} genuine mismatches)")
++    return 1 if total_genuine else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv[1:]))

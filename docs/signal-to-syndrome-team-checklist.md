@@ -1,259 +1,301 @@
-# Signal to Syndrome — Team Execution Checklist (two people)
+# Signal to Syndrome — Team Execution Checklist v2 (upgrade build, two people)
 
-Every step needed to build, verify, publish and submit the project as a team of two, split so that each person works independently as much as possible. Each dependency between the two of you is named, timed and given a fallback, and every joint step is marked.
+Every step needed to take Signal to Syndrome from its current state (tag `sp4`) to the upgraded submission: a learned detector error model, phase-flip memory, measurement crosstalk on trapped ions, per-platform idle physics, a reframed comparison with a trade-off plot, a "Learn the noise" level and a redesigned interface. The work is split so that each person works independently as much as possible; every dependency is named, timed and given a fallback, and every joint step is marked.
 
 | | |
 |---|---|
-| Version | 1.1, 6 October 2026 (updated with the probe results in `DECISIONS.md`: native-gate bank generator, one job per run, Qollab file names `index.html`/`main.css`/`main.js`, probe P10 for the live run) |
+| Version | 2.0, Sat 10 Oct 2026, written inside the build window |
 | Build window | Sat 10 Oct 04:30 IST → Mon 12 Oct 04:30 IST (Fri 9 Oct 19:00 ET → Sun 11 Oct 19:00 ET) |
-| Project plan | `signal-to-syndrome-project-plan.md` explains what is built and why. This checklist replaces its single-person timeline (Section 17.1) with the team timeline below; the gates, cut rules and validation checks are unchanged |
-| Repository | A private GitHub repository shared by both of you, cloned to `E:\My Project\signal-to-syndrome` (or any path you prefer) |
-| Commands | Windows cmd syntax; Appendix T7 gives the macOS and Linux equivalents |
+| Starting point | The repository at tag `sp4` (commit `0730c92`, plus `7f27a36` "Remove BOM from features.js"). Tests 176/176, release check 75/75 after a clean rebuild, V9 `53933f98` |
+| Relation to v1 | v1 (`signal-to-syndrome-team-checklist-v1.md`) describes how the base was built and stays in `docs/` unchanged as a disclosed record. This v2 governs all work from tag `window-start` onward. Its step IDs continue v1's: joint steps K0–K9, Person A steps A40–A60, Person B steps B40–B56, prompts CC-A10–CC-A16 and CC-B11–CC-B19, handoffs N1–N10, validation checks V11–V16 |
+| Companion | `signal-to-syndrome-execution-checklist.md` (v2): the same steps in one time-ordered list with every gate, verification command and cut rule. The Claude Code prompts live only in this file |
+| Repository | `E:\My Project\signal-to-syndrome` (or your path) |
+| Commands | Windows cmd syntax |
 
 ---
 
 ## Contents
 
-1. How the work is split
-2. Independent, dependent and joint work
-3. Timeline
-4. Ground rules for working in parallel
-5. Joint steps (J0–J9)
-6. Person A checklist (physics and data)
-7. Person B checklist (decoder, interface and platform)
+0. Read this first: eligibility
+1. What v2 adds
+2. How the work is split
+3. Independent, dependent and joint work
+4. Timeline and milestones
+5. Ground rules
+6. Joint steps (K0–K9)
+7. Person A checklist (physics and data)
+8. Person B checklist (decoder, interface and platform)
 
-Appendices: T1 team `CLAUDE.md` · T2 team `DECISIONS.md` · T3 bridge and feature switches · T4 platform probes · T5 review and fix prompts · T6 parameter-card templates · T7 Git for two people and other operating systems
-
----
-
-## 1. How the work is split
-
-The project is split along its module boundaries, not along its stages. Each file in the repository has exactly one owner, so you never edit the same file and Git merges cleanly.
-
-| Role | Owns | Typical skills |
-|---|---|---|
-| **Person A: physics and data** | The Qiskit bank generator and everything that runs on Qollab's Python side; the shot banks; all readout physics (flat, trapped-ion, superconducting); idle errors, calibration and statistics; the sweep engine and every results file; the parameter cards; the results and physics sections of the project page | Quantum physics, readout hardware, statistics |
-| **Person B: decoder, interface and platform** | The repository scaffold; randomness, bank parsing, detectors, the decoding graph and the matching decoder; the PyMatching cross-check; the whole interface (levels 1–5), the build and the release check; everything that runs in Qollab's JavaScript project; publishing; accessibility; the demo and the README | JavaScript, interfaces, algorithms |
-
-Assign the roles by fit. The physics-heavy work suits Person A to someone with a readout background; Person B needs comfort with JavaScript and the browser. Nothing in the checklist depends on which of you takes which role.
-
-**What makes independence possible.**
-
-1. **A fixed contract.** The team version of `CLAUDE.md` (Appendix T1) fixes, before any code exists, the exact function signatures each person's modules must provide (the Module API) and the exact shape of every results file. Each of you writes to that contract, so neither has to read the other's code to use it.
-2. **Stubs and fixtures.** Person B builds the interface against stand-in versions of Person A's modules (stubs, with placeholder physics) and synthetic data files (fixtures, each marked `"fixture": true`). The interface never waits for physics.
-3. **Bridges and feature switches.** The interface reaches Person A's work only through two small files, `src/ui/bridge_core.js` and `src/ui/bridge_data.js`. When a real module or results file arrives, Person B changes one line in a bridge (Appendix T3) and turns the matching feature on in `src/ui/features.js`. The release check refuses to pass if any enabled feature still uses a stub or fixture, so nothing fake can be published.
-4. **Synthetic test data.** Person A's physics tests and calibration tests generate their own data and do not need the decoder.
+Appendices: U1 `CLAUDE.md` v2 amendments · U2 `DECISIONS.md` v2 section · U3 bridge and feature switches v2 · U4 results formats v2 · U5 parameter-card additions · U6 review and fix prompts · U7 interface specification · U8 disclosure and email templates · U9 demo-video script · U10 hallway-test protocol · U11 optional statistics work
 
 ---
 
-## 2. Independent, dependent and joint work
+## 0. Read this first: eligibility
 
-### 2.1 Independent work (no input from the other person)
+The base version was built and tagged `sp1`–`sp4` on 7–9 Oct, before the window opened, while your own plan (§14.1, §14.5) states that no project code exists before Sat 10 Oct 04:30 IST and that the first commit's timestamp proves it. The README currently says "All code in this repository was generated during the build window", which the git history contradicts.
 
-"Independent" means the work can be built and tested on its own. The final versions still meet at the integration steps.
+This checklist assumes the organizers allow a disclosed, pre-built base with the hackathon judged on what you add inside the window. Step K0 asks them. Until they answer:
+
+1. **Do not rewrite or squash history**, and do not change commit dates. The history stays exactly as it is.
+2. **Fix the README sentence now** (K0), whatever the answer will be.
+3. **Keep both Qollab projects private.** Ship points are built, tagged and tested privately; nothing is made public before the answer, or before Sun 18:00 IST if no answer arrives (K0 decision table).
+4. **If the organizers say the base may not be used, stop following this checklist.** The honest options are to withdraw, or to ask whether a fresh in-window rebuild would be accepted; that rebuild is not planned here.
+
+---
+
+## 1. What v2 adds
+
+### 1.1 Scope
+
+| ID | Work package | Deliverables | Owner | Ship point |
+|---|---|---|---|---|
+| W1 | Detector error model | Diagonal edges in `graph.js`; per-class edge rates learned from detector correlations (`dem.js`); decoder switchable between "naive" and "learned"; Stages 1–4 rerun with both | B (graph), A (rates, sweeps) | SP5 |
+| W2 | New error types | (a) Phase-flip repetition memory: X-basis circuits, banks, Stages 1–3 in the X basis. (b) Measurement-induced crosstalk on neighbouring ions during ancilla detection, with a rate scan | A | SP6 |
+| W3 | Comparison | (a) Framed everywhere as "two readout physics models at fixed gate noise". (b) Each arm gets its own idle physics: T1 and T2 for both, plus crosstalk for the ion. (c) A trade-off plot (error per round against rounds per second) next to the per-µs comparison | A (data), B (interface) | SP6 |
+| W4 | "Learn the noise" level | Fault injection on a circuit timeline, the naive decoder's failure on a diagonal pair, the p_ij heatmap of the forte-1 banks, and a naive/learned toggle with the logical-error drop | B (interface), A (data) | SP6 |
+| W5 | Interface upgrade | Hero panel; Level 3 error-budget bar, d selector, challenge; text cut to two sentences per level; Level 1 decoding game; Level 5 visuals (trade-off, budget bars, scoreboard, tornado); demo video; Level 2 sandbox; global bit-flip/phase-flip toggle; one visual language; guided tour; polish (animations, curated Level 4 examples, live-run presence) | B (interface), both (video) | SP5–SP7 |
+
+Out of scope unless time remains: the statistics items in Appendix U11 (cluster bootstrap for every interval; ring-up in the superconducting belief model; a dense τ grid near the superconducting optimum). They are not in your list, but they decide how credible the C1 verdict is; do them if the buffer allows.
+
+### 1.2 Hypotheses for v2 (pre-registered at K1, before any rerun)
+
+Write these into `docs/notes_results.md` at K1 and commit them before CC-A12 runs, so the commit time proves they came first. Refutation remains a valid, reportable result.
+
+| ID | Statement | Tested by | Refuted if |
+|---|---|---|---|
+| C1 (revised) | Superconducting: τ*_log < τ*_phys (empirical), with the learned decoder, in both bases. Trapped ion with crosstalk off: no idle-driven optimum. Trapped ion with crosstalk at the card value: an interior τ*_log < τ*_phys appears | Stages 2–3 rerun; crosstalk scan | SC τ*_log interval contains or exceeds τ*_phys at d = 3 and 5; or the ion shows the crosstalk-driven optimum with crosstalk off, or no interior optimum at any scanned crosstalk rate |
+| C2 (unchanged statement) | Soft decoding is at or below hard at every τ, with most gain where readouts are short | Stages 2–3, learned decoder | Soft above hard beyond the intervals at any point |
+| C3 (replaced) | Neither readout model dominates: along the τ grids the ion arm has lower error per round and the superconducting arm more rounds per second | Trade-off curves, Stage 4 | One arm is better on both axes at its τ*_log |
+| C4 (unchanged) | Break-even ε̄ (d = 5 beats d = 3) similar on both arms, on the empirical ε̄ axis | Stage 4 | Values differ beyond their uncertainties |
+| C5 (new) | The learned detector error model lowers the logical error against the naive one at every (d, arm, mode) at τ*_log, out of sample | Stage dem, Stage 4 | Learned above naive beyond the intervals at any point |
+| C6 (new) | In the phase-flip memory the superconducting τ*_log is shorter than in the bit-flip memory when T2 < T1 | Stage 3 in both bases | τ*_log(X) ≥ τ*_log(Z) beyond the intervals |
+| O4 (measurement, no hypothesis) | Ratio of bulk detector rates, X-basis to Z-basis banks, per (d, r): how biased forte-1 noise looks to the decoder | Stage dem | — |
+
+### 1.3 New validation checks
+
+| ID | Check | Pass criterion | Owner |
+|---|---|---|---|
+| V2b | V2 rerun with diagonal edges: our decoder against PyMatching | Zero cost mismatches; ties counted | B |
+| V9 (kept) | Naive decoder, flat ε = 0.02, rep_d3_r3_L0 | Still `53933f98` | A |
+| V9L | Learned decoder, same setting | Hash recorded in DECISIONS; equal in Node and on the page | A, B |
+| V11 | ε fragility: learned decoder at ε = 0 and ε = 1e-9 | Wilson intervals overlap at every d (the naive decoder gives 108 against 13 errors of 4,000 at d = 3, L0) | A |
+| V12 | (a) Rate recovery on synthetic detectors with known per-class rates including diagonals; (b) out of sample: rates learned on L0 decode L1 and vice versa | (a) every class within 4 SE; (b) learned ≤ naive pooled, beyond intervals at d = 5 | A |
+| V13 | Phase-flip circuits: ideal simulator, every check 0; one injected Z gives exactly the predicted bits (same pattern as X in the bit-flip memory); three sites also on IonQ's ideal simulator | All equal | A |
+| V14 | Idle physics per basis: formulas; T2 ≤ 2T1 enforced (boundary test); crosstalk 0 reproduces the old ion idle; default basis Z reproduces V9 | All pass | A |
+| V15 | Trade-off values: hand check of one point per arm (rounds per second = 10⁶ / T_cyc in µs; error per round as in Stage 4) | Agrees with the file to 3 significant figures | A |
+| V16 | Fault-to-detector function used by "Learn the noise" agrees with `computeDetectors` on explicitly flipped bits, for every fault slot at d = 3 and 5 | All equal | B |
+
+### 1.4 Claims policy additions
+
+- The comparison is "two readout physics models at fixed gate noise": the same IonQ forte-1 banks, the same learned decoder, different readout models, idle physics and cycle times. Never "trapped ion against superconducting hardware".
+- The superconducting arm carries trapped-ion gate noise by construction; say so wherever the arms are compared.
+- The crosstalk rate and any unsourced T2 are labelled "UNSOURCED (illustrative)" on the page, and the crosstalk result is presented as a scan, not as one number.
+- Learned edge rates come from the same banks they decode; V12(b) is the out-of-sample check and its result is quoted next to every naive/learned comparison.
+
+---
+
+## 2. How the work is split
+
+Ownership is unchanged from v1 (`CLAUDE.md`, team rules), with these additions (Appendix U1 has the exact table):
+
+| Owner | New files |
+|---|---|
+| A | `src/core/dem.js`, `tests/dem.test.js`, `data/results/dem_forte1.json`, `data/results/*_x.json`, `data/banks/repx_*.json`, `data/banks/v13_*.json`, `data/raw/repx_*`, `data/raw/v13/*` |
+| B | `src/ui/hero.js`, `src/ui/learnnoise.js`, `src/ui/sandbox.js`, `src/ui/tour.js`, `src/ui/budget.js`, `src/ui/tokens.css` (all under `src/ui/*`, already B's), `tools/curate.mjs`, `data/curated/*`, `tests/learnnoise.test.js`, `tests/hero.test.js`, `tests/curate.test.js` |
+
+Shared: `CLAUDE.md`, `DECISIONS.md` (own section), `docs/project_page.md` (sections as assigned), `docs/notes_results.md` (A writes; B adds only the interface notes section).
+
+**What keeps the two lanes independent.** The contract v2 (K1, Appendix U1) fixes every new signature and results field before anyone writes code. Person B builds every new view against v2 fixtures (`data/fixtures/*_v2.json`, each with `"fixture": true`) through new bridge exports (Appendix U3), so the interface never waits for physics. The release check refuses any enabled feature whose bridge still points at a fixture.
+
+---
+
+## 3. Independent, dependent and joint work
+
+### 3.1 Independent work
 
 | Person A | Person B |
 |---|---|
-| Pre-window: paper derivations; sourcing all three parameter cards (ion, superconducting, cycle times) | Pre-window: studying Qollab's JavaScript lesson and copying its example; interface sketches; reading accessibility guidelines |
-| Python-side platform probes (packages, noise model, 25-qubit timing, copying long output) | JavaScript-side platform probes (job submission from JavaScript, pane size, HTML pane format) |
-| Bank generator, local circuit tests (V3), bank assembler | Repository scaffold |
-| Running all banks on Qollab and assembling them | Randomness, bank parsing, detectors |
-| Trapped-ion readout model and its validation (V7, V10) | Decoding graph, matching decoder, logical decision |
-| Superconducting readout model and its validation (V8, V10) | PyMatching cross-check (V2) |
-| The V4 batch on IonQ's ideal simulator | Stubs, fixtures, bridges, feature flags |
-| Stage 4 metrics module and its tests | All interface levels, built and tested on stubs and fixtures |
-| Interpreting results against hypotheses C1–C4 | Build tool, release check, live-run button |
-| Physics and results sections of the project page | Accessibility pass; demo video; README; assembling the Qollab page |
+| `dem.js`: pairwise edge-rate estimation, boundary rates, synthetic tests (V12a) | Diagonal edges in `graph.js`; matching tests; V2b with PyMatching |
+| X-basis circuits, circuit tests (V13), X-basis and V13 banks on Qollab | `bank.js` basis field; v2 fixtures, bridges and feature flags |
+| Idle physics per basis and ion crosstalk in the readout models; parameter cards (V14) | Design tokens, hero panel, text cut |
+| Stage reruns (Z and X, naive and learned), crosstalk scan, error budget, Stage dem | Level 1 game; Level 3 budget bar, d selector, challenge |
+| Stage 4 v2: trade-off, numeric sensitivity, C1–C6 verdicts | "Learn the noise" level (V16) |
+| Results notes; plain-language verdicts; physics and results sections of the page | Level 5 v2; Level 2 sandbox; basis toggle; tour; curated examples; live-run panel; accessibility; README |
 
-### 2.2 Dependencies (one person's work waits on the other's)
+### 3.2 Handoffs
 
-Each handoff has an ID (H1–H14), a target time, the step that consumes it, and a fallback, so that a late handoff delays as little as possible. Times are IST. "Push" means committing and pushing to the shared repository and sending the handoff message (Section 4).
+Times are IST. "Push" means commit, push and send the handoff message (Section 5).
 
-| ID | From → to | What exactly is handed over | Ready by | Needed by (step) | What waits | Fallback if late |
+| ID | From → to | What | Ready by | Needed by (step) | What waits | Fallback if late |
 |---|---|---|---|---|---|---|
-| H1 | B → A | `src/core/rng.js` | Sat 07:45 | Sat 08:00 (A9, CC-A2) | A's flat-model, idle and calibration tests (they draw random numbers) | A collects banks (A11) and sources parameters first; starts CC-A2 when rng.js lands |
-| H2 | B → A | `src/core/bank.js`, `src/core/detectors.js` | Sat 07:45 | Sat 10:30 (A12, CC-A3) | A's sweep engine | A writes the sweep engine against the Module API; runs its tests when the files land |
-| H3 | B → A | `src/core/graph.js`, `src/core/matching.js`, `src/core/logical.js` | Sat 09:30 | Sat 10:30 (A12, CC-A3) | A's sweep engine and every logical-error result | As H2 |
-| H4 | A → B | Banks `rep_d3_r1_L0.json` and `rep_d3_r3_L0.json` | Sat 08:00 (first) and 10:30 | Sat 12:30 (B10, switch) | Real data in levels 1 and 2 | B keeps the fixture banks; SP1 cannot publish until real banks arrive |
-| H5 | A → B | `src/core/sweep.js` (decodeShot, runPoint, diagnostic) and `src/core/readout/flat.js` | Sat 11:30 | Sat 12:30 (B10) | Real decoding in levels 1 and 2; the V9 fingerprint | B keeps the sweep and flat stubs; SP1 waits |
-| H6 | A → B | `data/results/stage1_flat.json` and the V9 fingerprint (`node tools/sweep.mjs --diag`) | Sat 12:00 | Sat 12:30 (B10) | The level 2 chart; the V9 check | Fixture chart; SP1 waits |
-| H7 | A → B | `src/core/readout/ion.js` and `params/ion.json` | Sat 15:00 | Sat 15:30 (B13) | Real physics in ion levels 3 and 4 | Ion stub; SP2 waits |
-| H8 | A → B | `data/results/stage2_ion.json` | Sat 16:30 | Sat 19:30 (B16) | Ion charts in levels 3 and 4 | Fixture charts; SP2 waits |
-| H9 | A → B | `src/core/readout/sc.js` and `params/sc.json` | Sat 19:15 | Sun 07:00 (B21) | Real physics on the superconducting platform | Superconducting stub; SP3 waits |
-| H10 | A → B | `data/results/stage3_sc.json` | Sun 06:00 | Sun 07:00 (B21) | Superconducting charts | Fixture charts; SP3 waits |
-| H11 | A → B | `data/results/stage4_comparison.json` and `params/cycle.json` | Sun 08:00 | Sun 08:30 (B22) | Level 5 | Fixture; SP4 waits |
-| H12 | B → A | Probe answers D4, D5, D9 (JavaScript job submission, pane size limit, HTML pane format) | Sat 06:00 | Sat 06:00 (J2) | The shots-per-configuration decision D8 | Use 4,000 shots and revisit if the pane limit is low |
-| H13 | A → B | Probe answers D1, D2, D3, D6, D7 (noise-model syntax, seed option, 25-qubit timing, packages, output copying) | Sat 06:00 | Sat 13:30 (B12, live-run) | The live-run button's noise setting | Live-run off until known |
-| H14 | A → B | Link to the published bank generator project | Sat 13:30 | Sat 13:30 (B12) | The live-run fallback note | Note without a link, added later |
+| N1 | B → A | `src/core/graph.js` with diagonal edges (`buildGraph(d, r, { diagonal })`), tests, V2b result | Sat 10:45 | Sat 11:45 (A44, CC-A12) | Learned decoding in `sweep.js` | A writes CC-A12 against the U1 signature and runs it when N1 lands; A44 slips at most 30 min, then K2 cut rule |
+| N2 | B → A | `src/core/bank.js` accepting `basis` | Sat 11:30 | Sat 11:45 (A44) and 16:00 (A48) | Loading X-basis banks | A44 runs Z only; X banks wait for A48 |
+| N3 | A → B | `src/core/dem.js`, `src/core/sweep.js` with `noise` and `basis` | Sat 13:00 | Sat 13:30 (B44) | Learned decoding in levels 1–4 | Levels keep the naive decoder; SP5 ships hero and text cut only |
+| N4 | A → B | `data/results/dem_forte1.json`; Stage 1 and 2 (Z) results with naive and learned series | Sat 13:00 | Sat 13:30 (B44), 16:30 (B46) | Learned curves; "Learn the noise" data | Fixture data; "Learn the noise" cannot ship until N4 |
+| N5 | A → B | `ion.js`, `sc.js` with `idleFlipProbability(basis)` and `idleBreakdown(basis)`; updated `params/ion.json`, `params/sc.json` | Sat 15:45 | Sat 19:00 (B47) | Budget bars from live models; idle text | Budget from results arrays only (N6) |
+| N6 | A → B | X-basis banks; Stage 1–3 results for Z and X, both decoders, with `budget` and (ion) `crosstalkScan` | Sat 18:00 | Sat 20:00 (B48 switches) | Basis toggle; budget bar; crosstalk view | Ship SP6 with Z only and the crosstalk view off |
+| N7 | A → B | `data/results/stage4_comparison.json` v2 and `params/cycle.json` v2 | Sat 19:45 | Sat 20:00 (B48) | Level 5 v2 | Level 5 v2 ships at SP7 instead |
+| N8 | B → A | A local build of SP6 with every flag on (`dist/local/preview.html`) | Sun 05:30 | Sun 05:30 (A53) | A's review of the new interface | A reviews the published private project instead |
+| N9 | A → B | Plain-language one-liners for C1–C6 and O4, and the framing sentence, in `stage4_comparison.json` (`conclusions[*].plain`) and `notes_results.md` | Sun 09:30 | Sun 11:30 (B52) | Scoreboard text; page | B uses A's verdict column from `notes_results.md` |
+| N10 | B → A | Interface sections of the page and the README v2 | Sun 11:30 | Sun 18:00 (K7) | Page review | K7 reviews what exists |
 
-The interface never blocks on a handoff, because it is built on stubs and fixtures first. What a late handoff delays is the ship point that needs it: no ship point is published with stand-in physics or data.
-
-### 2.3 Joint work (both of you together)
+### 3.3 Joint work
 
 | ID | When (IST) | What | Who does what |
 |---|---|---|---|
-| J0 | Before Tue 6 Oct | Register as a team, read the rules, prepare the shared repository and tools | Both; B creates the repository |
-| J1 | Sat 04:30 | Kickoff call (10 minutes) | Both |
-| J2 | Sat 06:00 | Merge probe answers; decide shots; set up the repository with the contract | Both decide; B commits |
-| J3 | Sat 13:00 | SP1 integration and publish | A hands over and checks numbers; B builds, uploads, publishes |
-| J4 | Sat 20:00 | SP2 integration and publish | As J3 |
-| J5 | Sun 09:00 | SP3 integration and publish | As J3 |
-| J6 | Sun 13:00 | SP4 integration and publish | As J3 |
-| J7 | Sun 17:30 | Joint page review | Both read the whole page |
-| J8 | Sun 21:00 | Release-candidate cross-review | Each reviews the other's latest work |
-| J9 | Sun 22:30 → Mon 01:30 | Freeze, verify, submit | B builds and uploads; A checks numbers and the generator; both test in clean browsers |
-
-Also joint at any time: any change to `CLAUDE.md` or to the Module API (Section 4, interface changes), and the cross-reviews listed in each person's checklist.
+| K0 | Sat 08:00 | Eligibility, disclosure fix, cleanup, `window-start` tag | Both; B commits |
+| K1 | Sat 09:00 | Contract v2, hypotheses v2, DECISIONS v2 | Both decide; B commits |
+| K2 | Sat 14:00 | SP5: learned decoder, hero, text cut | A checks numbers; B builds, uploads (private), tags |
+| K3 | Sat 20:30 | SP6: new error types, comparison data, Level 1 game, Level 3 budget, "Learn the noise", Level 5 v2 | As K2 |
+| K4 | Sun 13:00 | SP7: interface complete | As K2 |
+| K5 | Sun 14:00 | Hallway test with three outsiders | Both observe; B runs it |
+| K6 | Sun 16:30 | Demo video | B records; A narrates the physics |
+| K7 | Sun 18:00 | Page review | Both |
+| K8 | Sun 20:00 | Release-candidate cross-review | Each reviews the other |
+| K9 | Sun 22:30 → Mon 01:30 | Freeze, verify, submit | B uploads; A checks numbers; both test |
 
 ---
 
-## 3. Timeline
+## 4. Timeline and milestones
 
-### 3.1 Two-lane timeline
+### 4.1 Two-lane timeline
 
 ```text
-                              Sat 04:30               Sun 04:30       Mon 04:30
-                                          Sat 16:30               Sun 16:30
-                              ├───────────┼───────────┼───────────┼───────────┤
-A  Python probes              ██
-A  generator, first banks       ██
-A  flat, idle, stats             ██
-A  collect banks                   █
-A  sweep engine, stage 1            ██
-A  ion model, stage 2                 ████
-A  superconducting model                  ███
-A  V4, stage 3                                ██      ██
-A  stage 4 metrics                                     ███
-A  page: physics, results                                  ████████
-B  JavaScript probes          ██
-B  setup, scaffold             █
-B  rng, banks, detectors        ██
-B  graph, matching               ██
-B  PyMatching check                █
-B  stubs, fixtures                 ██
-B  levels 1-2, build                ███
-B  levels 3-4 (ion)                    ███
-B  superconducting UI                     ███
-B  level 5                                    ██
-B  accessibility, switches                            █████
-B  README, page, demo                                       ███████
-Cross-reviews                        ▒   ▒▒ ▒▒           ▒▒▒▒
-Joint: integration, buffer            ▓      ▓            ▓   ▓    ▓▓▓▓▓
-Joint: freeze and submit                                                ▓▓▓
-Sleep / slack                                   ░░░░░░                     ░░░
-Ship points published                  ◆      ◆            ◆   ◆
-                                      SP1    SP2          SP3 SP4
-
-█ individual work  ▒ cross-review  ▓ joint  ░ rest  ◆ ship point   one column = one hour (IST); a block marks every hour it touches
+                              Sat 08:00          Sat 20:00     Sun 06:00          Sun 18:00   Mon 02:00
+                              ├─────────────────────┼───────────┼─────────────────────┼───────────┤
+K0, K1 eligibility, contract  ▓▓
+A  dem.js                       ██
+A  X-basis generator, banks       ███████ (banks run in the background)
+A  sweep noise models, reruns       ███
+A  idle physics, crosstalk                ██
+A  stage reruns Z/X, budget                 ███
+A  stage 4 v2                                  ██
+A  notes, verdicts                                ██
+A  review B, page                                          █████████
+B  diagonal edges, V2b          ██
+B  basis field, fixtures v2       █
+B  tokens, hero, text cut          ██
+B  level 1 game, level 3              ██
+B  learn the noise                      ███
+B  level 5 v2                              ██
+B  sandbox, basis toggle                                  ███
+B  tour, curated, live run                                   ██
+B  a11y, polish, README                                        ███
+Integration                         ▓       ▓        ▓                  ▓
+Hallway test, fixes, video                                               ▓▓▓▓▓
+Page review, RC review                                                         ▓▓   ▓▓
+Freeze, submit                                                                   ▓▓▓
+Sleep                                                   ░░░░░░
+Ship points                         ◆SP5    ◆SP6                       ◆SP7
 ```
 
-### 3.2 Milestones (team version)
+### 4.2 Milestones
 
-The ship points come earlier than in the single-person plan because the two lanes run in parallel. Each cut deadline is 30 minutes before the integration step; the cut rules are those of the project plan (Section 17.2).
-
-| Milestone | Integration (IST) | Ship point published by | Cut deadline | Gate |
-|---|---|---|---|---|
-| M0 Probes done | — | — | Sat 06:30 | All probe answers recorded |
-| M1 = SP1 | J3, Sat 13:00 | Sat 13:30 | Sat 12:30 | V1, V2, V3 pass; F0 produced; levels 1–2 on real data |
-| M2 = SP2 | J4, Sat 20:00 | Sat 20:30 | Sat 19:30 | V7, V10 (ion) pass; ion levels 3–4 on real data |
-| M3 = SP3 | J5, Sun 09:00 | Sun 09:30 | Sun 08:30 | V4, V8, V10 (superconducting) pass; platform toggle on real data |
-| M4 = SP4 | J6, Sun 13:00 | Sun 13:30 | Sun 12:30 | Parameter cards sourced; level 5 on real data |
-| M5 Page | J7, Sun 17:30 | Sun 18:00 | Sun 17:00 | Page complete; demo recorded |
-| M6 Submitted | J9 | Mon 01:30 | Mon 03:00 | Final version verified; submission confirmed |
+| Milestone | Integration (IST) | Tag | Cut deadline | Gate | Cut rule |
+|---|---|---|---|---|---|
+| M10 Eligibility | K0, Sat 08:00 | `window-start` | — | Email sent; README fixed; tag pushed | — |
+| SP5 | K2, Sat 14:00 | `sp5` | Sat 13:30 | V2b, V9, V9L, V11, V12 pass; hero and text cut on real data; levels 1–4 use the learned decoder | If V12(b) fails: keep the naive decoder as default and report it; if V2b fails: revert the graph change and ship hero and text cut only |
+| SP6 | K3, Sat 20:30 | `sp6` | Sat 20:00 | V13, V14, V16 pass; X-basis and crosstalk data real; Level 1 game, Level 3 budget, "Learn the noise" on real data | Crosstalk scan cut to 3 rates; X-basis cut to d = 3, 5; Level 5 v2 moves to SP7 |
+| SP7 | K4, Sun 13:00 | `sp7` | Sun 12:30 | V15 passes; Level 5 v2, basis toggle, accessibility pass | Drop the sandbox, then the tour, then the polish items, in that order |
+| M11 Video | K6, Sun 16:30 | — | Sun 17:30 | Two-minute video recorded | Annotated GIF of the hero and "Learn the noise" |
+| M12 Submitted | K9 | `v2.0` | Mon 03:00 | Final build verified signed out; submission confirmed | Submit the last tagged ship point |
 
 ---
 
-## 4. Ground rules for working in parallel
+## 5. Ground rules
 
-1. **Own your files.** Edit only files you own (ownership table in Appendix T1). Every Claude Code prompt names its owner and Claude Code is told to refuse edits outside it. If you need a change in the other person's file, ask for it in a message.
-2. **Pull before you start, push when you finish.** Before every Claude Code prompt and before every push: `git pull --rebase`. After every green test run: commit your own files and push (Appendix T7).
-3. **Announce every handoff.** When you push something on the dependency list, send a message in this form: `HANDOFF H5: pushed src/core/sweep.js and src/core/readout/flat.js, commit 1a2b3c4, tests green`. The receiver replies `ACK H5` after pulling.
-4. **Interface changes are joint.** If either of you needs to change a Module API signature or the results format: stop, message the other, agree on the change, have one person edit `CLAUDE.md`, commit and push it, and both pull before continuing.
-5. **No stand-ins in public.** A feature is switched on in `src/ui/features.js` only after its bridges point to real modules and data; `npm run check` enforces this. Only Person B uploads to the main Qollab project and tags ship points.
-6. **Cross-review.** Each of you reviews the other's work at the times in your checklist, using a fresh Claude chat with the review prompt (Appendix T5) and your own reading. A reviewer reports findings; the owner fixes them.
-7. **Keep a call open at handoffs and integrations.** Between them, work silently and message only for handoffs and blockers.
-8. **Same sleep block.** Both of you sleep Sat 22:30 → Sun 04:30, so handoffs and integrations happen while both are awake.
+1. **Own your files** (Appendix U1 table). Ask for changes in the other person's files by message.
+2. **Pull before you start, push when you finish.** `git pull --rebase` before every prompt and every push.
+3. **Announce handoffs** as `HANDOFF N3: pushed src/core/sweep.js, src/core/dem.js, commit 1a2b3c4, tests green`; the receiver replies `ACK N3`.
+4. **Interface changes are joint.** Any change to the U1 Module API or the U4 results formats: stop, agree, one person edits `CLAUDE.md`, both pull.
+5. **No stand-ins in public, and nothing public before K0 clears.** `npm run check` enforces the first; the second is on you.
+6. **Never rewrite git history.** No `rebase -i` on pushed commits, no `--amend` on pushed commits, no force push, no date changes.
+7. **The naive decoder stays.** Every change keeps the naive path bit-for-bit (V9 `53933f98`); the learned path is added beside it.
+8. **Same sleep block.** Both sleep Sat 23:30 → Sun 05:30.
+9. **From Sun 22:30, no new features.**
 
 ---
 
-## 5. Joint steps (J0–J9)
+## 6. Joint steps (K0–K9)
 
-### J0 · JOINT · before Tue 6 Oct — Team, rules, repository, tools
+### K0 · JOINT · Sat 08:00 — Eligibility, disclosure fix, cleanup, `window-start`
 
-**Why:** everything the two of you share must exist before the window opens, and none of it is project code.
+**Why:** the submission must be eligible and every public statement true before anything else.
 **Do:**
-1. **Both:** register on Qollab for the hackathon as one team (teams of one to four are allowed), at the same node, before registration closes on 6 October.
-2. **Both:** read the rules and submission instructions and note the answers to: are AI coding assistants allowed and must they be disclosed; what is submitted and by whom; is there a team-project feature on Qollab (can two accounts edit one project)?
-3. **Both:** attend the organizers' question session (week of 5 October) with the questions in the project plan (Section 14.4), plus: "How do team members share a Qollab project?"
-4. **Both:** agree who is Person A and who is Person B, a messaging channel and a voice-call link.
-5. **Person B:** create an empty **private** GitHub repository named `signal-to-syndrome` (no README, no licence) and invite Person A as a collaborator. **Person A:** accept the invitation.
-6. **Both:** install and check the tools (Git, Node.js 20 or later, Python 3.12, VS Code, Claude Code) and create the validation environment:
+1. **Both:** re-read Qollab's hackathon terms and FAQ (https://qollab.xyz/programs, https://qollab.xyz/programs/hackathon) for any rule on prior work, pre-existing code or code written before the window. Copy the exact wording into DECISIONS row E1.
+2. **The registered team lead:** send the email in Appendix U8 to the organizers' contact address (and post it in the official Discord or help channel if that is the documented route). Record the time in E1.
+3. **Person B**, in TERMINAL:
 
 ```bat
-git --version
-node --version
-python --version
-claude --version
-python -m venv %USERPROFILE%\venvs\s2s
-%USERPROFILE%\venvs\s2s\Scripts\activate.bat
-pip install numpy qiskit pymatching pytest
-python -c "import numpy, qiskit, pymatching, pytest; print('ok')"
+cd /d "E:\My Project\signal-to-syndrome"
+git pull --rebase
+git status --short
+del review_b1.diff
+rmdir /s /q .pytest_cache
+rmdir /s /q node_modules
+npm install
+npm test
+npm run build
+npm run check
 ```
 
-7. **Both:** read the project plan and this whole checklist, including the other person's lane.
-
-**Pass:** team registered; rules answers noted; both can open the private repository on GitHub; every command above prints a version or `ok`.
-- [ ] Done (A)  - [ ] Done (B)
-
-### J1 · JOINT · Sat 04:30 — Kickoff call
-
-**Do:** 10-minute call. Confirm roles, that A takes the Python probes and B the JavaScript probes (Appendix T4), the J2 time, and the handoff message format.
-**Pass:** both start probing by 04:40.
-- [ ] Done
-
-### J2 · JOINT · Sat 06:00 — Merge probe answers, decide shots, set up the repository
-
-**Why:** the contract and the platform facts must be in the repository before either of you runs a prompt.
-**Do:**
-1. **Both (call):** read each other's probe answers (H12, H13). Decide D8, the shots per configuration: 4,000 unless D3 (job time) or D5 (pane size) argue for fewer.
-2. **Person B**, in TERMINAL:
-
-```bat
-cd /d "E:\My Project"
-git clone https://github.com/YOUR_GITHUB_USER/signal-to-syndrome.git
-cd signal-to-syndrome
-code .
-```
-
-3. **Person B**, in EDITOR: create `CLAUDE.md` with the full text of Appendix T1; `DECISIONS.md` from Appendix T2 with both people's probe answers filled in; `docs/qollab_js_api_example.txt` (Qollab's JavaScript example from J0, first line `Source: <lesson title and URL>, copied <date>`); and copy the three planning documents (project plan, this checklist, and the single-person checklist if you kept it) into `docs/`.
-4. **Person B**, in TERMINAL:
+4. **Person B**, in EDITOR: in `README.md`, replace the whole "AI assistance and planning disclosure" section with Variant B of Appendix U8 (pending reply). Remove the two HTML comments (`<!-- Drafted by Person B ... -->`, `<!-- TODO before submission ... -->`). Then `git mv docs\signal-to-syndrome-team-checklist.md docs\signal-to-syndrome-team-checklist-v1.md` and the same for the execution checklist; add this v2 checklist and the v2 execution checklist to `docs/`.
+5. **Person B**, in TERMINAL:
 
 ```bat
 git add -A
-git commit -m "Contract, decisions, planning documents"
-git branch -M main
-git push -u origin main
+git commit -m "K0: disclosure corrected (pending organizers), cleanup, v2 checklists"
+git tag window-start
+git push
+git push --tags
+git rev-parse window-start
 ```
 
-5. **Person B** continues straight to B4 (scaffold). **Person A**, in TERMINAL, after B's push:
+6. **Both:** record the `window-start` commit hash in DECISIONS row E2. Confirm both Qollab projects are private.
+
+**Decision table (revisit when the reply arrives, and at Sun 18:00 if none has):**
+
+| Organizers' answer | Action |
+|---|---|
+| Disclosed base allowed | Replace the README section with Variant A (Appendix U8); continue; publish from the next ship point |
+| Base not allowed | Stop this checklist; decide between withdrawing and asking whether an in-window rebuild is accepted |
+| No answer by Sun 18:00 | Submit with Variant B and the email attached or quoted in the submission notes; let the organizers decide |
+
+**Pass:** email sent; README no longer contains the false sentence; `window-start` pushed; build and release check pass; projects private.
+- [ ] Done (A)  - [ ] Done (B)
+
+### K1 · JOINT · Sat 09:00 — Contract v2, hypotheses v2, DECISIONS v2
+
+**Why:** both lanes code against the same signatures and results fields from the first prompt.
+**Do:**
+1. **Both (call, 20 min):** read Appendix U1, U4 and Section 1.2 together; change anything you disagree with now.
+2. **Person B**, in EDITOR: apply Appendix U1 to `CLAUDE.md` (replace the named sections, append the new ones); add the "v2" section of Appendix U2 to `DECISIONS.md`.
+3. **Person A**, in EDITOR: append Section 1.2 (the hypothesis table, verbatim) under a new heading "## v2 hypotheses (pre-registered Sat 10 Oct, before any rerun)" at the end of `docs/notes_results.md`.
+4. **Both:** commit and push (B first, A after pulling):
 
 ```bat
-cd /d "E:\My Project"
-git clone https://github.com/YOUR_GITHUB_USER/signal-to-syndrome.git
-cd signal-to-syndrome
-code .
+git pull --rebase
+git add CLAUDE.md DECISIONS.md docs\notes_results.md
+git commit -m "K1: contract v2, v2 hypotheses pre-registered"
+git push
 ```
 
-**Pass:** both have the repository with `CLAUDE.md` and `DECISIONS.md`; every D-row has an answer (D3 may say "pending").
+**Pass:** both have `CLAUDE.md` v2 and the pre-registered hypotheses in a commit timestamped before CC-A12 runs.
 - [ ] Done
 
-### J3 · JOINT · Sat 13:00 — SP1 integration and publish
+### K2 · JOINT · Sat 14:00 — SP5 integration
 
-This procedure is reused by J4, J5 and J6; only the switches and checks change.
-
+The procedure is reused by K3 and K4; only the switches and checks change.
 **Do:**
-1. **Person A:** confirm that all handoffs for this ship point are pushed (SP1: H4, H5, H6), and run `node tools/sweep.mjs --diag`; read out the fingerprint.
-2. **Person B:** `git pull --rebase`; make the bridge and feature switches for this ship point (Appendix T3; SP1: rows 1–4); then:
+1. **Person A:** confirm N3 and N4 are pushed; run and read out:
+
+```bat
+node tools/sweep.mjs --diag
+node tools/sweep.mjs --diag --decoder learned
+```
+
+   The first must print `53933f98` (V9); the second is V9L (record it in E9).
+2. **Person B:** `git pull --rebase`; apply the SP5 switches (Appendix U3 rows 13–16); then:
 
 ```bat
 npm test
@@ -262,1419 +304,958 @@ npm run check
 start "" "dist\local\preview.html"
 ```
 
-3. **Both:** play every enabled level in the local preview (Person B shares the screen, or Person A pulls and builds).
-4. **Person B:** replace the main Qollab project's three files with `dist/qollab/index.html`, `main.css` and `main.js`; open Diagnostics. **Both:** the fingerprint equals Person A's (V9).
-5. **Person B:** publish (public, MIT, attribution in the description). **Person A:** publish the bank generator project the same way (SP1 only) and send its link (H14).
-6. **Both:** open the published links in a signed-out private window and play.
-7. **Person B:**
+3. **Both:** play the hero panel and levels 1–4 in the preview; Diagnostics shows both hashes, equal to Person A's.
+4. **Person B:** replace the three files in the main Qollab project (still private) with `dist/qollab/index.html`, `main.css`, `main.js`; open Diagnostics on Qollab; both hashes equal.
+5. **Person B:**
 
 ```bat
 git add -A
-git commit -m "SP1: integration"
-git tag sp1
+git commit -m "SP5: integration (learned decoder, hero, text cut)"
+git tag sp5
 git push
 git push --tags
 ```
 
-**Pass:** release check passes; V9 fingerprints equal; both links work signed out; tag pushed. If the gate is not met at the cut deadline, apply the stage's cut rule from the project plan.
+**Pass:** release check passes; V9 and V9L equal locally and on Qollab; tag pushed. At the cut deadline apply the SP5 cut rule (Section 4.2).
 - [ ] Done
 
-### J4 · JOINT · Sat 20:00 — SP2 integration and publish
+### K3 · JOINT · Sat 20:30 — SP6 integration
 
-As J3, with handoffs H7 and H8, switches rows 5–7 of Appendix T3, and tag `sp2`. Turn on `liveRun` only if D11 (probe P10) passed and the live run worked on Qollab; in that case Person B also uploads Person A's `qollab/live.py` into the main project (as `qollab/live.py`, or `live.py` at the top level if D11 says folders do not work) in step 4. Build with `liveRun: true`, upload, press "Run a fresh experiment" once with **IonQ Forte 1** picked, and check that level 4 shows lit detectors; if it fails, set `liveRun: false`, rebuild and re-upload before publishing.
+As K2, with handoffs N5–N7, switches rows 17–24 (row 24 only if Level 5 v2 is ready), and tag `sp6`. Also: play "Learn the noise" end to end; switch to phase-flip in the header and check Levels 3–5; check the ion crosstalk view.
 - [ ] Done
 
-### J5 · JOINT · Sun 09:00 — SP3 integration and publish
+### K4 · JOINT · Sun 13:00 — SP7 integration
 
-As J3, with handoffs H9 and H10, switches rows 8–10, and tag `sp3`. Test both platforms.
+As K2, with switches rows 25–28 and tag `sp7`. Test every level, the basis toggle, the tour and the live run (IonQ Forte 1 picked). If K0 has cleared, publish both projects (public, MIT, attribution) and test signed out.
 - [ ] Done
 
-### J6 · JOINT · Sun 13:00 — SP4 integration and publish
+### K5 · JOINT · Sun 14:00 — Hallway test
 
-As J3, with handoff H11, switches rows 11–12, and tag `sp4`. Test all five levels.
+**Do:** run Appendix U10 with three people who are not on the team. Person B runs the sessions; Person A takes notes. Write the findings into DECISIONS row E10 as a ranked list.
+**Pass:** at least two of three can state the main finding in one sentence; otherwise the top three findings become FIX prompts at 15:00 (text cuts before features).
 - [ ] Done
 
-### J7 · JOINT · Sun 17:30 — Page review
+### K6 · JOINT · Sun 16:30 — Demo video
 
-**Do:** both read `docs/project_page.md` and the published page end to end. Person A checks every number against `data/results` and `docs/notes_results.md`; Person B checks the instructions by following them literally in a signed-out window.
-**Pass:** both agree the page is final apart from bug fixes.
+**Do:** record Appendix U9 on the SP7 build (or the fixed build after K5). Person B drives the screen; Person A narrates the physics lines. Keep it at 2:00 or less. Export MP4; upload where the submission form requires.
+**Pass:** video under 2:00, captions or a transcript attached.
 - [ ] Done
 
-### J8 · JOINT · Sun 21:00 — Release-candidate cross-review
+### K7 · JOINT · Sun 18:00 — Page review
 
-**Do:** each of you creates a diff of the other's files since `sp4` (Appendix T7) and reviews it in a fresh Claude chat with the review prompt (Appendix T5), adding: "Also read docs/project_page.md and flag any claim not supported by data/results or docs/notes_results.md." Owners fix blocking findings with the fix prompt; Person B tags `rc1` and pushes.
+**Do:** both read `docs/project_page.md`, the README and the published (or private) page end to end. Person A checks every number against `data/results` and `notes_results.md`; Person B follows every instruction literally in a signed-out window. Revisit the K0 decision table.
+**Pass:** both agree the page is final apart from bug fixes; the README disclosure matches the K0 outcome.
+- [ ] Done
+
+### K8 · JOINT · Sun 20:00 — Release-candidate cross-review
+
+**Do:** each creates `git diff sp7..HEAD` plus `git diff window-start..sp7` of the other's files (Appendix U6) and reviews it in a fresh Claude chat with the review prompt. Owners fix blocking findings with the fix prompt. Person B tags `rc2` and pushes.
 **Pass:** no blocking finding open.
 - [ ] Done
 
-### J9 · JOINT · Sun 22:30 → Mon 01:30 — Freeze, verify, submit
+### K9 · JOINT · Sun 22:30 → Mon 01:30 — Freeze, verify, submit
 
-No new features from here on.
 **Do:**
-1. **Person B:** `git pull --rebase`, `npm test`, `npm run build`, `npm run check`; final upload of the three files `dist/qollab/index.html`, `main.css` and `main.js` (plus `qollab/live.py` if `liveRun` is on); confirm public and MIT on the main project.
-2. **Person A:** `node tools/sweep.mjs --diag`; confirm the fingerprint on the published page matches; confirm the bank generator project is public, MIT, and runs its smallest configuration.
-3. **Both:** test in signed-out private windows (Person A in Chrome, Person B in Edge): every level, the platform toggle, the live run, Diagnostics.
-4. **The registered team lead:** submit through the global process with the main project link, the generator link and the video; save a screenshot of the confirmation and share it.
-5. **Person B:** `git tag v1.0`, `git push --tags`.
+1. **Person B:** `git pull --rebase`, `npm test`, `npm run build`, `npm run check`; final upload of the three files plus `live.py` (top level, D11); confirm visibility and MIT.
+2. **Person A:** `node tools/sweep.mjs --diag` and `--diag --decoder learned`; both hashes match the page; the bank generator runs `rep_d3_r1_L0` and `repx_d3_r1_L0`.
+3. **Both:** signed-out private windows (A in Chrome, B in Edge): hero, every level, basis toggle, tour, live run, Diagnostics.
+4. **Team lead:** submit (main project link, generator link, video, and the disclosure per K0); screenshot the confirmation.
+5. **Person B:** `git tag v2.0` and `git push --tags`.
 
-**Pass:** submission confirmed by Mon 01:30. Until 04:30, act only if a platform problem stops the submitted project from running.
+**Pass:** submission confirmed by Mon 01:30.
 - [ ] Done
 
 ---
 
-## 6. Person A checklist — physics and data
+## 7. Person A checklist — physics and data
 
-### A1 · SELF · before Thu 8 Oct — Derivations and parameter cards
+### A40 · CLAUDE CODE · Sat 09:30 — CC-A10: learned edge rates (`dem.js`)
 
-**Why:** you check every physics prompt's output against your own derivations, and the parameter cards must be sourced before the build.
-**Do:** derive on paper: detector definitions and pair shapes; $w=\ln[(1-p)/p]$ and soft weight $=|\ell|$; the Poisson LLR $n\ln(R_b/R_d)-(R_b-R_d)\tau$ and the pumping mixture likelihood; the superconducting steady states, $|\Delta\alpha|^2$, SNR, $\tfrac12\operatorname{erfc}(\text{SNR}/2\sqrt2)$ and the decay mixture; $p_{\text{idle}}=\tfrac12(1-e^{-\tau/T_1})$ and the injection rule; $\epsilon_L=\tfrac12[1-(1-2p_L)^{1/r}]$. Then fill all three parameter cards (Appendix T6) with values and sources; label anything unsourced `UNSOURCED (illustrative)`.
-**Pass:** every derivation is your own; every parameter has a value and a source or the label.
-- [ ] Done
-
-### A2 · QOLLAB · PLATFORM · Sat 04:35 — Python probes
-
-**Why:** the bank generator and the live run depend on these facts.
-**Do:** run probes P2, P3, P4 and P7 from Appendix T4 in a private Python/Qiskit project on Qollab. Start P4 (the 25-qubit job) early and do P7 while it runs.
-**Pass:** answers for D1, D2, D3 (or "pending"), D6 and D7 noted for J2 (handoff H13).
-- [ ] Done
-
-### A3 · JOINT · Sat 06:00 — J2
-
-Take part in J2. After Person B's push, clone the repository (J2 step 5).
-- [ ] Done
-
-### A4 · TERMINAL · Sat 06:25 — Start your session
-
-**Do:** wait for Person B's scaffold push (`HANDOFF scaffold`, about 06:30), then:
-
-```bat
-cd /d "E:\My Project\signal-to-syndrome"
-git pull --rebase
-npm install
-%USERPROFILE%\venvs\s2s\Scripts\activate.bat
-claude
-```
-
-**Pass:** `npm test` passes in a second terminal; Claude Code is running in the repository folder.
-- [ ] Done
-
-### A5 · CLAUDE CODE · Sat 06:30 — CC-A1: bank generator, circuit tests, bank assembler
-
-**Why:** the shot banks are the project's only quantum data.
-**Depends on:** nothing from Person B except the scaffold.
+**Why:** the forte-1 banks contain diagonal correlations as strong as the time-like ones (p ≈ 0.0096 against 0.0091–0.0096 at d = 5, r = 5 and d = 7, r = 3), which the decoder must know about.
+**Depends on:** nothing from Person B.
 **Do:** in Claude Code, `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
 Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
 
-Task CC-A1: the Qollab bank generator, its local tests, and the bank assembler.
-Create exactly: qollab/bank_generator.py, validation/test_circuits.py, tools/assemble_bank.mjs, tests/assemble_bank.test.js, and qollab/live.py only if D11 in DECISIONS.md says the live run works (part E).
+Task CC-A10: learned per-class edge rates from detector correlations.
+Create exactly: src/core/dem.js, tests/dem.test.js. Do not import graph.js (it may not have diagonal edges yet); enumerate incident edges yourself as specified below.
 
-A. qollab/bank_generator.py (standard library + qiskit only). Platform facts from DECISIONS.md: Qollab allows ONE job per code run; IonQ optimises abstract-gate circuits away, so every circuit is submitted in native gates (D1); the seed is set only with set_options (D2).
-1. Settings at the top, the only line a person edits between runs: CONFIG = the name of the one configuration to run (for example "rep_d3_r1_L0"). Also at the top: SHOTS = D8; a SEEDS table giving every configuration name (banks and V4) its own fixed sampler seed, distinct integers between 1 and 2^31.
-2. build_memory_circuit(d, r, logical, inject=None) -> (QuantumCircuit, layout). One quantum register: data qubits 0..d-1, then one fresh ancilla per check per round. If logical == 1, apply X to every data qubit first. Round k, check j: cx(data j -> ancilla), then cx(data j+1 -> ancilla). One classical register with n_clbits = (d-1)*r + d and the fixed layout in CLAUDE.md. All measurements at the end. inject is a list of (data_qubit, after_round): apply X to that data qubit after all CNOTs of round after_round and before round after_round + 1 (after_round = r-1 means just before the final readout). layout = {"ancilla": [[clbit of check j for j] for k], "data": [clbit of qubit i for i]}.
-3. CONFIGS: rep_d3_r1, rep_d3_r3, rep_d5_r3, rep_d5_r5, rep_d7_r3, each for logical 0 and 1, named like rep_d5_r3_L0.
-4. V4_BATCH: for (d, r) in [(3, 3), (5, 3)], logical 0, every single injection site (i, k) with i in 0..d-1 and k in 0..r-1, named like v4_d3_r3_i1_k0. These run with noise model "ideal" (not forte-1) and 100 shots, one configuration per run like the banks.
-5. run_native(qc, shots, noise_model, seed), the native recipe of D1, exactly:
-   - first assert backend.options.get("noise_model") == "forte-1"; otherwise raise an error telling the user to pick IonQ Forte 1 in the Select QPU dialog;
-   - nb = backend.with_name(backend.name, gateset="native", noise_model=noise_model); nb.set_options(noise_model=noise_model, sampler_seed=seed). Never pass the seed as a run() argument (it has no effect, D2). Never construct a provider or read an API key;
-   - qn = transpile(qc, backend=nb); native_ops = dict(qn.count_ops());
-   - job = nb.run(qn, shots=shots); poll job.status() every 5 s until DONE, ERROR or CANCELLED (from qiskit.providers.jobstatus import JobStatus); raise a clear error unless DONE;
-   - return (job.result().get_counts(), job.job_id(), native_ops).
-6. detector_rate(counts, d, r, layout): the fraction of detector bits equal to 1 over all detectors and all shots, with detectors as defined in CLAUDE.md (layer k < r: m[k][j] XOR m[k-1][j], with m[-1] = 0; final layer: x[j] XOR x[j+1] XOR m[r-1][j]).
-7. to_bank(...) builds the s2s-bank/1 object (fields: schema, code, d, r, logical, mode "fresh-ancilla", backend (= backend.name), noise_model, sampler_seed, job_id, native_ops, date (UTC, ISO 8601), detector_rate, shots, n_qubits, n_clbits, layout, bit_order "qiskit-little-endian", key_encoding "hex", counts, checksum). Keys: strip spaces, check length == n_clbits, convert binary to lowercase hex without prefix. checksum = {total_shots, n_keys, sha256 of json.dumps(counts, sort_keys=True, separators=(",", ":"))}. For V4 entries also store "inject": [[i, k]].
-8. emit(bank, name): S = json.dumps(bank, sort_keys=True, separators=(",", ":")); print the line "BEGIN_BANK <name> chunks=<N> sha256=<sha256 of S>", then for each 4000-character chunk the line "--- chunk <i>/<N> ---" followed by the chunk on its own line, then the line "END_BANK <name>" (D7: the person copies everything from BEGIN_BANK to END_BANK out of the console).
-9. main(): look up CONFIG in CONFIGS and V4_BATCH (an unknown name raises an error listing the valid names); print one progress line with the name, qubit count, shots, seed and the expected duration (about 6-8 min per 4000 shots at d = 3, r = 3, longer for larger d and r; D3); submit exactly one job with run_native (noise model "forte-1" for rep_* names, "ideal" for v4_* names); compute and print detector_rate; for a rep_* configuration whose detector_rate is 0, raise an error saying the circuit was optimised away and the bank must not be used, and emit nothing; otherwise emit. The last line of the file is: if "backend" in globals(): main()
-   so that importing the module locally never runs a job.
+Edge classes (CLAUDE.md v2, "Decoding graph"): for detector (k, j), index k*(d-1)+j, layers k = 0..r, checks j = 0..d-2:
+- space: (k, j)-(k, j+1), a flip of data qubit j+1 in layer k (all layers 0..r);
+- spaceBoundary: data qubit 0 in layer k joins (k, 0) to the boundary; data qubit d-1 joins (k, d-2) to the boundary;
+- time: (k, j)-(k+1, j) for k = 0..r-1;
+- diag: (k, j+1)-(k+1, j) for k = 0..r-1, j = 0..d-3 (a fault on data qubit j+1 between its CNOT into check j and its CNOT into check j+1 in round k).
 
-B. validation/test_circuits.py (pytest, qiskit.providers.basic_provider.BasicSimulator, circuits of at most 24 qubits only)
-1. rep_d3_r1, rep_d3_r3, rep_d5_r3, logical 0 and 1, no injection: exactly one outcome; every ancilla bit 0; every data bit equals the logical value.
-2. d = 3, r = 3, logical 0, every injection site (i, k): exactly one outcome, equal to the prediction: the ancilla bits of checks i-1 and i (those that exist) flipped in every round > k, and data bit i flipped.
-3. Layout: classical-bit indices match the CLAUDE.md formula for d = 5, r = 3.
-4. detector_rate is 0 for counts containing only the error-free outcome and positive when one ancilla bit is flipped in some shots (a non-vacuous pair).
-5. SEEDS has one entry per configuration name in CONFIGS and V4_BATCH, all distinct, all in 1..2^31.
-Each test has a comment stating, in words, the break it catches.
+1. pairRate(xi, xj, xij): p = 1/2 - 1/2 * sqrt(1 - 4 (xij - xi xj) / (1 - 2 xi - 2 xj + 4 xij)); clamp the radicand at 0 and the result to [0, 0.5). xi, xj are firing rates, xij the joint rate.
+2. estimateEdgeRates(detectorArrays, d, r) -> { classes: { space, spaceBoundary, time, diag }, counts: { space, spaceBoundary, time, diag }, pij: Float64Array(nDet*nDet), firing: Float64Array(nDet), antiDiag, nShots }
+   - nDet = (d-1)*(r+1). pij is symmetric, row-major, with pij[i*nDet+i] = firing rate of i. Compute pij for every pair (used by the heatmap).
+   - classes.space, classes.time, classes.diag: the mean of pairRate over all pairs of that class.
+   - antiDiag: the mean over (k, j)-(k+1, j+1) pairs (not an edge; a control that must be near 0).
+   - classes.spaceBoundary: for every boundary detector (j = 0 or j = d-2) in every layer, solve 1 - 2 f = (1 - 2 pb) * product over its other incident edges of (1 - 2 p_class), where f is its firing rate, the other incident edges are the space, time and diag edges touching it (enumerate: space edges of data qubits j and j+1 in layer k that are not boundary edges; time edges to layers k-1 and k+1 that exist; diag edges (k, j)-(k+1, j-1) if k <= r-1 and j >= 1, and (k-1, j+1)-(k, j) if k >= 1 and j+1 <= d-2), using the class means; pb = (1 - (1 - 2f) / product) / 2, clamped to [1e-5, 0.5). For d = 3 both ends of a layer touch the same detector pair; treat each end separately. Return the mean over all boundary detectors.
+   - Every class value is clamped to [1e-5, 0.5).
+3. ratesFromBanks(banks) -> estimateEdgeRates on the pooled detectors of the given banks (same d, r, basis; throw otherwise). Use expandShots, split and computeDetectors through the Module API.
 
-C. tools/assemble_bank.mjs <file or folder>... [--out <dir>, default data/banks]
-A folder argument means every .txt file in it. Parse every BEGIN_BANK ... END_BANK block (tolerate Windows line endings and blank lines), check chunk count and order, join chunks, verify the sha256 from the BEGIN_BANK line, parse the JSON, re-verify checksum.total_shots == sum of counts == shots, n_keys, and the counts sha256 using the same canonical form as Python (keys sorted, separators without spaces). Reject a bank whose name starts with rep_ and whose detector_rate is missing or 0 (the circuit was optimised away). Write <out>/<name>.json pretty-printed with 2 spaces; print one summary line per bank (name, shots, distinct keys, detector_rate, sampler_seed); exit 1 with a clear message on any mismatch.
+Tests (break comments required; fixed seeds; tolerances of at least 4 SE with the formula in the comment, SE of a pair rate taken as sqrt(p / N) for N shots):
+- Synthetic recovery (V12a): d = 5, r = 5, N = 60000 shots, every edge of the four classes flipped independently with space 0.008, spaceBoundary 0.006, time 0.010, diag 0.009; detectors = XOR of incident flipped edges (build the incidence in the test); each recovered class within 4 SE (spaceBoundary within 6 SE, because it is solved from single-detector rates); antiDiag within 4 SE of 0.
+- Non-vacuous control: the same generator with diag = 0 gives classes.diag within 4 SE of 0, and with diag = 0.02 gives a value above 0.015.
+- pairRate: independent detectors (xij = xi xj) give 0; the radicand clamp returns 0.5 - epsilon, never NaN.
+- pij symmetric; firing on the diagonal.
 
-D. tests/assemble_bank.test.js: a round trip on a synthetic block built in the test; a block with one corrupted character must fail; a block with a missing chunk must fail; a rep_ bank with detector_rate 0 must fail while the same bank with detector_rate 0.03 passes.
-
-E. qollab/live.py (only if D11 says the live run works; otherwise skip it and say so in the report). A standalone file (it is uploaded alone into Person B's JavaScript project, so it must not import bank_generator) with run_live(backend, shots=200, seed=7): build the d = 3, r = 3, logical 0 circuit with the same qubit order and classical-bit layout as build_memory_circuit, run it with the native recipe of part A step 5 (noise model "forte-1", sampler_seed = int(seed), shots = int(shots)) and return the counts as a plain dict of binary-string keys to int, as the P10 helper in the team checklist (Appendix T4) does. Add to validation/test_circuits.py a test that the circuit run_live builds (expose it as live_circuit()) gives the same single noiseless outcome as build_memory_circuit(3, 3, 0).
-
-Run `npm test`, then `python -m pytest validation -q`. End with the report format.
+Run `npm test`. End with the report format.
 ```
 
-**Pass:** `npm test` passes; `python -m pytest validation -q` passes (V3).
+**Pass:** all tests pass, including V12(a).
 - [ ] Done
 
-### A6 · TERMINAL · VERIFY · GIT · Sat 07:30 — Check V3 and push
+### A41 · TERMINAL · GIT · Sat 10:30 — Check and push
 
-**Do:** check one injection prediction in `validation/test_circuits.py` against your derivation by hand. Then:
+**Do:** run the estimator on the real banks as a sanity check:
+
+```bat
+node -e "import('./src/core/dem.js').then(async m=>{const fs=await import('fs');const b=['rep_d5_r5_L0','rep_d5_r5_L1'].map(n=>JSON.parse(fs.readFileSync('data/banks/'+n+'.json')));console.log(m.ratesFromBanks(b).classes)})"
+npm test
+git pull --rebase
+git status --short
+git add src\core\dem.js tests\dem.test.js
+git commit -m "CC-A10: learned edge rates from detector correlations"
+git push
+```
+
+**Pass:** d = 5, r = 5 gives roughly space 0.008, time 0.0096, diag 0.0096 (the review's numbers); antiDiag near 0.
+- [ ] Done
+
+### A42 · CLAUDE CODE · Sat 10:45 — CC-A11: phase-flip memory circuits
+
+**Why:** the bit-flip memory cannot see Z errors; the phase-flip memory makes dephasing and forte-1's Z-type noise visible with the same decoder.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A11: the phase-flip (X-basis) repetition memory in the bank generator, its local tests and the assembler.
+Modify exactly: qollab/bank_generator.py, validation/test_circuits.py, tools/assemble_bank.mjs, tests/assemble_bank.test.js. Do not change qollab/live.py.
+
+1. build_memory_circuit(d, r, logical, inject=None, basis="Z", inject_pauli="X"):
+   - basis "Z": unchanged, bit for bit (existing tests must still pass).
+   - basis "X": if logical == 1 apply X to every data qubit, then H to every data qubit (|+...+> or |-...->). Round k, check j, in the same order as basis Z (checks j = 0..d-2, inside a check data j before data j+1): h(anc); cx(anc -> data j); cx(anc -> data j+1); h(anc). After the last round, h on every data qubit, then measure everything with the same classical-bit layout as basis Z.
+   - inject applies inject_pauli ("X" or "Z") at the same position as today. Basis X with inject_pauli "Z" must give the same bit pattern as basis Z with "X".
+2. CONFIGS_X: repx_d3_r1, repx_d3_r3, repx_d5_r3, repx_d5_r5, repx_d7_r3, each with L0 (|+>) and L1 (|->), named like repx_d5_r3_L0; noise_model forte-1; SHOTS. V13_BATCH: v13_d3_r3_i{i}_k{k} for the three sites (0, 0), (1, 1), (2, 2), basis X, inject_pauli Z, noise_model ideal, V4_SHOTS. Add a distinct fixed seed for every new name to SEEDS (integers in 1..2^31, distinct from all existing seeds).
+3. Banks of basis X carry "basis": "X"; Z banks keep their fields (no basis field is needed; readers default to "Z"). Everything else (native recipe, one job per run, BEGIN_BANK printing, detector_rate check) is unchanged.
+4. validation/test_circuits.py (BasicSimulator, at most 24 qubits): basis X, logical 0 and 1, d = 3 r = 1, d = 3 r = 3, d = 5 r = 3: exactly one outcome, every ancilla bit 0, every data bit equal to the logical value (V13). Basis X, d = 3, r = 3, every Z-injection site: the single outcome equals the basis-Z X-injection outcome for the same site. SEEDS covers every name, all distinct. Basis Z tests unchanged.
+5. tools/assemble_bank.mjs: accept names repx_d{d}_r{r}_L{L} and v13_d{d}_r{r}_i{i}_k{k}; check the name against the bank's d, r, logical, inject and basis; treat repx_ like rep_ for the detector_rate > 0 rule. tests/assemble_bank.test.js: a repx_ round trip; a repx_ block whose bank says basis "Z" fails.
+
+Run `python -m pytest validation -q` and `npm test`. End with the report format.
+```
+
+**Pass:** V13 (local) passes; all old circuit tests unchanged and passing.
+- [ ] Done
+
+### A43 · QOLLAB · TERMINAL · Sat 11:30 — Push, then run the X-basis and V13 banks
+
+**Do:**
 
 ```bat
 python -m pytest validation -q
 npm test
 git pull --rebase
 git status --short
-git add -A
-git commit -m "CC-A1: bank generator, circuit tests, assembler"
+git add qollab\bank_generator.py validation\test_circuits.py tools\assemble_bank.mjs tests\assemble_bank.test.js
+git commit -m "CC-A11: phase-flip memory circuits, V13 tests"
 git push
 ```
 
-Before `git add -A`, check that `git status --short` lists only files you own.
-**Pass:** pushed.
+Paste the new `qollab/bank_generator.py` into your bank-generator project (private). Run, one configuration per run, IonQ Forte 1 picked: `repx_d3_r1_L0`, `repx_d3_r1_L1`, `repx_d3_r3_L0`, `repx_d3_r3_L1`, `repx_d5_r3_L0`, `repx_d5_r3_L1`, `repx_d5_r5_L0`, `repx_d5_r5_L1`, `repx_d7_r3_L0`, `repx_d7_r3_L1`; then `v13_d3_r3_i0_k0`, `v13_d3_r3_i1_k1`, `v13_d3_r3_i2_k2`. Save each block to `data/raw/repx_<...>.txt` or `data/raw/v13/<name>.txt`. Budget 6–8 min per configuration (more for d = 7): roughly 1.5–2 hours, in the background while you do A44–A47.
+**Pass:** every bank has a detector rate above 0 (repx) or exactly one outcome (v13).
 - [ ] Done
 
-### A7 · QOLLAB · Sat 07:40 — First bank end to end
+### A44 · CLAUDE CODE · Sat 11:45 — CC-A12: naive and learned decoding, Stage dem, Stages 1–2 rerun (Z)
 
-**Do:** on Qollab create a Python/Qiskit project `Signal to Syndrome — bank generator` (you own it, D10); paste `qollab/bank_generator.py`; set `CONFIG = "rep_d3_r1_L0"`; press Run and pick **IonQ Forte 1** in the Select QPU dialog (D1). One configuration per run: Qollab refuses a second job in the same run. When it finishes, use the console toolbar's copy (or download) button and save everything from the `BEGIN_BANK` line to the `END_BANK` line into `data/raw/rep_d3_r1_L0.txt`. The console shows only the latest run, so copy before you run again (D7). Then:
-
-```bat
-node tools/assemble_bank.mjs data\raw\rep_d3_r1_L0.txt
-git add data
-git commit -m "First bank"
-git pull --rebase
-git push
-```
-
-Send `HANDOFF H4 (first bank): rep_d3_r1_L0`.
-**Pass:** the assembler reports no error; the printed detector rate is above 0 (for reference, P9 gave 0.0325 at $d=3$, $r=3$; a rate of 0 means the circuit was optimised away and the generator refuses to print the bank); the bank shows several distinct outcomes; its provenance has `backend`, `noise_model` `forte-1`, `sampler_seed`, `job_id`, `native_ops` and `date`.
-- [ ] Done
-
-### A8 · QOLLAB · Sat 07:55 — Run the other banks, one run each
-
-**Do:** run the other nine configurations one at a time, smallest first: `rep_d3_r1_L1`, `rep_d3_r3_L0`, `rep_d3_r3_L1`, `rep_d5_r3_L0`, `rep_d5_r3_L1`, `rep_d5_r5_L0`, `rep_d5_r5_L1`, `rep_d7_r3_L0`, `rep_d7_r3_L1`. For each: set `CONFIG`, Run with **IonQ Forte 1**, wait, copy the `BEGIN_BANK` … `END_BANK` block into `data/raw/<name>.txt`, then start the next one. Budget about 6–8 min per configuration at $d=3$ and more for larger $d$ and $r$ (D3), so the nine runs take roughly 1.5–2 hours: work on A9 and A10 between runs, keeping the Qollab tab open. If a run shows `detector rate 0`, stop and tell Person B (the native path has failed); do not use that bank.
-**Pass:** each finished configuration has its own raw file with one complete `BEGIN_BANK` … `END_BANK` block.
-- [ ] Done
-
-### A9 · CLAUDE CODE · Sat 08:00 — CC-A2: flat readout, idle errors, calibration, statistics
-
-**Depends on:** H1 (`src/core/rng.js`), due 07:45. Run `git pull --rebase` first; if `src/core/rng.js` is not there yet, do A11 first and come back.
-**Do:** in Claude Code, `/clear`, then paste:
+**Depends on:** N1 (`graph.js` with diagonal edges) and N2 (`bank.js` basis). `git pull --rebase` first; if N1 is missing, write the code and run only the tests that do not need it, then rerun at N1.
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
 Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
 
-Task CC-A2: the flat readout model, the idle-error hook, calibration and statistics.
-Create exactly: src/core/readout/flat.js, src/core/idle.js, src/core/calibrate.js, src/core/stats.js, tests/flat.test.js, tests/idle.test.js, tests/calibrate.test.js, tests/stats.test.js. Follow the Module API in CLAUDE.md exactly. Use createRng from src/core/rng.js (Person B's module) for all randomness; if it is missing, stop and report.
+Task CC-A12: naive and learned noise models in the sweep engine, the Stage dem results, and the Stage 1 and 2 reruns.
+Modify exactly: src/core/sweep.js, tools/sweep.mjs, tests/sweep.test.js. Use buildGraph(d, r, { diagonal }) from graph.js and ratesFromBanks / estimateEdgeRates from dem.js through the Module API.
 
-1. readout/flat.js: createFlatReadout({ epsilon }) implementing the readout-model contract; require 0 <= epsilon < 0.5. measure flips trueBit with probability epsilon; llr = +ln((1-eps)/eps) if hard is 1, else its negative (+/-Infinity when epsilon = 0). idleFlipProbability() = 0. averageAssignmentError() = epsilon.
-2. idle.js: applyX(m, x, d, r, i, k) returns new arrays with the CLAUDE.md idle rule applied for one X on data qubit i after round k (valid for k = 0..r-1; k = r-1 flips only x[i]). injectIdle(m, x, d, r, p, rng) returns new arrays, applying applyX independently with probability p for every data qubit i and every round k = 0..r-2 (no idle error after the last round). Inputs are never mutated.
-3. calibrate.js: estimatePGate(detectorArrays, d, r): bulk detectors are layers 1..r-1 (layer 0 if r = 1; never the final layer). Model: each bulk detector touches 4 independent edges with the same probability p, so P(fire) = (1 - (1 - 2p)^4) / 2. Solve for p by bisection on [0, 0.5) from the observed mean firing rate. Return { p, rate, nDetectors, nShots }. Comment that time-like edges are counted as gate-noise edges because readout noise is off during calibration.
-4. stats.js: wilson(k, n, z = 1.96) -> { p, lo, hi }; bootstrap(nItems, statFn, B, rng) -> { mean, lo, hi } using the 2.5th and 97.5th percentiles; statFn receives an array of resampled indices.
+1. sweep.js (CLAUDE.md v2 Module API):
+   - decodeShot({ ..., noise, basis }) where noise is { model: "naive", pGate } or { model: "learned", rates } (rates = classes from dem.js). If noise is absent and pGate is given, treat it as { model: "naive", pGate } so that every existing caller and the V9 hash are unchanged. basis defaults to bank.basis ?? "Z" and is passed to readout.idleFlipProbability(basis) (models that ignore the argument stay valid).
+   - naive: buildGraph(d, r, { diagonal: false }) and today's edgeWeights, unchanged.
+   - learned: buildGraph(d, r, { diagonal: true }); space edges p = rates.space (rates.spaceBoundary for data qubits 0 and d-1) in layer 0; xorP(that, pIdle) in layers 1..r-1; xorP(that, pRead_i) in layer r; time edges xorP(rates.time, pRead); diag edges rates.diag (no idle or readout term). pRead as today (hard: averageAssignmentError, soft: pFromLlr).
+   - runPoint accepts noise the same way. diagnostic(bank, { decoder = "naive" } = {}): naive is the existing V9 computation, unchanged; learned uses rates from ratesFromBanks([bank]) and otherwise the same settings.
+2. tools/sweep.mjs:
+   - --decoder naive | learned | both (default both) for --stage 1, 2, 3, 4: every series gets "decoder": "naive" | "learned" (U4). Learned rates come from ratesFromBanks of the L0 and L1 banks of the same (d, r, basis), pooled.
+   - --basis Z | X (default Z): selects rep_* or repx_* banks; X results go to *_x.json (U4). If no repx_* banks exist, exit with a clear message.
+   - --stage dem: writes data/results/dem_forte1.json (U4): for every available (d, r, basis): pij, firing, classes, antiDiag, naive pGate, firing-rate ratio X/Z per (d, r) where both exist (O4); out of sample (V12b): rates from L0 decode L1 and rates from L1 decode L0, flat epsilon 0.02, hard, with naive for comparison; decoderComparison: naive against learned, hard and soft, at flat epsilon in [1e-9, 0.02], ion at tau in [3, 20, 100] us and superconducting at tau in [0.5, 0.7, 1.0] us with the current cards, d = 3, 5, 7, r = 3, R = 2, Wilson intervals.
+   - --diag --decoder learned prints V9L; --diag alone prints V9 unchanged.
+   - V11: in --stage 1, also run the learned decoder at epsilon = 0 and 1e-9 for every d and print PASS when the Wilson intervals overlap.
+3. Tests (break comments): naive decodeShot reproduces the pre-change result on a fixed synthetic shot; diagnostic(bank) still returns the V9 hash recorded in DECISIONS for rep_d3_r3_L0; a learned weight table pins one edge of each class (including diag) to its expected p; a synthetic shot with one fired diagonal edge decodes to flip 0 with the learned graph and with cost equal to the diag weight.
 
-Tests (each with the required break comment):
-- flat: the empirical flip rate equals epsilon within 4 binomial standard errors at epsilon = 0.05 with 200000 draws (validation V1); epsilon = 0 never flips and gives infinite |llr|; epsilon = 0.5 is rejected.
-- idle: applyX and injectIdle against hand-computed patterns for d = 3, r = 3, including an end qubit and k = r-1; p = 0 leaves values unchanged and inputs untouched.
-- stats: wilson known values (k = 0, n = 10 gives lo = 0; k = 5, n = 10 is symmetric about 0.5).
-- calibrate: estimatePGate recovers p within 4 standard errors from synthetic detector arrays generated inside the test with the same 4-edge model at p = 0.01 (do not depend on the decoder).
-
-Run `npm test`. End with the report format.
+Run `npm test`, then `node tools/sweep.mjs --stage dem`, `--stage 1`, `--stage 2`, `--diag`, `--diag --decoder learned`. End with the report format.
 ```
 
-**Pass:** all tests pass, including V1.
+**Pass:** tests pass; V9 unchanged; the four commands finish.
 - [ ] Done
 
-### A10 · TERMINAL · GIT · Sat 09:15 — Test and push
+### A45 · TERMINAL · VERIFY · GIT · Sat 13:00 — Check SP5 numbers and hand over
+
+**Do:** check and record in your DECISIONS section and `notes_results.md`: V9 = `53933f98`; V9L (E9); V11 PASS at d = 3, 5, 7; V12(b) learned ≤ naive pooled; O4 not yet (X banks arrive later); the learned Stage 1 curve no longer has the ε = 0 spike; the learned Stage 2 soft against hard at τ = 20 µs (expected: the C2 loss shrinks or disappears). Then:
+
+```bat
+git pull --rebase
+git status --short
+git add src\core\sweep.js tools\sweep.mjs tests\sweep.test.js data\results docs\notes_results.md DECISIONS.md
+git commit -m "CC-A12: learned decoder, Stage dem, Stages 1-2 rerun"
+git push
+```
+
+Send `HANDOFF N3 and N4: sweep.js, dem.js, dem_forte1.json, stage1/2 with naive and learned, V9L <hash>`.
+**Pass:** all checks recorded; if V12(b) fails, say so in the handoff (SP5 cut rule).
+- [ ] Done
+
+### A46 · CLAUDE CODE · Sat 14:30 — CC-A13: idle physics per arm and ion crosstalk
+
+**Do:** first add the card fields of Appendix U5 to `params/ion.json` and `params/sc.json` with values and sources (or the UNSOURCED label). Then `/clear` and paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A13: idle physics per basis for both readout models, and measurement-induced crosstalk on data ions.
+Modify exactly: src/core/readout/ion.js, src/core/readout/sc.js, tests/ion.test.js, tests/sc.test.js. Do not change measure(), the likelihoods or averageAssignmentError().
+
+Definitions (CLAUDE.md v2, "Idle errors"): for a wait of tau us,
+- Z-basis (bit-flip) memory sees X and Y: pT1 = 1/2 (1 - exp(-tau / T1));
+- X-basis (phase-flip) memory sees Z and Y: pT2 = 1/2 (1 - exp(-tau / T2));
+- ion crosstalk (resonant light scattered by the ancilla's detection, absorbed by a data ion, fully depolarising it): pXt = 1/2 (1 - exp(-Gamma_xt * tau)) in either basis;
+- total = xorP(idle part, pXt) (ion), idle part only (superconducting).
+
+1. ion.js: read T2_idle_us and crosstalk_rate_per_us from the card (cardValue rules as today; crosstalk default 0 when absent, T2 default 2*T1 when absent). idleFlipProbability(basis = "Z") returns the total; idleBreakdown(basis = "Z") returns { idle, crosstalk, total }. createIonReadout(params, tau, { crosstalkRate } = {}) overrides the card's rate (used by the scan).
+2. sc.js: read T2_us (default 2*T1 when absent); idleFlipProbability(basis = "Z") and idleBreakdown(basis) with crosstalk 0.
+3. Both: throw if T2 > 2*T1, naming the values.
+4. Tests (V14; break comments): the formulas at three tau values; basis "Z" with crosstalk 0 equals the old ion and superconducting values exactly (so V9 and every Z-basis naive number are unchanged); boundary T2 = 2*T1 accepted and T2 = 2*T1*(1 + 1e-9) rejected; crosstalk 0 against 1e-3 /us changes total; idleBreakdown parts recombine with xorP into total.
+
+Run `npm test` and `node tools/sweep.mjs --diag`. End with the report format.
+```
+
+**Pass:** tests pass; V9 unchanged.
+- [ ] Done
+
+### A47 · TERMINAL · GIT · Sat 15:45 — Push and hand over
 
 ```bat
 npm test
 git pull --rebase
 git status --short
-git add -A
-git commit -m "CC-A2: flat readout, idle, calibration, statistics"
+git add src\core\readout params tests\ion.test.js tests\sc.test.js
+git commit -m "CC-A13: idle physics per basis, ion crosstalk, card fields"
 git push
 ```
 
+Record the sources (or UNSOURCED labels) for T2 and Γ_xt in E6 and E7. Send `HANDOFF N5`.
 - [ ] Done
 
-### A11 · QOLLAB · TERMINAL · Sat 09:30 — Collect and assemble the banks
+### A48 · CLAUDE CODE · Sat 16:00 — CC-A14: Stage 1–3 reruns in both bases, budget, crosstalk scan
 
-**Do:** check that every finished A8 configuration has its raw file in `data\raw`, then:
+**Do:** first assemble every finished A43 bank (`node tools/assemble_bank.mjs data\raw` and `node tools/assemble_bank.mjs data\raw\v13`) and commit them. Then `/clear` and paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A14: Stage 1-3 results in both bases with both decoders, the error budget and the ion crosstalk scan.
+Modify exactly: tools/sweep.mjs, tests/v4.test.js (V13 part only), tests/sweep.test.js.
+
+1. Every stage passes basis to decodeShot (CC-A12) and uses readout.idleFlipProbability(basis).
+2. budget (U4), Stages 2 and 3, per basis, at every tau of the grid: readout = empirical assignment error (assignment.empirical); idle and crosstalk = idleBreakdown(basis) parts; gate = mean of the learned class rates for the d = 3, r = 3 banks of that basis. Label: "error sources per round, per qubit (approximate)".
+3. crosstalkScan (U4), Stage 2 only, per basis: rates [0, 1e-6, 1e-5, 1e-4, 1e-3] per us (plus the card value if different), the full tau grid, d = 3 and 5, hard and soft, learned decoder, R = 2; for each rate and (d, mode) store pL, lo, hi and the tauLog optimum with atEdge (findMinimum, log x). Print, per rate, whether an interior tauLog < tauPhys exists (C1 ion part).
+4. V13 test: the three v13_* banks have exactly one outcome, equal to the basis-Z injection prediction (applyX on the error-free bits) for the same site.
+5. Run: --stage 1, 2, 3 with --basis Z and with --basis X (decoder both). Print V7, V8, V10 as before for both bases, and O4.
+
+Run `npm test` and the six stage runs (expect about an hour in total; Stage 3 is the slow one). End with the report format.
+```
+
+**Pass:** tests pass (V13); six results files written.
+- [ ] Done
+
+### A49 · TERMINAL · VERIFY · GIT · Sat 18:00 — Check the reruns and hand over
+
+**Do:** check and record: V7, V8, V10 unchanged in the Z basis; learned soft against hard (C2) in both arms; C1 superconducting with the learned decoder; the crosstalk scan verdict (C1 ion part) per rate; C6 (τ*_log X against Z, superconducting); O4 ratio per (d, r); the budget arrays add up to sensible magnitudes (readout ~10⁻³–10⁻², idle ≤ 3×10⁻², gate ~10⁻²). Write them into `notes_results.md`. Then commit `data\banks data\raw data\results tools\sweep.mjs tests docs\notes_results.md DECISIONS.md`, push, and send `HANDOFF N6`.
+**Pass:** every check recorded with its source file.
+- [ ] Done
+
+### A50 · CLAUDE CODE · Sat 18:30 — CC-A15: Stage 4 v2 (framing, trade-off, sensitivity effects, C1–C6)
+
+**Do:** first decide whether the ion's two-qubit gates in one round run in parallel (two layers per round) or one after another (2(d−1) layers per round). Use a source if you find one; otherwise choose sequential as the conservative case. Record it in E8 and set `gate_layers_per_round` in `params/cycle.json` (Appendix U5). Then `/clear` and paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A15: Stage 4 v2.
+Modify exactly: src/core/metrics.js, tests/metrics.test.js, tools/sweep.mjs.
+
+1. metrics.js: cycleTime(card, tau, d) uses card.gate_layers_per_round: a number, or { "value": "2*(d-1)" } meaning 2*(d-1) (no other expressions are accepted; throw otherwise). roundsPerSecond(Tcyc_us) = 1e6 / Tcyc_us. tradeoffCurve(taus, pLs, r, card, d) -> { tau, roundsPerSecond, perRound } arrays.
+2. --stage 4 (Z basis; learned decoder for every headline value; naive kept only in decoderComparison):
+   - title and framing in the file: "framing": "Two readout physics models at fixed gate noise: the same IonQ forte-1 banks and learned decoder; different readout models, idle physics and cycle times."
+   - platforms[p].tradeoff per d and mode (U4); platforms[p].budgetAtOptimum (budget at tauLog, d = 3 hard);
+   - keep perRound, perMicrosecond, breakEven (byMode, empiricalAxis) as today;
+   - sensitivity rows: keep the verdict fields and add effect = { perRound_d3_hard: { "trapped-ion", "superconducting" }, tauLog_d3_hard: { ... } } with values at the reduced statistics already used, plus the same two numbers in sensitivityBaseline; parameters now include T2 and the crosstalk rate;
+   - conclusions C1 (revised), C2, C3 (replaced), C4, C5, C6 with fields { statement, verdict ("held" | "refuted" | "undetermined"), automated, note, plain } exactly as U4; plain is "" (Person A fills it at A55); C3 uses the U4 dominance rule; C5 compares learned against naive at tauLog per (d, arm, mode); C6 compares superconducting tauLog X against Z (needs stage3_sc_x.json).
+3. --stage 4 --basis X writes stage4_comparison_x.json with tradeoff, perRound and budgetAtOptimum only.
+4. Tests (V15; break comments): cycleTime with 2 and with "2*(d-1)" at d = 5; an unknown expression throws; tradeoffCurve on hand-computed numbers; the C3 dominance rule on two synthetic curves, one dominating and one not.
+
+Run `npm test`, `node tools/sweep.mjs --stage 4`, `node tools/sweep.mjs --stage 4 --basis X`. End with the report format.
+```
+
+**Pass:** tests pass; both files written.
+- [ ] Done
+
+### A51 · TERMINAL · VERIFY · GIT · Sat 19:45 — Check Stage 4 and hand over
+
+**Do:** hand-check V15 for one point per arm; read every conclusion; make sure no automated verdict contradicts your reading without a note. Commit `src\core\metrics.js tests\metrics.test.js tools\sweep.mjs params\cycle.json data\results DECISIONS.md`, push, send `HANDOFF N7`.
+- [ ] Done
+
+### A52 · SELF · Sat 21:15 — Results notes v2
+
+**Do:** rewrite the "Verdicts" part of `docs/notes_results.md` for C1–C6 and O4, each with the full-statistics verdict, the numbers and their sources, and a "what changed from v1" line (the learned decoder, the new idle physics). Note plainly which v1 conclusions were decoder artefacts. Commit and push.
+- [ ] Done
+
+### A53 · REVIEW · Sun 05:30 — Review Person B's SP6 interface
+
+**Do:** pull; open N8's preview with every flag on. Check every number shown against the results files, the physics wording of "Learn the noise" (fault position, why the naive decoder needs two edges), the budget bar's labels and the framing caption. Send findings as a numbered list (blocking, major, minor) in B's DECISIONS-style format.
+- [ ] Done
+
+### A54 · CLAUDE CODE · Sun 06:30 — CC-A16: page physics and results sections v2
+
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A (shared file docs/project_page.md, Person A's sections only: "The physics in plain language", "Results", "Validation", "Limitations").
+
+Task CC-A16: rewrite Person A's sections of docs/project_page.md for v2 from docs/notes_results.md, DECISIONS.md and data/results/*.json only; every number carries an HTML comment naming its source file and field.
+- Frame every comparison as "two readout physics models at fixed gate noise"; state that the superconducting arm carries trapped-ion gate noise by construction.
+- Physics: add the phase-flip memory (what it sees, T2), measurement crosstalk on ions, and the detector error model (diagonal edges, learned rates, out-of-sample check), each in at most 120 words of plain language.
+- Results: one short paragraph per hypothesis C1-C6 and O4 with the verdict, the key numbers and the "changed from v1" line; the trade-off result in one paragraph.
+- Validation: add V2b, V9L, V11-V16.
+- Limitations: keep v1's, add the in-sample learned rates (with the V12b result), the crosstalk rate's status (sourced or illustrative), and fixed gate noise for both arms.
+Do not touch Person B's sections. End with the report format.
+```
+
+**Pass:** every number has a source comment; nothing contradicts `notes_results.md`.
+- [ ] Done
+
+### A55 · EDITOR · Sun 08:00 — Edit the page; plain-language verdicts
+
+**Do:** edit your sections by hand until they read well aloud. Write one plain sentence (at most 20 words) for each of C1–C6 and O4, and the framing sentence, into `conclusions[*].plain` of `stage4_comparison.json` (edit the JSON directly; record it in E-notes) and into `notes_results.md`. Commit, push, send `HANDOFF N9`.
+- [ ] Done
+
+### A56 · SELF · Sun 10:00 — Buffer, or optional statistics work
+
+**Do:** fix review findings in your files with the fix prompt (U6). If nothing is open, take an item from Appendix U11 in the stated order; rerun only what it touches; update notes and page numbers.
+- [ ] Done
+
+### A57 · REVIEW · Sun 11:30 — Review Person B's Sunday work
+
+**Do:** as A53, on the sandbox, basis toggle, tour, curated examples and Level 5 v2. Also check the README's methods and disclosure sections.
+- [ ] Done
+
+### A58 · JOINT · Sun 13:00 → 22:30 — K4–K8
+
+Take part in K4 (numbers), K5 (notes), fixes at 15:00 (FIX prompts in your files), K6 (narration), K7, K8.
+- [ ] Done
+
+### A59 · JOINT · Sun 22:30 — K9
+
+- [ ] Done
+
+---
+
+## 8. Person B checklist — decoder, interface and platform
+
+### B40 · CLAUDE CODE · Sat 09:30 — CC-B11: diagonal edges and V2b
+
+**Why:** the decoding graph lacks a whole error class; adding it is the single change that moves the most results.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
+
+Task CC-B11: diagonal edges in the decoding graph, and the PyMatching cross-check with them (V2b).
+Modify exactly: src/core/graph.js, tests/graph.test.js, tests/matching.test.js, tools/export_vectors.mjs, validation/pymatching_check.py, data/vectors/*.
+
+1. graph.js: buildGraph(d, r, { diagonal = false } = {}). The space and time edges and their ids are generated exactly as today, first. If diagonal, append, for k = 0..r-1 and j = 0..d-3, an edge { u: node(k, j+1), v: node(k+1, j), kind: "diag", layer: null, dataQubit: j+1, check: null, round: k, observable: false } (a fault on data qubit j+1 between its CNOT into check j and its CNOT into check j+1 in round k). buildGraph(d, r) and buildGraph(d, r, { diagonal: false }) must equal today's graph exactly. The default stays false because src/core/sweep.js (Person A) calls buildGraph(d, r) today and its results must not change before CC-A12; CLAUDE.md v2 says callers pass { diagonal } explicitly.
+2. matching.js needs no change; prove it with tests: on buildGraph(3, 3, { diagonal: true }) a shot whose only fired edge is one diag edge decodes with nDefects 2, flip 0, and cost equal to that edge's weight; on the naive graph the same detectors cost the sum of one space and one time edge. A diag edge never sets the observable.
+3. graph tests: the diagonal graph has exactly r(d-2) more edges than the naive one; every diag edge joins (k, j+1) and (k+1, j); { diagonal: false } is identical, edge by edge, to the previous graph (snapshot of ids, u, v, kind).
+4. export_vectors.mjs: an option --diagonal (default on) so vectors are drawn on the diagonal graph (every edge flips with p = 0.03 as today). pymatching_check.py: build the PyMatching graph from the exported edge list (no change if it already does) and report as before: flips, ties, and cost mismatches (tolerance 1e-9). Regenerate data/vectors with --n 20000 --seed 1.
+
+Run `npm test`, then `node tools/export_vectors.mjs --n 20000 --seed 1` and `%USERPROFILE%\venvs\s2s\Scripts\python.exe validation\pymatching_check.py`. End with the report format.
+```
+
+**Pass:** tests pass; V2b: zero cost mismatches; ties counted.
+- [ ] Done
+
+### B41 · TERMINAL · GIT · Sat 10:45 — Push and hand over
 
 ```bat
-node tools/assemble_bank.mjs data\raw
-dir data\banks
-git add data
-git commit -m "All banks"
+npm test
 git pull --rebase
+git status --short
+git add src\core\graph.js tests\graph.test.js tests\matching.test.js tools\export_vectors.mjs validation\pymatching_check.py data\vectors
+git commit -m "CC-B11: diagonal edges (opt-in), V2b"
 git push
 ```
 
-Send `HANDOFF H4: rep_d3_r3_L0 and the remaining banks`. If some large banks are still running, push what you have and repeat later.
-**Pass:** the assembler reports no error for each bank.
+Record the V2b tie counts in your DECISIONS section. Send `HANDOFF N1: graph.js with { diagonal }, V2b 0 cost mismatches`.
 - [ ] Done
 
-### A12 · CLAUDE CODE · Sat 10:30 — CC-A3: sweep engine and Stage 1 sweep
+### B42 · CLAUDE CODE · Sat 10:45 — CC-B12: basis field, v2 fixtures, bridges and flags
 
-**Depends on:** H2 and H3 (Person B's bank, detectors, graph, matching and logical modules), due 09:30. `git pull --rebase` first; if any is missing, ask Person B for its status and meanwhile start A15.
-**Do:** in Claude Code, `/clear`, then paste:
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A3: the sweep engine and the Stage 1 sweep.
-Create exactly: src/core/sweep.js, tools/sweep.mjs, tests/sweep.test.js. Use Person B's bank.js, detectors.js, graph.js, matching.js and logical.js only through the Module API; if any of them is missing, stop and report.
+Task CC-B12: the bank basis field, v2 fixtures, bridge exports and feature flags.
+Modify exactly: src/core/bank.js, tests/bank.test.js, tools/make_fixtures.mjs, data/fixtures/* (new *_v2.json files only), src/ui/bridge_core.js, src/ui/bridge_data.js, src/ui/features.js, tools/release_check.mjs, tests/stubs.test.js.
 
-1. sweep.js:
-   - decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng }): split the shot; apply readout.measure to every ancilla and data bit; apply injectIdle with p = readout.idleFlipProbability(); compute detectors; build weights with graph.js helpers: space-like edges in layer 0: p = pGate; in layers 1..r-1: p = xorP(pGate, pIdle); in the final layer: p = xorP(pGate, pRead_i), where pRead_i = averageAssignmentError() (mode "hard") or pFromLlr(llr of data bit i) (mode "soft"); time-like edge of m[k][j]: p = averageAssignmentError() (hard) or pFromLlr(llr of that ancilla measurement) (soft). Decode; the corrected logical uses the measured (noisy) x[0]. Return every field listed for decodeShot in the Module API.
-   - runPoint({ bank, readout, mode, pGate, seed, maxShots }) -> { k, n, wilson, nonExact }.
-   - diagnostic(bank) -> FNV-1a 32-bit hash (8 hexadecimal characters) of JSON.stringify of the array of logicalError flags (0/1) for the first 1000 shots of the bank with flat epsilon = 0.02, pGate from estimatePGate on that bank with readout off, hard mode, seed 7. The browser reuses this exact function (validation V9).
-2. tools/sweep.mjs:
-   --stage 1: load every bank file named rep_*.json in data/banks (never v4_*.json); estimate pGate per bank and print V5 (bulk firing rate with Wilson interval and p); epsilon grid [0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12]; for d = 3, 5, 7 at r = 3 and both logical states, run hard mode (assert on one point that soft gives identical results for the flat model); write data/results/stage1_flat.json in the results format of CLAUDE.md (platform "flat", x name "epsilon"; provenance: commit from `git rev-parse HEAD` if available, else "unknown"; bank file names; seeds); print V1 (flat flip rate at epsilon 0.05) and V6 (L0 against L1 logical error with intervals, per distance), then the diagnostic hash for rep_d3_r3_L0.
-   --diag: print only the diagnostic hash for data/banks/rep_d3_r3_L0.json.
+1. bank.js: validateBank accepts an optional "basis" equal to "Z" or "X" and rejects any other value; absent means "Z". Tests: "X" accepted, "Y" rejected, absent accepted.
+2. make_fixtures.mjs writes synthetic v2 fixtures following CLAUDE.md v2 results formats exactly, each with "fixture": true: dem_forte1_v2.json; stage1_flat_v2.json, stage2_ion_v2.json, stage3_sc_v2.json (series with "decoder", budget, crosstalkScan in stage 2); stage1_flat_x_v2.json, stage2_ion_x_v2.json, stage3_sc_x_v2.json; stage4_comparison_v2.json (tradeoff, budgetAtOptimum, sensitivity effect, conclusions C1-C6 with plain text "fixture"); params_ion_v2.json, params_sc_v2.json, params_cycle_v2.json with the U5 fields.
+3. bridge_data.js: keep every current export; add demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x, paramsIonV2, paramsScV2, paramsCycleV2, all pointing at the v2 fixtures. bridge_core.js: keep every export; add estimateEdgeRates (stub that throws "not available in the browser"; the UI never calls it), buildGraph and decode are imported by the UI directly from src/core (Person B's own modules).
+4. features.js: add hero, uxV2, learnNoise, phaseFlip, crosstalk, level5v2, sandbox, tour, curated, all false.
+5. release_check.mjs: each new flag lists the bridge exports it needs (CLAUDE.md v2, U3 of the team checklist) and fails if any points at data/fixtures or src/ui/stubs while the flag is on. Also add a visible-text check: the built index.html and every string literal in src/ui that is rendered as text must not contain any of: "belief model", "bank shot", "layer r", "CC-", "Person A", "Person B", "stub", "fixture" (case-insensitive), except inside the Diagnostics panel; report the file and string.
 
-Tests (break comments required): decodeShot with epsilon = 0 and pGate = 0 on an error-free synthetic shot returns nDefects = 0 and logicalError = 0 and every API field; runPoint on a synthetic error-free bank gives k = 0; diagnostic returns the same string twice for the same bank (determinism).
-
-Run `npm test` and `node tools/sweep.mjs --stage 1`. End with the report format.
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-**Pass:** tests pass; `data/results/stage1_flat.json` is written.
+**Pass:** tests pass; build and check pass with every new flag off.
 - [ ] Done
 
-### A13 · TERMINAL · VERIFY · GIT · Sat 11:30 — Check Stage 1 and hand over
+### B43 · CLAUDE CODE · Sat 11:30 — CC-B13: design tokens, hero panel, text cut
 
-**Do:**
-
-```bat
-node tools/sweep.mjs --stage 1
-node tools/sweep.mjs --diag
-```
-
-Check V1 (flip rate at $\varepsilon=0.05$), V5 (similar bulk detection rates for banks of equal $(d,r)$; small $p_{\text{gate}}$), V6 (L0 and L1 agree within intervals or the difference is noted) and the F0 shape (at $\varepsilon=0$ logical error falls with $d$). Write the fingerprint and the checks into your section of `DECISIONS.md` and into `docs/notes_results.md`. Then push your files and send `HANDOFF H5 and H6: sweep.js, flat.js, stage1_flat.json, fingerprint <hash>`.
-**Pass:** V1, V5, V6 hold or deviations are recorded.
-- [ ] Done
-
-### A14 · REVIEW · Sat 12:00 — Cross-review of Person B's decoder
-
-**Do:** `git diff start..HEAD -- src/core/rng.js src/core/bank.js src/core/detectors.js src/core/graph.js src/core/matching.js src/core/logical.js tests validation/pymatching_check.py > review_b1.diff`. In a fresh Claude chat, paste the review prompt (Appendix T5) and attach `CLAUDE.md`, `DECISIONS.md` and the diff. Read the matching code yourself too. Send the findings to Person B; delete the diff file.
-**Pass:** findings sent, or "no findings" stated.
-- [ ] Done
-
-### A15 · EDITOR · Sat 12:30 — Ion parameter card
-
-**Do:** create `params/ion.json` from Appendix T6 with your A1 values; check it parses: `node -e "JSON.parse(require('fs').readFileSync('params/ion.json','utf8')); console.log('ok')"`. Commit and push.
-- [ ] Done
-
-### A16 · JOINT · Sat 13:00 — J3 (SP1)
-
-Your part: step 1, step 5 (publish the generator and send H14), and checking the numbers.
-- [ ] Done
-
-### A17 · CLAUDE CODE · Sat 13:30 — CC-A4: trapped-ion readout model
-
-**Do:** `git pull --rebase`; in Claude Code, `/clear`, then paste:
+**Do:** first push B42 (`git add` your files, commit "CC-B12 ...", push, send `HANDOFF N2: bank.js accepts basis`). Then `/clear` and paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A4: the trapped-ion fluorescence readout model.
-Create exactly: src/core/quadrature.js, src/core/readout/ion.js, tests/quadrature.test.js, tests/ion.test.js.
+Task CC-B13: one visual language, the hero panel, and the text cut. Follow the team checklist Appendix U7 sections U7.1-U7.3 exactly (attached below).
+Create: src/ui/tokens.css, src/ui/hero.js, tests/hero.test.js. Modify: src/ui/style.css, src/ui/main.js, src/ui/charts.js, src/ui/level1.js, src/ui/level2.js, src/ui/level3.js, src/ui/level4.js, src/ui/level5.js, src/ui/index.template.html, tools/build.mjs (only to include tokens.css).
 
-1. quadrature.js: gaussLegendre(n) returns nodes and weights on [-1, 1] (Newton iteration on Legendre polynomials); integrate(f, a, b, n = 64); logIntegrate(logF, a, b, n = 64) computes the log of the integral of exp(logF) with log-sum-exp.
-2. ion.js: createIonReadout(params, tau), where params is parsed params/ion.json (rates in counts/us and 1/us; bright_is_bit names the bit that fluoresces). Validate that every required value is a finite number; otherwise throw an error naming the field.
-   - Truth sampler measure(trueBit, rng): initial rate Ri = R_bright if the bit is bright, else R_dark; final rate Rf = the other one; switch rate g = gamma_bright_to_dark (bright) or gamma_dark_to_bright (dark). Draw t ~ Exponential(g) (no switch if g = 0). If t < tau the count is n ~ Poisson(Ri t + Rf (tau - t)), else n ~ Poisson(Ri tau). At most one switch.
-   - Belief log-likelihood logLik(n, bit) = log[ e^{-g tau} Pois(n; Ri tau) + integral_0^tau g e^{-g t} Pois(n; Ri t + Rf (tau - t)) dt ], evaluated in log space with logIntegrate and a Lanczos lgamma, so that counts up to 500 do not overflow.
-   - llr(n) = logLik(n, 1) - logLik(n, 0).
-   - Threshold nTh: the integer minimizing the belief-model average assignment error, searched over n = 0 .. ceil(R_bright tau + 10 sqrt(R_bright tau) + 10). hard = bright bit if n > nTh, else the other bit.
-   - averageAssignmentError() = the belief-model average error at nTh. idleFlipProbability() = 0.5 (1 - exp(-tau / T1_idle_us)).
-   - measure returns { hard, llr, n }. Also provide countHistogram(bit, nSamples, rng) as a method of the returned object, as in the Module API.
+<paste Appendix U7.1, U7.2 and U7.3 here>
 
-Tests (each with the required break comment):
-- Closed form: with both gammas 0 and bright_is_bit = 1, llr(n) equals n ln(R_bright/R_dark) - (R_bright - R_dark) tau to 1e-9 for n = 0, 3, 10, 40.
-- V7: with both gammas 0, the empirical assignment error from 200000 truth samples equals the analytic Poisson tail sums at nTh within 4 binomial standard errors.
-- Threshold boundary (non-vacuous): the belief error at nTh is lower than at nTh - 1 and lower than at nTh + 1.
-- V10 calibration with belief equal to truth (both gammas 0): among samples with |llr| in [1, 2), the observed error frequency equals the mean of 1/(1 + e^{|llr|}) within 4 standard errors.
-- Pumping matters: with a large gamma_bright_to_dark, the mean bright count is lower than with gamma 0 (fixed seed).
-- quadrature: integrates x^10 on [0, 1] and exp(-x) on [0, 5] to 1e-12; logIntegrate agrees with log(integrate) on a smooth positive function.
+Data: the hero reads stage2v2 (trapped ion) and stage3v2 (superconducting) through bridge_data, fixtures for now: assignment.empirical, the d = 3 hard series with decoder "learned" (fall back to the series without a decoder field, which is naive, if no learned series exists), optima.tauPhysEmpirical (fall back to locating the minimum of assignment.empirical with findMinimum, log x), and the matching tauLog. Until SP6, stage3v2 may point at the v1 file data/results/stage3_sc.json, which has no learned series; the fallbacks make that work. Behind FEATURES.hero (hero) and FEATURES.uxV2 (text cut and tokens); with both flags off the page must look exactly as before.
+Tests: hero.test.js checks the live sentence for a tau below, between and above the two optima (three different sentences), the shaded interval endpoints, and that the slider snaps to grid points.
 
-Run `npm test`. End with the report format.
+Run `npm test`, `npm run build`, `npm run check`. Open dist/local/preview.html with hero and uxV2 forced on in a scratch copy of features.js (do not commit it on) and describe what you see. End with the report format.
 ```
 
-Then `npm test`, commit, push, and send `HANDOFF H7: ion.js, params/ion.json`.
-**Pass:** all tests pass, including V7 and V10; pushed by 15:00.
+**Pass:** tests pass; with flags off nothing changes; with flags on, the hero works on fixtures.
 - [ ] Done
 
-### A18 · CLAUDE CODE · VERIFY · Sat 15:00 — CC-A5: Stage 2 sweeps
+### B44 · EDITOR · VERIFY · Sat 13:30 — Switch to SP5 data
 
-**Do:** in Claude Code, `/clear`, then paste:
+**Do:** after `ACK N3` and `ACK N4`, apply Appendix U3 rows 13–16; levels 1–4 now pass `noise: { model: "learned", rates }` (rates from `demForte1` for the bank's (d, r, basis)) into `decodeShot` and `runPoint`; Diagnostics shows V9 and V9L (from `diagnostic(bank)` and `diagnostic(bank, { decoder: "learned" })`). Build, check, preview; join K2.
+**Pass:** release check passes with hero and uxV2 on.
+- [ ] Done
+
+### B45 · CLAUDE CODE · Sat 14:30 — CC-B14: Level 1 game; Level 3 budget bar, d selector, challenge
+
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A5: Stage 2 sweeps (hard against soft decoding) and optimum estimation.
-Create exactly: src/core/optimum.js, tests/optimum.test.js. Modify tools/sweep.mjs only to add a --stage 2 option; do not change the behaviour or outputs of --stage 1 or --diag.
+Task CC-B14: the Level 1 decoding game and the Level 3 error budget, distance selector and challenge. Follow Appendix U7.4 and U7.5 exactly (attached below).
+Create: src/ui/budget.js, tests/level1.test.js. Modify: src/ui/level1.js, src/ui/level3.js, src/ui/charts.js, tests/level3.test.js.
 
-1. optimum.js: findMinimum(xs, ys, { logX: true }) fits a quadratic in ln x through the lowest grid point and its neighbours (up to 5 points) and returns { xMin, yMin, atEdge }; atEdge is true when the lowest point is the first or the last grid point (then there is no interior minimum and xMin is that grid point). minimumWithBootstrap(xs, perShotMatrix, B, rng) resamples quantum-shot indices, recomputes the curve and returns { xMin, lo, hi, fractionAtEdge }.
-2. tools/sweep.mjs --stage 2: load params/ion.json and the rep_*.json banks. For each tau in params tau grid:
-   (a) F1-ion: averageAssignmentError() and the empirical error from 200000 truth samples;
-   (b) F2-ion: logical error for d = 3 and 5 at r = 3 (and d = 7 if its banks exist), logical states pooled, hard and soft modes, Wilson intervals, pGate per bank from calibration with readout off, R = 4 readout draws per quantum shot. Store, for each grid point, the per-quantum-shot mean error over the R draws.
-   Then: tau*_phys = findMinimum of F1 (belief curve); tau*_log per distance and mode with minimumWithBootstrap (B = 200) on the stored per-shot values; report "no interior minimum" when atEdge.
-   Write data/results/stage2_ion.json (schema s2s-results/1, with provenance and the parameter card copied in). Print V7 and V10 summaries and the runtime.
+<paste Appendix U7.4 and U7.5 here>
 
-Tests (break comments required): findMinimum recovers the known minimum of a quadratic in ln x; atEdge is true for a monotone series and false for a series with an interior minimum (non-vacuous pair).
+Behind FEATURES.uxV2. The budget bar reads stage2v2/stage3v2 budget arrays (fixtures until switched) and, when FEATURES.crosstalk is on, shows the crosstalk segment for the ion.
+Tests: level1: data readouts are not in the DOM before an answer; the epsilon schedule; score and streak updates; the reason text names the flipped qubit and lit checks. level3: only the chosen d's tauLog marker is drawn; the challenge score bands; budget segments sum to the stored total within 1e-12.
 
-Run `npm test` and `node tools/sweep.mjs --stage 2`. End with the report format.
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-Then run `node tools/sweep.mjs --stage 2` and check: V7 and V10 pass; with pumping, assignment error has a minimum in $\tau$ (record $\tau^*_{\text{phys}}$); soft is at or below hard at every $\tau$ (C2); record $\tau^*_{\log}$ per distance or "no interior minimum" (C1, ion part). Write these in `docs/notes_results.md`. Commit, push, send `HANDOFF H8: stage2_ion.json`.
-**Pass:** pushed by 16:30.
+**Pass:** tests pass; build and check pass.
 - [ ] Done
 
-### A19 · SELF · Sat 16:30 — Ion results paragraph
+### B46 · CLAUDE CODE · Sat 16:30 — CC-B15: "Learn the noise"
 
-Write one paragraph on what the ion arm shows for C1 and C2, with numbers and intervals, in `docs/notes_results.md`. Commit and push.
-- [ ] Done
-
-### A20 · CLAUDE CODE · Sat 17:00 — CC-A6: superconducting readout model
-
-**Do:** create `params/sc.json` from Appendix T6 (check it parses). In Claude Code, `/clear`, then paste:
+**Depends on:** N4 (`dem_forte1.json`). Until it lands, build on `dem_forte1_v2.json`.
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A6: the superconducting dispersive readout model.
-Create exactly: src/core/special.js, src/core/readout/sc.js, tests/special.test.js, tests/sc.test.js.
+Task CC-B15: the "Learn the noise" level. Follow Appendix U7.6 exactly (attached below).
+Create: src/ui/learnnoise.js, tests/learnnoise.test.js. Modify: src/ui/main.js (mount it as the level after Level 4, behind FEATURES.learnNoise), src/ui/charts.js (heatmap helper only).
 
-1. special.js: erfc(x) accurate to 1e-12 (series for small |x|, continued fraction for large |x|), normalLogPdf(x, mu, sigma), lgamma (Lanczos) if not already exported elsewhere (do not edit other files; duplicate a small private copy if needed).
-2. sc.js: createScReadout(params, tau) with params from params/sc.json: chi_over_2pi_MHz, kappa_over_2pi_MHz, nbar, eta, T1_us, detection ("heterodyne" or "homodyne"), ringup (true or false). Convert chi and kappa to rad/us (2 pi f).
-   - s_b = -1 for bit 0, +1 for bit 1. Drive eps_d real with |eps_d| = sqrt(nbar (kappa^2/4 + chi^2)), so |alpha_ss|^2 = nbar.
-   - alpha_ss_b = eps_d / (kappa/2 + i s_b chi). With ringup: alpha_b(t) = alpha_ss_b (1 - exp(-(kappa/2 + i s_b chi) t)); after a decay at t_d the field evolves from alpha_1(t_d) under the bit-0 equation: alpha(t) = alpha_ss_0 + (alpha_1(t_d) - alpha_ss_0) exp(-(kappa/2 - i chi)(t - t_d)). Without ringup the field takes the steady-state value of the current state instantly.
-   - u_hat = (alpha_ss_1 - alpha_ss_0) / |alpha_ss_1 - alpha_ss_0|; c = sqrt(2) for heterodyne, 2 for homodyne. Mean signal mu = (c sqrt(eta kappa) / tau) * integral_0^tau Re[alpha(t) conj(u_hat)] dt, computed with closed-form integrals of the exponentials (no numerical integration). Noise sigma = 1/sqrt(tau).
-   - Precompute mu0, mu1 (no decay) and a table of the decay mean over 256 points of t_d in [0, tau]; interpolate linearly.
-   - measure(trueBit, rng): bit 0 gives s = mu0 + sigma * normal; bit 1 draws t_d ~ Exponential(1 / T1_us) and gives s = (t_d >= tau ? mu1 : decay mean at t_d) + sigma * normal. hard = 1 if s > (mu0 + mu1) / 2. Return { hard, llr, s }.
-   - Belief: logLik(s, 0) = normalLogPdf(s, mu0ss, sigma); logLik(s, 1) = log[ e^{-tau/T1} N(s; mu1ss, sigma) + integral_0^tau (e^{-t/T1} / T1) N(s; mu0ss + (mu1ss - mu0ss) t / tau, sigma) dt ] with the steady-state means (ring-up ignored), via logIntegrate from src/core/quadrature.js. llr = logLik(s, 1) - logLik(s, 0).
-   - averageAssignmentError(): from the belief densities on each side of the threshold, by numerical integration. idleFlipProbability() = 0.5 (1 - exp(-tau / T1_us)).
-   - Provide the methods snr() = c |alpha_ss_1 - alpha_ss_0| sqrt(eta kappa tau) and iqSamples(bit, n, rng) on the returned object, as in the Module API; iqSamples returns { i, q } points around the projected mean with independent noise of standard deviation sigma on both quadratures, for the interface.
+<paste Appendix U7.6 here>
 
-Tests (break comments required):
-- erfc against known values (erfc(0) = 1, erfc(1), erfc(3)) to 1e-12.
-- V8: with T1_us = 1e12 and ringup false, the empirical assignment error from 200000 samples equals 0.5 erfc(SNR / (2 sqrt(2))) within 4 binomial standard errors.
-- With ringup false, (mu1 - mu0) / sigma equals snr() to 1e-9.
-- U-curve (non-vacuous pair): with T1_us = 20 and ringup false, the error at an intermediate tau is lower than at both ends of a grid from 0.05 to 20 us; with T1_us = 1e12 the error decreases monotonically on the same grid.
-- At fixed nbar, kappa |delta alpha|^2 is larger at kappa = 2 chi than at 1.9 chi and at 2.1 chi.
-- V10 calibration with ringup false (belief equals truth): among samples with |llr| in [1, 2), the observed error frequency matches the mean of 1/(1 + e^{|llr|}) within 4 standard errors.
-- idleFlipProbability at tau = T1 equals 0.5 (1 - e^{-1}).
+faultDetectors(d, r, fault) is a pure exported function. V16: for d = 3 and d = 5, r = 3, every fault slot ("before", "mid" for data qubits 1..d-2, "after"), build m and x explicitly by flipping the affected bits of an error-free shot (the rule in U7.6), run computeDetectors, and compare with faultDetectors; all equal.
+The naive and learned graphs come from buildGraph(d, r, { diagonal }) and decode() directly (Person B's modules); learned weights from demForte1 classes.
 
-Run `npm test`. End with the report format.
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-Then `npm test`, commit, push, send `HANDOFF H9: sc.js, params/sc.json`.
-**Pass:** all tests pass, including V8 and V10; pushed by 19:15.
+**Pass:** tests pass including V16.
 - [ ] Done
 
-### A21 · REVIEW · Sat 19:15 — Cross-review of Person B's interface (levels 1–4)
+### B47 · CLAUDE CODE · Sat 19:00 — CC-B16: Level 5 v2
 
-**Do:** `git diff sp1..HEAD -- src/ui tools/build.mjs tools/release_check.mjs > review_b2.diff`; review in a fresh Claude chat with the Appendix T5 prompt, focusing on whether the interface shows the physics correctly (labels, units, which curve is which). Play the ion levels in Person B's latest local build. Send findings.
-- [ ] Done
-
-### A22 · JOINT · Sat 20:00 — J4 (SP2)
-
-- [ ] Done
-
-### A23 · QOLLAB · TERMINAL · Sat 20:30 — V4 batch on the ideal simulator
-
-**Do:** in the generator project run each V4 configuration as its own run (one job per run): set `CONFIG` to `v4_d3_r3_i0_k0`, Run with **IonQ Forte 1** picked in the dialog (the generator itself switches V4 names to the `ideal` noise model, D1), and copy the `BEGIN_BANK` … `END_BANK` block into `data/raw/v4/<name>.txt`; repeat for every site. These are 100-shot ideal runs, so each should take well under a minute. Then `node tools/assemble_bank.mjs data\raw\v4`. Expect 24 files `v4_*.json` (9 for $d=3$, 15 for $d=5$). If time runs short, do the 9 sites at $d=3$ only and note this in your section of `DECISIONS.md`. Commit and push.
-- [ ] Done
-
-### A24 · CLAUDE CODE · Sat 21:00 — CC-A7: V4 test and Stage 3 sweeps
-
-**Do:** in Claude Code, `/clear`, then paste:
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A7: validation V4 and the Stage 3 sweeps.
-Create exactly: tests/v4.test.js. Modify tools/sweep.mjs only to add a --stage 3 option; do not change the other options.
+Task CC-B16: Level 5 v2, "Two readout models, same gates". Follow Appendix U7.7 exactly (attached below).
+Modify: src/ui/level5.js, src/ui/charts.js, tests/level5.test.js.
 
-1. tests/v4.test.js: load every data/banks/v4_*.json (skip with a clear message if there are none). Each must have exactly one outcome. Take the injection (i, k) from the bank's "inject" field. Compute the expected measured bits from the error-free bits (ancilla 0, data equal to the logical value) by applying applyX(m, x, d, r, i, k) from src/core/idle.js. The simulator outcome must equal the expectation bit for bit. Break comment: fails if the classical idle-injection rule disagrees with a physical X gate in the circuit.
-2. tools/sweep.mjs --stage 3: as --stage 2 but with params/sc.json and createScReadout: F1-sc (belief-model assignment error and the empirical error from 200000 truth samples, with ringup as set in the parameter file), F2-sc (logical error for d = 3 and 5 at r = 3, and d = 7 if present; hard and soft; R = 4; bootstrap B = 200 over the stored per-shot values), tau*_phys and tau*_log with intervals or "no interior minimum". Write data/results/stage3_sc.json with provenance and the parameter card. Print V8 and V10 summaries and the runtime.
+<paste Appendix U7.7 here>
 
-Run `npm test` and `node tools/sweep.mjs --stage 3`. End with the report format.
+Behind FEATURES.level5v2; with it off, Level 5 is unchanged. Data from stage4v2 and paramsCycleV2 (fixtures until switched).
+Tests: the trade-off chart has one series per (arm, d) with points in tau order; the scoreboard shows one row per conclusion with the correct badge; the tornado chart orders parameters by the largest absolute effect; every chart has its values table; the old tables are inside the "Data" expander.
+
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-Start `node tools/sweep.mjs --stage 3`. At 22:15, whatever the state: commit (message `WIP CC-A7: <state>` if unfinished), push, and write five handoff lines in your section of `DECISIONS.md` (what passed, what fails, the next step, what to check first, the time).
+**Pass:** tests pass.
 - [ ] Done
 
-### A25 · SELF · Sat 22:30 — Sleep
+### B48 · EDITOR · VERIFY · Sat 20:00 — Switch to SP6 data
 
-Alarm at 04:15.
+**Do:** after `ACK N5`, `N6`, `N7`: apply Appendix U3 rows 17–24 (24 only if B47 passed); build, check, preview with every switched flag on; produce `dist/local/preview.html` with every flag on in a scratch copy for N8 (send the file, do not commit the scratch flags). Join K3.
 - [ ] Done
 
-### A26 · TERMINAL · VERIFY · Sun 04:30 — Finish Stage 3 and hand over
+### B49 · CLAUDE CODE · Sun 05:30 — CC-B17: Level 2 sandbox and the global basis toggle
 
-**Do:** `git pull --rebase`, read your handoff lines, finish CC-A7 if needed, then `npm test` and `node tools/sweep.mjs --stage 3`. Check V4, V8, V10; the U-curve and $\tau^*_{\text{phys}}$; whether an interior $\tau^*_{\log}$ exists and lies below $\tau^*_{\text{phys}}$ beyond the intervals (C1); soft at or below hard (C2). Record in `docs/notes_results.md`. Commit, push, send `HANDOFF H10: stage3_sc.json`.
-**Pass:** pushed by 06:00.
-- [ ] Done
-
-### A27 · CLAUDE CODE · VERIFY · Sun 06:00 — CC-A8: Stage 4 comparison
-
-**Do:** create `params/cycle.json` from Appendix T6 (check it parses). In Claude Code, `/clear`, then paste:
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A8: Stage 4 comparison metrics.
-Create exactly: src/core/metrics.js, tests/metrics.test.js. Modify tools/sweep.mjs only to add a --stage 4 option.
+Task CC-B17: the Level 2 sandbox and the global bit-flip / phase-flip toggle. Follow Appendix U7.8 and U7.9 exactly (attached below).
+Create: src/ui/sandbox.js, tests/sandbox.test.js. Modify: src/ui/level2.js, src/ui/main.js, src/ui/hero.js, src/ui/level3.js, src/ui/level4.js, src/ui/level5.js.
 
-1. metrics.js:
-   - perRound(pL, r) = 0.5 (1 - (1 - 2 pL)^(1/r)) for pL < 0.5; perRoundToTotal(eps, r) = 0.5 (1 - (1 - 2 eps)^r).
-   - cycleTime(card, tau) = gate_layers_per_round * two_qubit_gate_us + tau + reset_us.
-   - perMicrosecond(eps, Tcyc) = eps / Tcyc.
-   - breakEven(xs, yD3, yD5) returns the x where yD5 - yD3 changes sign (linear interpolation), or null if it never does.
-2. tools/sweep.mjs --stage 4: load stage2_ion.json, stage3_sc.json, params/cycle.json, params/ion.json, params/sc.json and the rep_*.json banks.
-   - For each platform and mode: per-round logical error at tau*_log (or at the best grid point when there is no interior minimum) and per microsecond.
-   - Break-even: using averageAssignmentError at each tau as the x axis, the break-even assignment error between d = 3 and d = 5, and the tau where it occurs.
-   - Sensitivity: for each physical parameter of each platform, scale it by 0.5 and by 2 in turn, rerun the Stage 2 or 3 computation at reduced statistics (R = 1, at most 1000 shots per bank, no bootstrap), and record for each conclusion whether it holds, flips or is undetermined, with these definitions:
-     C1 holds if, for the superconducting arm, there is an interior minimum and tau*_log < tau*_phys, and for the ion arm there is no interior minimum driven by idle errors (idle probability below 1e-6 at every tau).
-     C2 holds if soft is at or below hard at every tau (within Wilson intervals) and strictly below at one or more tau.
-     C3 holds if the ordering of the two platforms by per-round error differs from their ordering by per-microsecond error.
-     C4 holds if the two break-even assignment errors differ by less than the sum of their half-widths (use Wilson-based intervals at the neighbouring grid points).
-   - Write data/results/stage4_comparison.json with all tables, provenance and the parameter cards. Print a summary and the runtime.
+<paste Appendix U7.8 and U7.9 here>
 
-Tests (break comments required): perRound inverts perRoundToTotal to 1e-12; perRound(pL, 1) equals pL; breakEven finds the crossing of two straight lines at a known x and returns null for parallel lines (non-vacuous pair); cycleTime arithmetic on a hand example.
+Sandbox behind FEATURES.sandbox; toggle behind FEATURES.phaseFlip.
+Tests: injecting a data flip lights the predicted horizontal pair; a misreport lights the vertical pair; the player's matching cost equals the sum of the chosen path weights; the toggle swaps every results source to its *_x counterpart and every visible "bit flip" label to "phase flip".
 
-Run `npm test` and `node tools/sweep.mjs --stage 4`. End with the report format.
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-Run `node tools/sweep.mjs --stage 4`; recompute one per-round and one per-microsecond value by hand. Commit, push, send `HANDOFF H11: stage4_comparison.json, params/cycle.json`.
-**Pass:** your hand values agree to three significant figures; pushed by 08:00.
 - [ ] Done
 
-### A28 · SELF · REVIEW · Sun 08:00 — Interpret C1–C4; review the superconducting interface
+### B50 · CLAUDE CODE · Sun 08:00 — CC-B18: guided tour, curated Level 4 examples, live-run panel
 
-**Do:** in `docs/notes_results.md`, write for each hypothesis: held, refuted or undetermined, with numbers and the sensitivity result, and one sentence on why. Then review Person B's superconducting interface and level 5 in their latest local build (labels, units, the caption).
-- [ ] Done
-
-### A29 · JOINT · Sun 09:00 — J5 (SP3)
-
-- [ ] Done
-
-### A30 · CLAUDE CODE · Sun 09:30 — CC-A9: draft the project page
-
-**Do:** in Claude Code, `/clear`, then paste:
+**Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
 
-Task CC-A9: draft the project page.
-Create exactly: docs/project_page.md (a shared file; Person B will edit the sections on running the project, the levels and accessibility afterwards).
+Task CC-B18: the guided tour, curated Level 4 examples and the live-run panel. Follow Appendix U7.10, U7.11 and U7.12 exactly (attached below).
+Create: src/ui/tour.js, tools/curate.mjs, data/curated/curated_shots.json, tests/curate.test.js, tests/tour.test.js. Modify: src/ui/main.js, src/ui/level4.js, src/ui/liverun.js, src/ui/bridge_data.js (one new export, curatedShots).
 
-Use only facts from README.md, DECISIONS.md, docs/notes_results.md, data/results/*.json, params/*.json and the planning documents in docs/. Every number must come from these files; put an HTML comment naming the source file next to each number. Sections: a one-sentence hook; what it is and how to run it (browser note: Chrome, Edge or Opera); the physics in plain language (one short paragraph per stage); what runs where (IonQ simulator versus classical models); results for C1-C4 with intervals, stating plainly when a hypothesis was refuted or untested; a validation summary V1-V10 with outcomes; limitations; how to extend the project; references with links; the exact line "This effort is supported by Qollab & IonQ."; and the AI-assistance and planning disclosure from README.md. Do not invent results; write "not measured" where data are missing.
+<paste Appendix U7.10, U7.11 and U7.12 here>
 
-End with the report format.
+Tour behind FEATURES.tour; curated examples behind FEATURES.curated.
+Tests: curate.mjs output is reproducible (same file twice); every curated "soft saves" shot really has hard error 1 and soft error 0 under the stated settings, and the reverse for "soft fails"; the tour moves focus to each target and Escape ends it.
+
+Run `node tools/curate.mjs`, `npm test`, `npm run build`, `npm run check`. End with the report format.
 ```
 
-Commit, push, and tell Person B the draft is in place.
 - [ ] Done
 
-### A31 · EDITOR · Sun 11:00 — Physics and results sections of the page
+### B51 · CLAUDE CODE · VERIFY · Sun 10:00 — CC-B19: accessibility, consistency, motion
 
-**Do:** edit the hook, the physics, "what runs where", the results for C1–C4, validation and limitations in `docs/project_page.md`, checking every number against `data/results` and `docs/notes_results.md`. Leave "how to run", the interface description and accessibility to Person B. Commit and push.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
+
+Task CC-B19: accessibility and consistency pass over every v2 view, plus the motion polish. Follow Appendix U7.1 (tokens) and U7.13 (motion) exactly (attached below).
+Modify: src/ui/* only.
+
+<paste Appendix U7.1 and U7.13 here>
+
+Audit in a scratch build with every flag on, at 360 px and 1280 px: keyboard reach and order; visible focus; accessible names; a values table for every chart and the heatmap; contrast >= 4.5:1 for text and >= 3:1 for chart marks; colour never the only cue; no horizontal page scroll; prefers-reduced-motion disables every animation; numbers at 2-3 significant figures; d, mode, arm and basis always in their token colour and shape. Fix what fails; list what passed and what failed before the fix.
+
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
+```
+
 - [ ] Done
 
-### A32 · JOINT · Sun 13:00 — J6 (SP4)
+### B52 · EDITOR · Sun 11:30 — README v2, interface page sections, cleanup
 
+**Do:** README: authors, about (the framing sentence), run instructions, methods (add learned edge rates, diagonal edges, phase-flip memory, crosstalk, trade-off metric, with references), libraries, the disclosure section as decided at K0 (Appendix U8), licence. Page: "How to run it", "The levels" (hero, Levels 1–5, "Learn the noise", sandbox, toggle, tour), "Accessibility". No internal codes anywhere. Fresh screenshots of every view into `docs/screenshots/`. Commit, push, send `HANDOFF N10`.
 - [ ] Done
 
-### A33 · SELF · Sun 13:30 — Finish your page sections; check references
+### B53 · REVIEW · Sun 12:00 — Review Person A's v2 code
 
-**Do:** finish your sections; check every reference against the publisher; add the "Methods implemented and sources" text for the readout models, idle rule, Wilson intervals, bootstrap and PTRS, and send it to Person B for the README. Open the generator project in a signed-out window and run the smallest configuration.
+**Do:** `git diff window-start..HEAD -- src/core/dem.js src/core/sweep.js src/core/readout src/core/metrics.js tools/sweep.mjs qollab tests > review_a2.diff`; review it with the U6 prompt in a fresh chat; read `dem.js` yourself (the boundary solve and the diagonal class definition). Send findings; delete the diff file.
 - [ ] Done
 
-### A34 · JOINT · Sun 17:30 — J7
+### B54 · EDITOR · VERIFY · Sun 12:30 — Switch to SP7
 
+**Do:** apply Appendix U3 rows 25–28 for what passed; join K4.
 - [ ] Done
 
-### A35 · CLAUDE CODE · Sun 18:00 — Buffer: fix bugs in your files
+### B55 · JOINT · Sun 13:00 → 22:30 — K4–K8
 
-**Do:** fix only blocking and major bugs in files you own, each with the fix prompt (Appendix T5), then `npm test`, commit, push. No new features.
+Run K5, fix at 15:00 (FIX prompts in your files; text cuts first), drive K6, take part in K7 and K8.
 - [ ] Done
 
-### A36 · JOINT · Sun 21:00 — J8
-
-Review Person B's files since `sp4`.
-- [ ] Done
-
-### A37 · JOINT · Sun 22:30 — J9
+### B56 · JOINT · Sun 22:30 — K9
 
 - [ ] Done
 
 ---
 
-## 7. Person B checklist — decoder, interface and platform
+## Appendix U1 — `CLAUDE.md` v2 amendments
 
-### B1 · QOLLAB · SELF · before Thu 8 Oct — Platform study and sketches
+Apply at K1. Replace the named sections entirely; keep every other section as it is.
 
-**Why:** you own everything that runs in Qollab's JavaScript project, and you build the interface.
-**Do:** open Qollab's lesson on running a circuit in JavaScript; copy Qollab's example (how a circuit is built, how `backend.run` is called from JavaScript, how results are unpacked with `.toJs()`) into your notes. Note how projects are created, published and licensed, and whether two accounts can share a project. Sketch the three-panel layout and levels 1–5 on paper (project plan, Section 18). Read a short guide to web accessibility (keyboard focus, contrast, text alternatives for charts). Before Saturday, run probe P10 (Appendix T4) once and record the result as D11 in your section of `DECISIONS.md`; tell Person A the outcome, because it decides whether they write `qollab/live.py` in CC-A1.
-**Pass:** you can describe the JavaScript API pattern and the publishing steps from your notes; D11 has an answer.
-- [ ] Done
-
-### B2 · QOLLAB · PLATFORM · Sat 04:35 — JavaScript probes
-
-**Do:** run probes P5 and P6 from Appendix T4. Also check whether Person A's Qollab account can edit a project you own (if Qollab supports team projects).
-**Pass:** answers for D4, D5 and D9 noted for J2 (handoff H12).
-- [ ] Done
-
-### B3 · JOINT · Sat 06:00 — J2
-
-You do steps 2–4 of J2 (clone, create `CLAUDE.md`, `DECISIONS.md` and the docs files, push).
-- [ ] Done
-
-### B4 · CLAUDE CODE · GIT · Sat 06:10 — CC-B1: scaffold
-
-**Do:** in TERMINAL:
-
-```bat
-%USERPROFILE%\venvs\s2s\Scripts\activate.bat
-claude
-```
-
-In Claude Code, `/clear`, then paste:
+**Replace "What the project is" with:**
 
 ```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B1: scaffold the repository. Create exactly these files and folders:
-
-1. package.json: name "signal-to-syndrome", version "0.1.0", private true, "type": "module", "engines": {"node": ">=20"}, scripts {"test": "node --test", "build": "node tools/build.mjs", "check": "node tools/release_check.mjs"}. Then run `npm install --save-dev esbuild` (the only dependency allowed).
-2. .gitignore containing: node_modules/, dist/, __pycache__/, *.pyc, .pytest_cache/
-3. LICENSE: the standard MIT licence text with "Copyright (c) 2026 PERSON_A_NAME and PERSON_B_NAME".
-4. README.md with these sections, using short placeholder text where content does not exist yet: title "Signal to Syndrome"; "Authors" (PERSON_A_NAME: physics and data; PERSON_B_NAME: decoder, interface and platform); a one-paragraph description based on CLAUDE.md; "Status" (SP0, scaffold); "Run it on Qollab"; "Rebuild locally" (npm install, npm test, npm run build); "Repository layout"; "Methods implemented and sources" (empty list); "Libraries and tools" (esbuild as a build-only tool; Qiskit; the IonQ provider through Qollab; PyMatching and pytest for local validation only); "AI assistance and planning disclosure" (placeholder: planning documents and prompts were prepared before the build window; all code was generated during the window with Claude Code under the authors' direction and reviewed by the authors); "Licence" (MIT); and the exact line "This effort is supported by Qollab & IonQ."
-5. Empty folders, each kept with a .gitkeep file: src/core/readout, src/ui/stubs, tools, tests, qollab, validation, data/banks, data/raw, data/results, data/vectors, data/fixtures, params, docs. Do not touch CLAUDE.md, DECISIONS.md or any existing file in docs/.
-6. tests/smoke.test.js: one passing test, with the required comment stating the break it catches (it fails if the test runner is misconfigured).
-7. tools/build.mjs and tools/release_check.mjs: stubs that print "not implemented yet (CC-B6)" and exit with code 0.
-
-Create nothing else. Run `npm test`. End with the report format from CLAUDE.md and list PERSON_A_NAME and PERSON_B_NAME as open issues for the humans.
-```
-
-Then in EDITOR replace `PERSON_A_NAME` and `PERSON_B_NAME` in `LICENSE` and `README.md`, and in TERMINAL:
-
-```bat
-npm test
-git add -A
-git commit -m "CC-B1: scaffold"
-git tag start
-git push
-git push --tags
-```
-
-Send `HANDOFF scaffold`.
-**Pass:** pushed by 06:30; Person A acknowledges.
-- [ ] Done
-
-### B5 · CLAUDE CODE · GIT · Sat 06:30 — CC-B2: randomness, banks, detectors
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B2: randomness, banks and detectors.
-Create exactly: src/core/rng.js, src/core/bank.js, src/core/detectors.js, tests/rng.test.js, tests/bank.test.js, tests/detectors.test.js. Follow the Module API in CLAUDE.md exactly; Person A's code will depend on it.
-
-1. rng.js: createRng(seed) returning { uniform(), normal(), exponential(rate), poisson(lambda), int(n) }. uniform: mulberry32. normal: Box-Muller with a cached second value. poisson: Knuth's multiplication method for lambda < 30, PTRS (Hormann 1993) for lambda >= 30; lambda = 0 returns 0.
-2. bank.js: validateBank(obj) (schema s2s-bank/1, required fields, checksum totals; extra fields such as "inject" or "fixture" are allowed; throws with a clear message); bitsFromKey(hexKey, nClbits) -> Uint8Array where element b is classical bit b (bit 0 = least significant bit); expandShots(bank) -> array of Uint8Array, keys in ascending numeric order, each repeated by its count; split(shotBits, layout, d, r) -> { m: array of r Uint8Array(d-1), x: Uint8Array(d) }.
-3. detectors.js: computeDetectors(m, x, d, r) -> Uint8Array((d-1)*(r+1)) with D[k][j] = m[k][j] XOR m[k-1][j] (m[-1] = 0) for k < r, and D[r][j] = x[j] XOR x[j+1] XOR m[r-1][j]; index k*(d-1) + j.
-
-Tests (each with the required break comment):
-- rng: the same seed gives the same first 1000 uniforms; different seeds differ; normal mean and variance; poisson mean and variance at lambda = 5 and lambda = 50 (both branches); tolerances of at least 4 standard errors with the formula in the comment.
-- bank: bitsFromKey for a key where only bit 0 is set and a key where only bit n-1 is set (a non-vacuous boundary pair); expandShots length equals total shots; split on a hand-built d = 3, r = 2 shot; validateBank accepts an extra "inject" field and rejects a wrong total.
-- detectors: no errors gives all zeros; a flip of interior data qubit i before round k (applied by hand to m and x) lights exactly D[k][i-1] and D[k][i]; an end-qubit flip lights exactly one detector; a single wrong m[k][j] with k < r-1 lights D[k][j] and D[k+1][j]; a wrong m[r-1][j] lights D[r-1][j] and the final-layer D[r][j].
-
-Run `npm test`. End with the report format.
-```
-
-Then `npm test`, `git pull --rebase`, `git status --short` (only your files), `git add -A`, `git commit -m "CC-B2: rng, banks, detectors"`, `git push`. Send `HANDOFF H1 and H2: rng.js, bank.js, detectors.js`.
-**Pass:** all tests pass; pushed by 07:45.
-- [ ] Done
-
-### B6 · CLAUDE CODE · GIT · Sat 07:45 — CC-B3: decoding graph, matching decoder, logical decision
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B3: the decoding graph, the matching decoder and the logical decision.
-Create exactly: src/core/graph.js, src/core/matching.js, src/core/logical.js, tests/graph.test.js, tests/matching.test.js, tests/logical.test.js.
-
-1. graph.js:
-   - buildGraph(d, r) for odd d >= 3 and r >= 1. Nodes: detectors 0..(d-1)*(r+1)-1 and the boundary node B = (d-1)*(r+1). Edges, each { id, u, v, kind, layer, dataQubit, check, round, observable }:
-     space-like, for every layer k = 0..r: data qubit 0 joins (k, 0) to B with observable = true; data qubit i = 1..d-2 joins (k, i-1) to (k, i); data qubit d-1 joins (k, d-2) to B.
-     time-like, for every check j and round k = 0..r-1: joins (k, j) to (k+1, j); it represents a wrong report of m[k][j].
-   - Expected counts: d*(r+1) space-like edges, (d-1)*r time-like edges, r+1 observable edges.
-   - weightFromP(p) = ln((1-p)/p) with p clamped to [1e-12, 0.5]; weightFromLlr(llr) = |llr| (Infinity allowed); pFromLlr(llr) = 1/(1 + exp(|llr|)); xorP(a, b) = a + b - 2ab.
-2. matching.js: decode(graph, weights, detectorBits) -> { flip, nDefects, exact, cost, paths }, exactly as in the Module API: paths lists every chosen pairing as { a, b, edges }, with b = "B" for the boundary and edges the edge ids along the chosen shortest path.
-   - Lit detectors are the indices with bit 1. Run Dijkstra from each lit detector over the whole graph, including the boundary node; weights are non-negative and Infinity edges are unusable. Track, for each shortest path, the parity of observable edges; break ties deterministically by lower parity, then lower predecessor index.
-   - Pair cost and parity for every pair of lit detectors; boundary cost and parity for each.
-   - If nDefects <= 20: exact dynamic programming over subsets (always resolve the lowest unmatched detector, either to the boundary or to another unmatched detector), Float64Array of size 2^n, stored choices, reconstruction; flip = XOR of chosen parities; exact = true.
-   - If nDefects > 20: greedy (repeatedly take the cheapest remaining pair or boundary option); exact = false.
-3. logical.js: correctedLogical(xHat0, flip) = xHat0 XOR flip; isLogicalError(corrected, logical).
-
-Tests (each with the required break comment):
-- graph: node and edge counts for (d, r) = (3, 1), (5, 3), (7, 3); the observable edges are exactly the data-qubit-0 edges.
-- matching with uniform weights: no defects gives flip 0 and cost 0; a lone defect at (k, 0) gives flip 1; a lone defect at (k, d-2) gives flip 0; an interior horizontal pair gives flip 0; a vertical pair gives flip 0 with cost equal to one time-like weight.
-- distance (non-vacuous pair): with d = 3, flips of data qubits 0 and 1 in one layer leave one defect that the decoder resolves through qubit 2, so the corrected logical is wrong; with d = 5, flips of qubits 0 and 1 are resolved correctly.
-- exactness: on 300 random instances with up to 8 defects and random positive weights, the dynamic-programming cost equals brute-force enumeration over all matchings.
-- more than 20 defects returns exact = false and a valid flip.
-- paths: for a vertical pair, the single path contains exactly the one time-like edge between them; for a lone defect at (k, 0), the path ends at "B" and contains the observable edge.
-
-Run `npm test`. End with the report format.
-```
-
-Then test, commit and push as in B5. Send `HANDOFF H3: graph.js, matching.js, logical.js`.
-**Pass:** all tests pass, including the exactness test; pushed by 09:30.
-- [ ] Done
-
-### B7 · CLAUDE CODE · VERIFY · Sat 09:30 — CC-B4: PyMatching cross-check (V2)
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B4: independent cross-check of the decoder against PyMatching (validation V2).
-Create exactly: tools/export_vectors.mjs, validation/pymatching_check.py.
-
-1. tools/export_vectors.mjs [--n 20000] [--seed 1]: for (d, r) in (3,3), (5,3), (5,5), (7,3): build the graph; draw each edge independently with probability 0.03 (seeded rng); lit detectors are the detector nodes (not the boundary) touched an odd number of times; the true observable flip is the parity of drawn observable edges. Decode with src/core/matching.js using uniform weights weightFromP(0.03). Write data/vectors/vectors_d<d>_r<r>.json with: d, r, number of detectors, edges [{u, v, weight, observable}] (v = -1 for boundary edges), shots [{lit, ourFlip, ourCost, ourExact, trueFlip}].
-2. validation/pymatching_check.py <files...>: for each file build pymatching.Matching with add_edge(u, v, weight=w, fault_ids={0} if observable else set()) for detector pairs and add_boundary_edge(u, weight=w, fault_ids=...) for boundary edges. Decode each shot's syndrome (a 0/1 array over detectors). Compare predictions with ourFlip. For each mismatch on a shot with ourExact = true, obtain PyMatching's solution weight (decode with return_weight=True if available) and compare with ourCost: |difference| < 1e-9 is a tie, otherwise a genuine mismatch. Report mismatches on ourExact = false shots separately; they are not failures. Print a table per file; exit 1 on any genuine mismatch.
-
-Run `node tools/export_vectors.mjs --n 20000 --seed 1`, then `python validation\pymatching_check.py data\vectors\vectors_d3_r3.json data\vectors\vectors_d5_r3.json data\vectors\vectors_d5_r5.json data\vectors\vectors_d7_r3.json`. End with the report format.
-```
-
-Re-run both commands from the prompt yourself. Record the tie counts in your section of `DECISIONS.md`. Commit and push.
-**Pass:** zero genuine mismatches in all four files.
-- [ ] Done
-
-### B8 · CLAUDE CODE · Sat 10:15 — CC-B5: stubs, fixtures, feature flags, bridges
-
-**Why:** lets you build the whole interface without waiting for Person A.
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B5: stubs, fixtures, feature flags and bridges, so that the interface can be built before Person A's modules and data exist.
-Create exactly: src/ui/stubs/sweep_stub.js, src/ui/stubs/flat_stub.js, src/ui/stubs/ion_stub.js, src/ui/stubs/sc_stub.js, src/ui/bridge_core.js, src/ui/bridge_data.js, src/ui/features.js, tools/make_fixtures.mjs, tests/stubs.test.js.
-
-1. Stubs implement Person A's Module API signatures exactly, with simple placeholder physics:
-   - flat_stub: createFlatReadout({ epsilon }) as specified for the real model.
-   - ion_stub: createIonReadout(params, tau): Poisson counts with means R_bright*tau and R_dark*tau (values from the parameter card), threshold at the midpoint of the means, llr = n ln(Rb/Rd) - (Rb - Rd) tau, idleFlipProbability() = 0, averageAssignmentError() from Poisson tails, and the method countHistogram(bit, nSamples, rng).
-   - sc_stub: createScReadout(params, tau): signal mu0 = 0, mu1 = 4 sqrt(tau), noise sigma = 1, Gaussian llr, idleFlipProbability() = 0.5 (1 - exp(-tau / T1_us)), averageAssignmentError() from a normal tail, and the methods snr() and iqSamples(bit, n, rng).
-   - sweep_stub: decodeShot, runPoint and diagnostic with the API signatures, using Person B's own bank, detectors, graph, matching and logical modules, readout.measure on every bit, no idle errors and uniform weights; diagnostic returns "stub0000".
-2. bridge_core.js contains exactly these four lines:
-   export { decodeShot, runPoint, diagnostic } from './stubs/sweep_stub.js';
-   export { createFlatReadout } from './stubs/flat_stub.js';
-   export { createIonReadout } from './stubs/ion_stub.js';
-   export { createScReadout } from './stubs/sc_stub.js';
-3. bridge_data.js contains one import line per item followed by one export line, importing from ../../data/fixtures/: stage1 (stage1_flat.json), stage2 (stage2_ion.json), stage3 (stage3_sc.json), stage4 (stage4_comparison.json), bankD3R1 (rep_d3_r1_L0.json), bankD3R3 (rep_d3_r3_L0.json), paramsIon (params_ion.json), paramsSc (params_sc.json), paramsCycle (params_cycle.json).
-4. features.js: export const FEATURES = { level1: true, level2: true, ion: false, superconducting: false, level5: false, liveRun: false };
-5. tools/make_fixtures.mjs writes the nine files into data/fixtures/. Every file follows its format in CLAUDE.md (s2s-results/1, s2s-bank/1, or the parameter-card templates in the checklist) and contains "fixture": true at top level. Results contain plainly synthetic smooth curves. The two banks are simulated directly at bit level (data flips before a round flip the reports of the checks touching that qubit in that and later rounds and the final readout; measurement flips change one bit), each data flip and measurement flip with probability 0.02, seed 11, 2000 shots each, keys encoded as in CLAUDE.md, with valid checksums so that validateBank accepts them.
-
-Tests (break comments required): every stub returns objects with exactly the API fields; every fixture file has its required fields and "fixture": true; validateBank accepts both fixture banks.
-
-Run `node tools/make_fixtures.mjs` and `npm test`. End with the report format.
-```
-
-Commit and push.
-**Pass:** `node tools/make_fixtures.mjs` writes nine files; tests pass.
-- [ ] Done
-
-### B9 · CLAUDE CODE · Sat 11:00 — CC-B6: levels 1–2, build tool, release check
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first (D5, the bundle-size limit, and D9, the HTML-pane format, matter here).
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B6: the first interface (levels 1 and 2), the build tool and the release check.
-Create exactly: src/ui/main.js, src/ui/level1.js, src/ui/level2.js, src/ui/charts.js, src/ui/diag.js, src/ui/index.template.html, src/ui/style.css; replace the stubs tools/build.mjs and tools/release_check.mjs.
-
-Import everything from Person A (decodeShot, runPoint, diagnostic, createFlatReadout, banks, results, parameter cards) only from src/ui/bridge_core.js and src/ui/bridge_data.js, and do not modify the bridges or features.js. Show each level only when its flag in FEATURES is true.
-
-Interface (one page, sentence-case labels, no external fonts or libraries):
-- Header with the title "Signal to Syndrome" and a level selector. Footer with the version from package.json, the exact line "This effort is supported by Qollab & IonQ." and a collapsible "Diagnostics" section.
-- Level 1 "Be the decoder": d = 3, one round, shots drawn (seeded) from bankD3R1 among shots with at least one lit detector, flat readout with adjustable epsilon (default 0.02), decoded with decodeShot. Show the three data qubits and two check lights. The player clicks the data qubit they think flipped, or "no correction". Then reveal the decoder's answer and whether the logical value survived; keep a score over 10 shots.
-- Level 2 "Time is a dimension": d = 3, three rounds, bankD3R3. Draw the space-time detector grid as SVG (columns = checks, with a boundary column on each side; rows = rounds plus the final layer), lit detectors filled, the decoder's matching drawn from decodeShot's paths; previous and next shot buttons. Below it, an epsilon slider (0 to 0.12) and a chart of logical error against epsilon for d = 3, 5, 7 from stage1, with a marker at the slider value and a live estimate at that value computed with runPoint from 1000 shots of bankD3R3.
-- charts.js draws inline SVG charts: axes, ticks, optional log scale, error bars, legend. Series differ by colour and by marker shape; colours remain distinguishable with colour-vision deficiency.
-- Accessibility: every control works with the keyboard and shows a visible focus ring; text contrast at least 4.5:1; every chart has a text alternative listing its values.
-- diag.js calls diagnostic(bankD3R3) and shows the result in the Diagnostics section.
-
-tools/build.mjs: bundle src/ui/main.js with esbuild (format iife, minify, JSON imports embedded) into dist/qollab/main.js; write dist/qollab/main.css; write dist/qollab/index.html from the template as a body fragment (D9: Qollab strips <html>, <head> and <body> and does not run <script> tags), with no script or stylesheet tags, because Qollab loads main.js and main.css itself. Also write dist/local/preview.html, one self-contained file with the CSS and JavaScript inlined, for local testing. Print each output file's size. (The source files keep their names, src/ui/main.js and src/ui/style.css; only the files in dist/qollab/ use the Qollab names.)
-
-tools/release_check.mjs: exit 1 unless all of these hold, printing a pass/fail table:
-- the three dist/qollab files (index.html, main.css, main.js) exist; main.js plus index.html are at most 1 900 000 bytes (D5);
-- neither main.js nor index.html contains "fetch(", "XMLHttpRequest", "WebSocket" or "import(";
-- every http(s) URL in them has a host on the allowlist qollab.xyz, ionq.com, docs.ionq.com, arxiv.org, doi.org, github.com;
-- the attribution line appears in index.html and README.md; LICENSE exists and contains neither PERSON_A_NAME nor PERSON_B_NAME;
-- every file in data/banks passes validateBank;
-- for every feature set to true in src/ui/features.js, each bridge export it needs is imported from a path containing neither "stubs/" nor "fixtures/". Needs: level1 and level2: decodeShot, runPoint, diagnostic, createFlatReadout, bankD3R1, bankD3R3, stage1; ion: createIonReadout, stage2, paramsIon; superconducting: createScReadout, stage3, paramsSc; level5: stage2, stage3, stage4, paramsIon, paramsSc, paramsCycle; liveRun: nothing.
-
-Run `npm test`, `npm run build` and `npm run check`. While the bridges still point to stubs the check is expected to fail on the bridge rule only; report exactly which lines fail. End with the report format.
-```
-
-Open `dist\local\preview.html` and play levels 1 and 2 on the stubs. Commit and push.
-**Pass:** tests and build pass; the release check fails only on the bridge rule (stubs still in use).
-- [ ] Done
-
-### B10 · EDITOR · TERMINAL · VERIFY · Sat 12:30 — Switch to Person A's real Stage 1 work
-
-**Depends on:** H4, H5 and H6. `git pull --rebase` first.
-**Do:** make switches 1–4 of Appendix T3. Then:
-
-```bat
-npm test
-npm run build
-npm run check
-start "" "dist\local\preview.html"
-```
-
-Open Diagnostics and compare the fingerprint with Person A's (V9).
-**Pass:** release check passes; fingerprints match; levels 1–2 show real data. Commit and push.
-- [ ] Done
-
-### B11 · JOINT · Sat 13:00 — J3 (SP1)
-
-You lead steps 2–7.
-- [ ] Done
-
-### B12 · CLAUDE CODE · Sat 13:30 — CC-B7: ion levels 3–4 and the live-run button
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B7: levels 3 and 4 for the trapped-ion readout, and the live-run button.
-Create exactly: src/ui/level3.js, src/ui/level4.js, src/ui/liverun.js. Modify only src/ui/main.js (register the levels), src/ui/style.css, tools/build.mjs and tools/release_check.mjs (the live-run import, below).
-
-Use only the bridges for Person A's modules and data (createIonReadout, decodeShot, runPoint, stage2, paramsIon, bankD3R3). Show the trapped-ion platform only when FEATURES.ion is true and the live-run button only when FEATURES.liveRun is true. Do not modify the bridges or features.js.
-
-- Level 3 "Listen longer?": a detection-time slider over the tau grid of paramsIon; histograms of photon counts for bright and dark (the readout object's countHistogram method, 5000 samples each) with the threshold marked; the assignment error at the slider value; the chart of logical error against tau from stage2 (hard mode) for each distance, with optima.tauPhys and optima.tauLog marked (or "no interior minimum"); a "Batch" button that runs runPoint with 200 shots of bankD3R3 at the slider value and shows the logical error with its interval.
-- Level 4 "Trust but verify": the level 2 grid, each lit detector shaded by the confidence of the measurements that produced it (from decodeShot's llrAnc and llrData; opacity plus ring thickness, never colour alone); for each shot, decodeShot in mode "hard" and in mode "soft" with the same seed, their matchings (paths) side by side, and whether each kept the logical value; a running tally over 20 shots; and the chart of hard against soft logical error against tau (stage2).
-- liverun.js: the live run must use native gates, or it returns no detector events (DECISIONS platform facts, D4), so JavaScript does not build the circuit itself: it calls Person A's Python helper qollab/live.py, as tested in probe P10 (D11). If D11 says the live run works: a "Run a fresh experiment" button that calls `(await globalThis.s2sLive.run_live.callPromising(backend, 200, seed)).toJs()` (`backend` is Qollab's pre-created global; seed is a new integer per press, for example Date.now() modulo 2^31, shown on screen), converts a Map result with Object.fromEntries, turns the binary-key counts into an in-memory s2s-bank/1 bank for d = 3, r = 3, L0 (hex keys and layout as in CLAUDE.md, with a checksum that validateBank accepts), validates it with validateBank, and feeds it to level 4. Show a status line while the job runs (expect tens of seconds to minutes) and a clear message on error. If globalThis.s2sLive is undefined, or D11 says the live run does not work, show instead a short note with a link to the bank generator project (link in DECISIONS.md). Do not invent any API beyond docs/qollab_js_api_example.txt and P10.
-- tools/build.mjs: esbuild cannot keep an ES import inside an IIFE (an external import becomes a require() call that fails in the browser), so when FEATURES.liveRun is true, write dist/qollab/main.js as the single line `import * as s2sLive from 'qollab.live'; globalThis.s2sLive = s2sLive;` followed by the IIFE bundle (use 'live' instead of 'qollab.live' if D11 says live.py had to sit at the top level). When liveRun is false, main.js is the IIFE alone, as before. CLAUDE.md rule 3 allows exactly this one import.
-- tools/release_check.mjs: when liveRun is false, main.js must not contain "qollab.live"; when it is true, the first line of main.js must be exactly the import line above. Print a reminder that qollab/live.py must be uploaded to the main project with the three files.
-- The accessibility rules from CC-B6 apply.
-
-Run `npm test`, `npm run build` and `npm run check`. End with the report format.
-```
-
-To try the ion levels locally before Person A's model arrives, temporarily set `ion: true` in `src/ui/features.js`, build and preview; set it back to `false` before committing. Commit and push.
-**Pass:** tests and build pass; the ion levels work on stubs in the preview.
-- [ ] Done
-
-### B13 · EDITOR · VERIFY · Sat 15:30 — Switch to the real ion model
-
-**Depends on:** H7. `git pull --rebase` first.
-**Do:** make switch 5 of Appendix T3 (ion model and parameter card); keep `ion: false` until the Stage 2 results arrive (B16). Build and preview with `ion: true` temporarily to check that the real model works with the interface. Commit (with `ion: false`) and push.
-**Pass:** count histograms and live decoding behave sensibly with the real model.
-- [ ] Done
-
-### B14 · REVIEW · Sat 16:00 — Cross-review of Person A's Stage 1 and 2 code
-
-**Do:** `git diff start..HEAD -- qollab validation/test_circuits.py tools/assemble_bank.mjs tools/sweep.mjs src/core/readout src/core/idle.js src/core/calibrate.js src/core/stats.js src/core/sweep.js src/core/quadrature.js src/core/optimum.js > review_a1.diff`. Review it in a fresh Claude chat with the Appendix T5 prompt, focusing on contract compliance, bit order, the use of your modules' API, and test quality. Send findings to Person A.
-- [ ] Done
-
-### B15 · CLAUDE CODE · Sat 17:00 — CC-B8: superconducting platform in the interface
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B8: the superconducting platform in the interface.
-Create exactly: src/ui/iqview.js. Modify only src/ui/level3.js, src/ui/level4.js, src/ui/main.js and src/ui/style.css.
-
-Use only the bridges (createScReadout, decodeShot, runPoint, stage3, paramsSc, bankD3R3). Show the superconducting platform only when FEATURES.superconducting is true. Do not modify the bridges or features.js.
-
-- A platform toggle (trapped ion / superconducting) shared by levels 3 and 4, listing only enabled platforms; each platform keeps its own slider position.
-- Superconducting level 3: an integration-time slider over the tau grid of paramsSc; iqview.js draws IQ samples (the readout object's iqSamples method, 1500 per state) with the two cluster centres and the threshold line, so that decays show as points smeared between the clusters; the assignment-error U-curve from stage3 (assignment) with the current tau marked; logical error against tau (stage3 series, hard) with optima.tauPhys and optima.tauLog marked.
-- Superconducting level 4: as for the ion, using createScReadout and stage3.
-- The accessibility rules from CC-B6 apply.
-
-Run `npm test`, `npm run build` and `npm run check`. End with the report format.
-```
-
-Try it locally with `superconducting: true` temporarily; commit with it set to `false`. Push.
-**Pass:** tests and build pass; the platform toggle works on stubs.
-- [ ] Done
-
-### B16 · EDITOR · VERIFY · Sat 19:30 — Switch to the real Stage 2 results
-
-**Depends on:** H8.
-**Do:** make switches 6–7 of Appendix T3 (results file; `ion: true`). Build, check, preview. If D11 says the live run works and Person A has pushed `qollab/live.py`, prepare `liveRun: true` for J4. The local preview has no `backend`, so the live run can only be tested on Qollab, in J4 step 4.
-**Pass:** release check passes with `ion: true`.
-- [ ] Done
-
-### B17 · JOINT · Sat 20:00 — J4 (SP2)
-
-- [ ] Done
-
-### B18 · CLAUDE CODE · Sat 20:30 — CC-B9: level 5
-
-**Do:** in Claude Code, `/clear`, then paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B9: level 5, the platform comparison.
-Create exactly: src/ui/level5.js. Modify only src/ui/main.js and src/ui/style.css.
-
-Use only the bridges (stage2, stage3, stage4, paramsIon, paramsSc, paramsCycle). Show level 5 only when FEATURES.level5 is true. Do not modify the bridges or features.js.
-
-- Side-by-side charts of logical error against tau for both platforms (each on its own tau axis, labelled in microseconds), with a toggle between "per round" and "per microsecond" (from stage4).
-- A table of tau*_phys, tau*_log, per-round and per-microsecond logical error, and break-even assignment error, for both platforms and both decoding modes.
-- The sensitivity table (holds / flips / undetermined).
-- Each parameter card with its sources, with UNSOURCED labels visible.
-- A fixed caption: "Both readout models are classical models with literature parameters, applied to the same IonQ-simulated circuit noise. This is a controlled comparison of readout physics, not a hardware benchmark."
-- The accessibility rules from CC-B6 apply.
-
-Run `npm test`, `npm run build` and `npm run check`. End with the report format.
-```
-
-Try it locally with `level5: true` temporarily; commit with `false`; push. At 22:15, whatever the state, commit and push, and write five handoff lines in your section of `DECISIONS.md`.
-- [ ] Done
-
-### B19 · SELF · Sat 22:30 — Sleep
-
-Alarm at 04:15.
-- [ ] Done
-
-### B20 · CLAUDE CODE · VERIFY · Sun 04:30 — CC-B10: accessibility pass
-
-**Do:** `git pull --rebase`; read your handoff lines; finish CC-B9 if needed. Then in Claude Code, `/clear`, paste:
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
-
-Task CC-B10: accessibility and polish pass.
-Modify only files in src/ui/.
-
-Check and fix: keyboard reachability and a sensible tab order for every control; visible focus; aria-labels on controls without visible text; a text alternative listing the values of every chart; contrast of every text and background pair at least 4.5:1 (compute and list the ratios); no information carried by colour alone; the reduced-motion preference respected; the page usable at 360 px width. Produce a table of every check with pass/fail before and after.
-
-Run `npm test`, `npm run build` and `npm run check`. End with the report format.
-```
-
-Then complete level 1 and level 3 using only the keyboard. Commit and push.
-**Pass:** the report's check table is all "pass"; your keyboard-only run succeeds.
-- [ ] Done
-
-### B21 · EDITOR · VERIFY · Sun 07:00 — Switch to the real superconducting work
-
-**Depends on:** H9 and H10.
-**Do:** make switches 8–10 of Appendix T3. Build, check, preview both platforms. Commit and push.
-**Pass:** release check passes with `superconducting: true`.
-- [ ] Done
-
-### B22 · EDITOR · VERIFY · Sun 08:30 — Switch to the real Stage 4 results
-
-**Depends on:** H11.
-**Do:** make switch 11 of Appendix T3 (keep `level5: false` until J6). Preview level 5 with `level5: true` temporarily. Commit with `false`; push.
-- [ ] Done
-
-### B23 · JOINT · Sun 09:00 — J5 (SP3)
-
-- [ ] Done
-
-### B24 · REVIEW · Sun 09:30 — Cross-review of Person A's Stage 3 and 4 code
-
-**Do:** `git diff sp2..HEAD -- src/core/readout/sc.js src/core/special.js src/core/metrics.js tools/sweep.mjs tests > review_a2.diff`; review in a fresh Claude chat with the Appendix T5 prompt, asking the reviewer to re-derive $|\Delta\alpha|^2$ and the SNR formula independently. Send findings.
-- [ ] Done
-
-### B25 · EDITOR · Sun 11:00 — README and the interface sections of the page
-
-**Do:** finalize `README.md` (authors, how to run on Qollab with both links, how to rebuild, repository layout, libraries and tools, the AI-assistance and planning disclosure in the form the rules require, licence, attribution), adding Person A's "Methods implemented and sources" text. In `docs/project_page.md`, write "How to run it" (browser note: Chrome, Edge or Opera), the description of each level, and accessibility. Take screenshots of every level. Commit and push.
-- [ ] Done
-
-### B26 · JOINT · Sun 13:00 — J6 (SP4)
-
-- [ ] Done
-
-### B27 · SELF · QOLLAB · Sun 13:30 — Demo and the Qollab page
-
-**Do:** record a two-minute walkthrough (Windows: Win+Alt+R with the Xbox Game Bar, or OBS): the question, level 1, the ion level 3 slider, the soft-decoding duel, the superconducting U-curve, the comparison, the honest conclusion. Paste `docs/project_page.md` into the main project's description with the screenshots, the video and the generator link; simplify any formula Qollab does not render.
-**Pass:** video under two minutes; the page reads correctly in a signed-out window.
-- [ ] Done
-
-### B28 · JOINT · Sun 17:30 — J7
-
-- [ ] Done
-
-### B29 · CLAUDE CODE · Sun 18:00 — Buffer: fix bugs in your files
-
-Fix only blocking and major bugs in files you own, each with the fix prompt (Appendix T5); `npm test`, `npm run build`, `npm run check`; commit; push.
-- [ ] Done
-
-### B30 · JOINT · Sun 21:00 — J8
-
-Review Person A's files since `sp4`; then tag `rc1` once both sides' blocking findings are fixed.
-- [ ] Done
-
-### B31 · JOINT · Sun 22:30 — J9
-
-You do steps 1, 3 and 5.
-- [ ] Done
-
----
-
-## Appendix T1 — Team `CLAUDE.md` (full text)
-
-Person B creates `CLAUDE.md` in J2 with exactly this content.
-
-~~~markdown
-# CLAUDE.md — Contract for Signal to Syndrome
-
-This file is the contract for all code in this repository. Authority order: this file > DECISIONS.md > docs/*.md plans > the current prompt. If a prompt conflicts with this file, stop and say so.
-
 ## What the project is
-An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise), submitted in native gates so IonQ's optimiser does not remove them. Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
+An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of repetition-code memories (bit-flip and phase-flip), as a comparison of two readout physics models at fixed gate noise. Circuits: Qiskit on IonQ's simulator (forte-1 noise), submitted in native gates. Readout models and idle physics: classical, in JavaScript. Decoder: our own exact minimum-weight matching on a naive graph (space and time edges, one calibrated rate) or a learned graph (space, time and diagonal edges, per-class rates learned from detector correlations).
+```
 
-## Architecture rules
-1. Core logic lives in `src/core/` as ES modules (package "type": "module"). No runtime dependencies. No DOM, network or file-system access in `src/core/`.
-2. The user interface lives in `src/ui/` and imports from `src/core/`.
-3. The shipped artefact is `dist/qollab/` (index.html, main.css, main.js; index.html is a body fragment), built by `tools/build.mjs` with esbuild into one IIFE with all data embedded. Nothing in `dist/` may load an external resource or call fetch, XMLHttpRequest, WebSocket or dynamic import(). Only exception: when the liveRun feature is on, main.js begins with the single line `import * as s2sLive from 'qollab.live'; globalThis.s2sLive = s2sLive;` before the IIFE (`'live'` instead of `'qollab.live'` if D11 says so). It loads the Python helper qollab/live.py, which is uploaded to the main project with the three files (DECISIONS D11).
-4. Node scripts for builds, sweeps and checks live in `tools/` as .mjs files. They may read and write files.
-5. Python appears only in `qollab/` (runs on Qollab: standard library plus qiskit, uses the pre-existing `backend` object, never constructs providers or reads API keys; it may derive a native-gate backend with backend.with_name(backend.name, gateset="native", noise_model="forte-1") (DECISIONS D1)) and `validation/` (runs locally with %USERPROFILE%\venvs\s2s\Scripts\python.exe).
+**In "Conventions", replace the "Check j", "Logical observable" and "Idle errors" bullets with:**
 
-## Conventions
-- Indexing in code is 0-based. Data qubits i = 0..d-1. Check j = 0..d-2 measures Z_j Z_{j+1}. Rounds k = 0..r-1. Detector layers k = 0..r, where layer r is the final layer computed from the data readout. Detector index = k*(d-1) + j. Boundary node index = (d-1)*(r+1).
-- Classical-bit layout (fixed): check j of round k is classical bit k*(d-1) + j; data qubit i is classical bit (d-1)*r + i.
-- Bit order: Qiskit little-endian. Classical bit 0 is the least significant bit of the integer (the rightmost character of a binary key). Banks store keys as lowercase hexadecimal without prefix. n_clbits <= 29, so parseInt(hex, 16) is exact.
-- Logical observable: the Z value of data qubit 0. Observable edges are the edges representing a flip of data qubit 0.
-- Idle errors: an X on data qubit i after round k (k = 0..r-2) flips m[k'][i-1] and m[k'][i] (checks that exist) for all k' > k, and flips x[i]. No idle error is applied after the last round, because the data are read out together with the last ancillas.
-- Units: time in microseconds. Frequencies in parameter files are ordinary frequencies in MHz, converted to angular frequency 2*pi*f in rad/us at load. Count rates in counts per microsecond.
-- Randomness: every function that draws random numbers takes an explicit rng from createRng(seed). Never use Math.random.
-- Readout-model contract: measure(trueBit, rng) -> { hard, llr }; idleFlipProbability(); averageAssignmentError(). llr = ln[p(s|1)/p(s|0)]; +/-Infinity is allowed for perfect readout.
-- Edge weights: w = ln[(1-p)/p] with p clamped to [1e-12, 0.5]; soft weights use p = 1/(1 + exp(|llr|)) for the readout part.
+```text
+- Indexing in code is 0-based. Data qubits i = 0..d-1. Check j = 0..d-2 measures Z_j Z_{j+1} in the Z basis (bit-flip memory) and X_j X_{j+1} in the X basis (phase-flip memory). Rounds k = 0..r-1. Detector layers k = 0..r, where layer r is the final layer computed from the data readout. Detector index = k*(d-1) + j. Boundary node index = (d-1)*(r+1). Banks carry "basis": "Z" | "X"; absent means "Z".
+- Logical observable: the value of data qubit 0 in the memory's basis (Z or X). Observable edges are the edges representing a flip of data qubit 0.
+- Decoding graph: space edges (data qubit flips within a layer; data qubits 0 and d-1 join the boundary), time edges (wrong reports of m[k][j]), and, in the learned graph only, diagonal edges (k, j+1)-(k+1, j) for k = 0..r-1, j = 0..d-3: a fault on data qubit j+1 between its CNOT into check j and its CNOT into check j+1 in round k. Diagonal edges are never observable. Callers pass { diagonal } explicitly.
+- Idle errors: an error on data qubit i after round k (k = 0..r-2) flips m[k'][i-1] and m[k'][i] (checks that exist) for all k' > k, and flips x[i]; in the X basis the error is a Z, with the same bit pattern. No idle error after the last round. Idle errors act on the true bits before readout. Probabilities for a wait tau: Z basis 1/2 (1 - exp(-tau/T1)); X basis 1/2 (1 - exp(-tau/T2)) with T2 <= 2*T1; ion crosstalk 1/2 (1 - exp(-Gamma_xt tau)) in either basis, combined with xorP.
+- Readout-model contract: measure(trueBit, rng) -> { hard, llr }; idleFlipProbability(basis = "Z"); idleBreakdown(basis = "Z") -> { idle, crosstalk, total }; averageAssignmentError(). llr = ln[p(s|1)/p(s|0)]; +/-Infinity is allowed for perfect readout.
+```
 
-## Testing rules
-- Node's built-in runner: `npm test` runs `node --test`. Test files are tests/*.test.js.
-- Every test carries a comment that states, in words, the break it catches (for example "fails if classical bit 0 is read from the left end of the key").
-- Boundary tests are non-vacuous: one case exactly on the boundary and one a fixed step past it, with different expected outcomes.
-- Statistical tests use fixed seeds and tolerances of at least 4 standard errors; the comment states the formula.
-- Never delete or weaken an existing test to make new code pass. Report the conflict instead.
+**Replace the ownership table with:**
 
-## Scope rules
-- Create or modify only the files named in the prompt. If another file must change, stop and explain why first.
-- No new dependencies unless the prompt says so.
-- Do not run git commands; the human commits.
-- Do not invent Qollab APIs. For anything Qollab-specific use only DECISIONS.md and docs/qollab_js_api_example.txt; if they do not cover it, stop and ask.
-
-## Report format (end every task with this)
-1. Files created or changed.
-2. Commands run, with summarized output (test counts, pass/fail).
-3. Assumptions made.
-4. Open issues and deviations from the prompt.
-
-## Team rules (two people)
-- Person A owns physics and data. Person B owns the decoder core, the interface and the platform work. Every prompt names its owner. Create or modify only files owned by that person (table below). If a change is needed in a file the other person owns, stop and write the request in the report instead.
-- CLAUDE.md changes only with both people's agreement. In DECISIONS.md each person edits only their own section.
-- Code may use the other person's modules only through the Module API below. The API changes only with both people's agreement.
-- Stubs and fixtures (Person B) live only in src/ui/stubs/ and data/fixtures/; every fixture JSON contains "fixture": true. The interface reaches Person A's modules and data only through src/ui/bridge_core.js and src/ui/bridge_data.js. A feature may be switched on in src/ui/features.js only when every bridge line it needs points to Person A's real module or data; tools/release_check.mjs enforces this.
-
+```text
 | Owner | Files |
 |---|---|
-| A | qollab/*; validation/test_circuits.py; tools/assemble_bank.mjs; tools/sweep.mjs; src/core/readout/*; src/core/idle.js; src/core/calibrate.js; src/core/stats.js; src/core/sweep.js; src/core/quadrature.js; src/core/special.js; src/core/optimum.js; src/core/metrics.js; params/*; data/banks/*; data/raw/*; data/results/*; docs/notes_results.md; the tests for these files |
-| B | package.json; package-lock.json; .gitignore; LICENSE; README.md; src/core/rng.js; src/core/bank.js; src/core/detectors.js; src/core/graph.js; src/core/matching.js; src/core/logical.js; src/ui/* (including stubs, bridges and features.js); tools/build.mjs; tools/release_check.mjs; tools/export_vectors.mjs; tools/make_fixtures.mjs; validation/pymatching_check.py; data/vectors/*; data/fixtures/*; docs/qollab_js_api_example.txt; the tests for these files |
-| Both | CLAUDE.md; DECISIONS.md (own section only); docs/project_page.md (sections as assigned) |
+| A | qollab/*; validation/test_circuits.py; tools/assemble_bank.mjs; tools/sweep.mjs; src/core/readout/*; src/core/idle.js; src/core/calibrate.js; src/core/dem.js; src/core/stats.js; src/core/sweep.js; src/core/quadrature.js; src/core/special.js; src/core/optimum.js; src/core/metrics.js; params/*; data/banks/*; data/raw/*; data/results/*; docs/notes_results.md; the tests for these files |
+| B | package.json; package-lock.json; .gitignore; LICENSE; README.md; src/core/rng.js; src/core/bank.js; src/core/detectors.js; src/core/graph.js; src/core/matching.js; src/core/logical.js; src/ui/* (including stubs, bridges, features.js, tokens.css); tools/build.mjs; tools/release_check.mjs; tools/export_vectors.mjs; tools/make_fixtures.mjs; tools/curate.mjs; validation/pymatching_check.py; data/vectors/*; data/fixtures/*; data/curated/*; docs/qollab_js_api_example.txt; docs/screenshots/*; the tests for these files |
+| Both | CLAUDE.md; DECISIONS.md (own section only); docs/project_page.md (sections as assigned); docs/notes_results.md (B: "Interface notes" section only) |
+```
 
-## Module API (stable; changes need both people)
-- rng.js (B): createRng(seed) -> { uniform(), normal(), exponential(rate), poisson(lambda), int(n) }.
-- bank.js (B): validateBank(obj) (throws on error; extra fields allowed); bitsFromKey(hexKey, nClbits) -> Uint8Array; expandShots(bank) -> Uint8Array[]; split(shotBits, layout, d, r) -> { m: Uint8Array[] (r rows of length d-1), x: Uint8Array(d) }.
-- detectors.js (B): computeDetectors(m, x, d, r) -> Uint8Array((d-1)*(r+1)).
-- graph.js (B): buildGraph(d, r) -> { d, r, nDetectors, boundary, edges: [{ id, u, v, kind: "space" | "time", layer, dataQubit, check, round, observable }] }; weightFromP(p); weightFromLlr(llr); pFromLlr(llr); xorP(a, b).
-- matching.js (B): decode(graph, weights, detectorBits) -> { flip, nDefects, exact, cost, paths }, where weights is a Float64Array indexed by edge id and paths is [{ a, b, edges }] with b = "B" for the boundary and edges the edge ids along the chosen path.
-- logical.js (B): correctedLogical(xHat0, flip); isLogicalError(corrected, logical).
-- Readout models (A): createFlatReadout({ epsilon }), createIonReadout(params, tau), createScReadout(params, tau). Each returns an object with measure(trueBit, rng) -> { hard, llr, ... }, idleFlipProbability() and averageAssignmentError(). The ion object also has the method countHistogram(bit, nSamples, rng) -> array of counts. The superconducting object also has the methods snr() and iqSamples(bit, n, rng) -> [{ i, q }].
-- idle.js (A): applyX(m, x, d, r, i, k); injectIdle(m, x, d, r, p, rng).
-- calibrate.js (A): estimatePGate(detectorArrays, d, r) -> { p, rate, nDetectors, nShots }.
-- stats.js (A): wilson(k, n, z = 1.96) -> { p, lo, hi }; bootstrap(nItems, statFn, B, rng) -> { mean, lo, hi }.
-- sweep.js (A): decodeShot({ shotBits, layout, d, r, readout, mode, pGate, rng }) -> { logicalError, corrected, flip, nDefects, exact, detectors, paths, hardAnc, hardData, llrAnc, llrData } (hardAnc and llrAnc have r rows of length d-1); runPoint({ bank, readout, mode, pGate, seed, maxShots }) -> { k, n, wilson, nonExact }; diagnostic(bank) -> 8-character hexadecimal string.
-- optimum.js (A): findMinimum(xs, ys, { logX }); minimumWithBootstrap(xs, perShotMatrix, B, rng).
-- metrics.js (A): perRound, perRoundToTotal, cycleTime, perMicrosecond, breakEven.
+**In "Module API", replace the graph.js, readout, calibrate.js, sweep.js and metrics.js lines and add dem.js:**
 
-## Results format (s2s-results/1)
-- Stages 1 to 3: { "schema": "s2s-results/1", "stage": 1 | 2 | 3, "platform": "flat" | "trapped-ion" | "superconducting", "x": { "name": "epsilon" | "tau_us", "values": [...] }, "series": [{ "d", "r", "mode": "hard" | "soft", "pL": [...], "lo": [...], "hi": [...], "n": [...] }], "assignment": { "belief": [...], "empirical": [...], "lo": [...], "hi": [...] } (stages 2 and 3), "optima": { "tauPhys": { "xMin", "atEdge" }, "tauLog": [{ "d", "mode", "xMin", "lo", "hi", "atEdge" }] } (stages 2 and 3), "params": {...}, "provenance": {...} }.
-- Stage 4: { "schema": "s2s-results/1", "stage": 4, "platforms": { "trapped-ion": P, "superconducting": P }, "sensitivity": [{ "platform", "parameter", "scale", "C1", "C2", "C3", "C4" }], "provenance": {...} }, where P = { "tauLog": {...}, "perRound": { "hard", "soft" }, "perMicrosecond": { "hard", "soft" }, "breakEven": { "epsBar", "tau_us" } } and each C value is "holds", "flips" or "undetermined".
-~~~
+```text
+- graph.js (B): buildGraph(d, r, { diagonal = false } = {}) -> { d, r, nDetectors, boundary, edges: [{ id, u, v, kind: "space" | "time" | "diag", layer, dataQubit, check, round, observable }] }; space and time edges come first with the same ids as the naive graph; weightFromP(p); weightFromLlr(llr); pFromLlr(llr); xorP(a, b).
+- Readout models (A): createFlatReadout({ epsilon }), createIonReadout(params, tau, { crosstalkRate } = {}), createScReadout(params, tau). Each returns measure(trueBit, rng) -> { hard, llr, ... }, idleFlipProbability(basis = "Z"), idleBreakdown(basis = "Z") -> { idle, crosstalk, total }, averageAssignmentError(). Ion: countHistogram(bit, nSamples, rng). Superconducting: snr(), iqSamples(bit, n, rng).
+- calibrate.js (A): estimatePGate(detectorArrays, d, r) -> { p, rate, nDetectors, nShots } (naive model, unchanged).
+- dem.js (A): pairRate(xi, xj, xij); estimateEdgeRates(detectorArrays, d, r) -> { classes: { space, spaceBoundary, time, diag }, counts, pij, firing, antiDiag, nShots }; ratesFromBanks(banks) -> the same, pooled over banks of equal d, r, basis.
+- sweep.js (A): decodeShot({ shotBits, layout, d, r, readout, mode, noise, basis, rng, logical = 0 }) with noise = { model: "naive", pGate } | { model: "learned", rates }; pGate alone is accepted as the naive model; returns { logicalError, corrected, flip, nDefects, exact, detectors, paths, hardAnc, hardData, llrAnc, llrData }; runPoint({ bank, readout, mode, noise, seed, maxShots }) -> { k, n, wilson, nonExact }; diagnostic(bank, { decoder = "naive" } = {}) -> 8-character hexadecimal string (naive: V9, learned: V9L).
+- metrics.js (A): perRound, perRoundToTotal, cycleTime(card, tau, d), perMicrosecond, roundsPerSecond, tradeoffCurve, breakEven.
+```
 
-## Appendix T2 — Team `DECISIONS.md`
+**Replace "Results format" with a pointer:** "Results formats are s2s-results/1 (v1 fields) plus the v2 fields in docs/signal-to-syndrome-team-checklist.md, Appendix U4. New fields are additive; v1 readers ignore them."
 
-~~~markdown
-# DECISIONS
+**Append a section:**
 
-Recorded during the build. Times in IST. Each person edits only their own section.
+```text
+## Integrity rules (v2)
+- Never rewrite pushed history, amend pushed commits, force push or change dates.
+- Every number on the page or in the README comes from data/results, params or DECISIONS, with a source comment.
+- The comparison is always described as two readout physics models at fixed gate noise.
+```
 
-## Shared decisions (agreed at J2)
+---
 
-| ID | Question | Answer |
+## Appendix U2 — `DECISIONS.md` v2 section
+
+Append at K1:
+
+```text
+## v2 (from tag window-start)
+
+| ID | Question | Answer | Evidence | Time | Who |
+|---|---|---|---|---|---|
+| E1 | What do the terms say about prior work; what did the organizers answer | | quote + email | | Both |
+| E2 | window-start commit | | git rev-parse | | B |
+| E3 | Edge classes and the boundary-rate method | as CC-A10 | tests/dem.test.js | | A |
+| E4 | V12b out of sample: learned against naive | | dem_forte1.json | | A |
+| E5 | O4: X/Z bulk detector-rate ratio per (d, r) | | dem_forte1.json | | A |
+| E6 | Ion crosstalk rate: value and source, or UNSOURCED | | params/ion.json | | A |
+| E7 | T2 values (ion idle, superconducting): value and source | | params/*.json | | A |
+| E8 | Ion two-qubit gates per round: parallel or sequential | | params/cycle.json | | A |
+| E9 | V9L hash (learned decoder) | | sweep.mjs --diag --decoder learned | | A |
+| E10 | Hallway-test findings, ranked | | K5 notes | | Both |
+```
+
+---
+
+## Appendix U3 — Bridge and feature switches v2
+
+After any switch: `npm run build`, then `npm run check`.
+
+| # | Ship point | Handoff | File | Change |
+|---|---|---|---|---|
+| 13 | SP5 | N4 | `bridge_data.js` | `demForte1`, `stage1v2`, `stage2v2` → `data/results/dem_forte1.json`, `stage1_flat.json`, `stage2_ion.json`; `stage3v2` → `data/results/stage3_sc.json` (the v1 file; replaced by the rerun at row 18) |
+| 14 | SP5 | N3 | levels 1–4 | pass the learned `noise` (B44) |
+| 15 | SP5 | — | `features.js` | `hero: true`, `uxV2: true` (the superconducting hero curve uses the naive series until row 18, through the U7.2 fallbacks) |
+| 16 | SP5 | — | `features.js` | nothing else; check that Level 1 game and budget stay off |
+| 17 | SP6 | N5 | `bridge_data.js` | `paramsIonV2`, `paramsScV2` → `params/ion.json`, `params/sc.json` |
+| 18 | SP6 | N6 | `bridge_data.js` | `stage3v2` stays on `stage3_sc.json`, now the rerun with both decoders; `stage1x`, `stage2x`, `stage3x` → `data/results/*_x.json` |
+| 19 | SP6 | — | `features.js` | `crosstalk: true` |
+| 20 | SP6 | — | `features.js` | `learnNoise: true` (needs row 13) |
+| 21 | SP6 | — | `features.js` | `phaseFlip: true` only if B49 is done; otherwise at SP7 |
+| 22 | SP6 | N7 | `bridge_data.js` | `stage4v2` → `stage4_comparison.json`; `paramsCycleV2` → `params/cycle.json` |
+| 23 | SP6 | — | Level 1 and Level 3 | uxV2 parts from B45 are already under `uxV2`; confirm they show real budget data |
+| 24 | SP6 | — | `features.js` | `level5v2: true` if B47 passed |
+| 25 | SP7 | — | `features.js` | `sandbox: true` |
+| 26 | SP7 | — | `features.js` | `phaseFlip: true` (if not at row 21) |
+| 27 | SP7 | — | `features.js` | `tour: true` |
+| 28 | SP7 | — | `features.js`, `bridge_data.js` | `curated: true`; `curatedShots` → `data/curated/curated_shots.json` |
+
+---
+
+## Appendix U4 — Results formats v2 (additive)
+
+**Series (Stages 1–3).** Each series gains `"decoder": "naive" | "learned"`. Files written with `--decoder both` contain both.
+
+**Basis.** Top-level `"basis": "Z" | "X"`. X-basis files: `stage1_flat_x.json`, `stage2_ion_x.json`, `stage3_sc_x.json`, `stage4_comparison_x.json`.
+
+**Optima (Stages 2–3).** `optima.tauPhysEmpirical: { xMin, atEdge }` added beside `tauPhys`; `optima.tauLog` entries gain `"decoder"`.
+
+**Budget (Stages 2–3).** `"budget": { "label": "error sources per round, per qubit (approximate)", "tau_us": [...], "readout": [...], "idle": [...], "crosstalk": [...] (zeros for superconducting), "gate": number }`.
+
+**Crosstalk scan (Stage 2).** `"crosstalkScan": { "rates_per_us": [...], "entries": [{ "rate", "d", "mode", "pL": [...], "lo": [...], "hi": [...], "tauLog": { "xMin", "lo", "hi", "atEdge" }, "interiorBelowTauPhys": bool }] }`.
+
+**Stage dem (`dem_forte1.json`).**
+
+```json
+{
+  "schema": "s2s-results/1", "stage": "dem",
+  "banks": [{ "d": 5, "r": 5, "basis": "Z", "files": ["rep_d5_r5_L0.json", "rep_d5_r5_L1.json"],
+              "nShots": 8000, "firing": [], "pij": [[]], "classes": { "space": 0, "spaceBoundary": 0, "time": 0, "diag": 0 },
+              "antiDiag": 0, "pGateNaive": 0 }],
+  "ratioXoverZ": [{ "d": 3, "r": 3, "ratio": 0, "lo": 0, "hi": 0 }],
+  "outOfSample": [{ "d": 3, "r": 3, "basis": "Z", "trainedOn": "L0", "testedOn": "L1", "naive": { "k": 0, "n": 0, "lo": 0, "hi": 0 }, "learned": { "k": 0, "n": 0, "lo": 0, "hi": 0 } }],
+  "decoderComparison": [{ "arm": "flat|trapped-ion|superconducting", "x": 0.02, "d": 3, "r": 3, "basis": "Z", "mode": "hard",
+                          "naive": { "pL": 0, "lo": 0, "hi": 0 }, "learned": { "pL": 0, "lo": 0, "hi": 0 } }],
+  "params": {}, "provenance": {}
+}
+```
+
+**Stage 4 v2.** Adds to each platform `P`: `"tradeoff": { "<d>": { "hard": { "tau": [], "roundsPerSecond": [], "perRound": [], "lo": [], "hi": [] }, "soft": {...} } }` and `"budgetAtOptimum": { "readout", "idle", "crosstalk", "gate", "tau_us" }`. Adds `"framing"` (string). Sensitivity rows add `"effect": { "perRound_d3_hard": { "trapped-ion": n, "superconducting": n }, "tauLog_d3_hard": { ... } }`; `sensitivityBaseline` gets the same. `conclusions` holds `C1`–`C6` and `O4`, each `{ "statement", "verdict": "held" | "refuted" | "undetermined", "automated", "note", "plain" }`.
+
+**C3 dominance rule.** At each arm's τ*_log (d = 3, hard, learned): arm A dominates if its error per round is lower beyond the intervals and its rounds per second higher. C3 is "held" if neither dominates, "refuted" if one does.
+
+---
+
+## Appendix U5 — Parameter-card additions
+
+`params/ion.json`:
+
+```json
+"T2_idle_us": { "value": null, "source": "<source, or UNSOURCED (illustrative)>" },
+"crosstalk_rate_per_us": { "value": null, "source": "<measured crosstalk error per detection on a neighbouring ion, converted to a rate over the detection time; or UNSOURCED (illustrative)>" },
+"crosstalk_scan_per_us": { "value": [0, 1e-6, 1e-5, 1e-4, 1e-3], "source": "scan grid spanning shielded to unshielded same-species chains; illustrative" }
+```
+
+`params/sc.json`:
+
+```json
+"T2_us": { "value": null, "source": "<source, or UNSOURCED (illustrative)>" }
+```
+
+`params/cycle.json`, trapped ion:
+
+```json
+"gate_layers_per_round": { "value": "2*(d-1)", "source": "<source for sequential two-qubit gates on one chain, or: conservative choice, see DECISIONS E8>" }
+```
+
+Also fix the superconducting `reset_us` source still marked "check against the paper" (A28 item 7).
+
+Search the literature for each value before using the UNSOURCED label; record the search in E6/E7 either way. A value labelled UNSOURCED is shown with the badge on the page.
+
+---
+
+## Appendix U6 — Review and fix prompts
+
+Use v1's review prompt (Appendix T5 of `signal-to-syndrome-team-checklist-v1.md`) with these additions at the end:
+
+```text
+5. v2 specifics: the naive path is unchanged bit for bit (V9 hash); the diagonal edge geometry (k, j+1)-(k+1, j) and its never-observable flag; the boundary-rate solve in dem.js; the X-basis circuit (ancilla H, CX ancilla -> data, H, measure; data H before the final measurement); the idle formulas per basis and T2 <= 2*T1; no number shown on the page without a results source; no internal codes in visible text; the framing "two readout physics models at fixed gate noise".
+```
+
+The fix prompt is v1's, unchanged.
+
+---
+
+## Appendix U7 — Interface specification
+
+### U7.1 Visual language (tokens)
+
+- `tokens.css` defines: colours for d = 3 / 5 / 7 (`--d3`, `--d5`, `--d7`), hard / soft (`--hard`, `--soft`, also solid against dashed lines), trapped ion / superconducting (`--ion`, `--sc`, also circle against square markers), bit-flip / phase-flip (`--zbasis`, `--xbasis`), budget segments (`--b-readout`, `--b-idle`, `--b-xt`, `--b-gate`); spacing scale 4/8/16/24/32 px; type scale 14/16/20/28/40 px; chart heights 320 px desktop, 260 px narrow.
+- Every chart uses the tokens; the same quantity has the same colour and shape everywhere.
+- Numbers: 2–3 significant figures; powers of ten as superscripts in text and tables.
+- Fewer gridlines: major ticks only.
+
+### U7.2 Hero panel
+
+- Above the level tabs. Large question: "How long should you listen to a qubit?"
+- Controls: one τ slider (snaps to the platform's grid points), a trapped ion / superconducting toggle.
+- One chart, shared log τ axis: readout error (empirical assignment error) and logical error (d = 3, hard; learned decoder when the results contain it, otherwise naive), each with a dot at the current τ.
+- Shaded band between τ*_log and τ*_phys(empirical), labelled "listening longer costs more than it gains here" when τ*_log < τ*_phys; when the two coincide within intervals, no band and the label "here the best readout is also the best for the code".
+- Live sentence, three templates: below both optima ("Too short: the readout itself is still unreliable."), between them ("At {τ} you read better, but your data qubits lose more than you gain."), above both ("Too long: the waiting costs more than the clearer signal is worth.").
+- A "Go deeper" link scrolls to Level 3.
+- Keyboard: slider and toggle reachable; the live sentence in an `aria-live="polite"` region; a values table under the chart.
+
+### U7.3 Text cut
+
+- Each level: a one-line goal at the top and a one-line takeaway card shown when the player finishes (or scrolls past the main interaction).
+- At most two sentences visible per level besides the goal; everything else in "Explain more" (`<details>`).
+- Plain labels: "logical error (chance the stored bit is lost)", "readout error (chance one measurement is wrong)", "readout time".
+- Forbidden in visible text (checked by the release check): "belief model", "bank shot", "layer r", "CC-", "Person A", "Person B", "stub", "fixture". Use "the readout model's own estimate" for the belief model.
+
+### U7.4 Level 1 game
+
+- Data readouts hidden until the player answers; checks shown as lit or not.
+- Ten shots per game; ε rises every three shots: 0.01, 0.02, 0.05, 0.08 (the tenth shot at 0.12).
+- Score: player against decoder; streak counter.
+- After each answer: highlight the flipped data qubit (or "no flip") and the checks it lit, for 1.5 s (no animation under reduced motion), with one sentence of reason.
+- Wording for a one-round level: "check 2 misfired" instead of round language.
+
+### U7.5 Level 3 additions
+
+- Error-budget bar beside the curves: stacked readout / idle / crosstalk (ion, when on) / gate, at the current τ, labelled "error sources per round, per qubit (approximate)", with a values table.
+- Distance selector (d = 3 / 5 / 7): only that d's τ*_log marker, plus τ*_phys and the current τ; labels never overlap (stagger vertically, or put them in a legend row).
+- Challenge: "Set τ to minimise logical error" with a "Lock in" button; score bands by pL(chosen)/pL(min): ≤ 1.1 "spot on", ≤ 1.5 "close", else "try again"; the true optimum is revealed after locking in.
+
+### U7.6 "Learn the noise"
+
+Three steps, each one screen, with Back/Next:
+
+1. **Inject a fault.** A circuit timeline for d = 3, one round shown in detail: data qubits as rows, the four CNOTs in circuit order (check 0: data 0 then data 1; check 1: data 1 then data 2). Clickable fault slots on each data qubit: "before the round", "between its two CNOTs" (data 1 only at d = 3), "after the round". Choosing "between" on data 1 lights detectors (k, 1) and (k+1, 0) on the space-time grid beside it: a diagonal pair. Rule for faultDetectors: a fault on data qubit i in round k at "mid" flips m[k][i] (the later check in that round) and m[k'][i-1], m[k'][i] for every k' > k, and x[i]; at "before" it flips both checks of qubit i from round k on, and x[i]; at "after" (k = r-1 only) it flips x[i] only.
+2. **Hit the limit.** "Ask the naive decoder": decode the pair on the naive graph; draw its two-edge path and show the cost of two errors against one; caption "The naive decoder has no single error that explains this pattern, so it invents two."
+3. **Reveal and pay off.** The p_ij heatmap of the selected bank (selector: d = 5, r = 5 and d = 7, r = 3; Z or X basis when phaseFlip is on), detector order by layer then check, the diagonal band labelled; beside it the space-time lattice with edge thickness proportional to p. A single toggle "naive graph / learned graph"; a large number shows the logical error for the selected arm and readout time from `decoderComparison` (naive → learned, with the factor) and, in small print, the out-of-sample check from `outOfSample`.
+
+Accessibility: the heatmap has a table alternative (top 10 pairs by p plus the class means); the lattice has a text summary.
+
+### U7.7 Level 5 v2
+
+- Title "Two readout models, same gates"; caption: the `framing` string.
+- Trade-off plot: x = rounds per second (log), y = error per round (log); one curve per (arm, d), points along τ, τ*_log points enlarged; hard/soft toggle. A tab "Per µs" keeps today's chart.
+- Budget bars: one stacked bar per arm at its τ*_log (`budgetAtOptimum`).
+- Hypothesis scoreboard: rows C1–C6 and O4, each with `plain`, a badge (held / refuted / undetermined, with icon and text, not colour alone) and an expander with `statement` and `note`.
+- Tornado chart: for each parameter, the change in per-round error at d = 3 hard for each arm when scaled by 0.5 and 2, sorted by largest absolute effect.
+- Every old table inside a "Data" expander.
+
+### U7.8 Level 2 sandbox
+
+- d = 3, r = 3 grid. Click a data qubit between rounds to inject a flip (lights the horizontal pair, or a single detector at the ends); click a check report to make it misreport (vertical pair). A clear button.
+- "Draw a matching": click two lit detectors, or a detector and the boundary, to pair them; the path is the shortest one; show the player's total cost and logical outcome against the decoder's (learned weights).
+
+### U7.9 Global basis toggle
+
+- Header switch "Bit-flip memory / Phase-flip memory". It swaps every results source in the hero and Levels 3–5 to its `*_x` counterpart, every label "bit flip" to "phase flip", and the idle text from T1 to T2. Levels 1–2 stay in the bit-flip memory and say so when the toggle is on.
+
+### U7.10 Guided tour
+
+- A "3-minute tour" button in the header; stops: hero, Level 3 budget bar, "Learn the noise" step 3, Level 5 scoreboard; one caption each (≤ 25 words); Next, Back, Escape; focus moves to each target; no auto-advance.
+
+### U7.11 Curated Level 4 examples
+
+- `tools/curate.mjs`: bank `rep_d3_r3_L0`, ion readout at τ = 3 µs, learned decoder, seed 20261011, first 4,000 shots, R = 1; record up to 10 shot indices (with their readout seeds) where hard fails and soft succeeds, and 10 where soft fails and hard succeeds; write `data/curated/curated_shots.json`.
+- Level 4 buttons: "Show me a shot where soft decoding saves the bit" and "…where it fails".
+
+### U7.12 Live-run panel
+
+- States: idle, submitting, running (elapsed timer), done, error; the button stays focusable (`aria-disabled`).
+- When done: detector rate and logical error of the fresh shots against the stored bank, with intervals, and one sentence on whether they agree.
+
+### U7.13 Motion
+
+- Level 3: IQ points or photon counts accumulate over 600 ms when τ changes. Level 2: detectors light in time order over 400 ms when a shot loads. Hero: the dots glide between grid points.
+- Every animation is skipped under `prefers-reduced-motion: reduce`.
+
+---
+
+## Appendix U8 — Disclosure and email templates
+
+**Email to the organizers (K0).**
+
+```text
+Subject: Signal to Syndrome (team <name>): question about work done before the build window
+
+Hello,
+
+We are <names>, registered as team <name> at node <node>. We want to be open about our project's history before the window and ask how you want us to handle it.
+
+Our repository shows that we built a first version of our project, Signal to Syndrome (a Qollab lab on how qubit readout physics sets the logical error of a repetition-code memory, on IonQ's simulator with the forte-1 noise model), between 7 and 9 October, before the window opened at 19:00 ET on 9 October. The git history is unedited and we will share it on request. During the window we plan to add, as clearly separated work starting at a tagged commit: a learned detector error model, a phase-flip memory, measurement crosstalk on trapped ions, a reworked platform comparison and a redesigned interface.
+
+Is it acceptable to submit the project with this history fully disclosed, judged on the work done inside the window? If not, please tell us what you would accept.
+
+Thank you,
+<names>
+```
+
+**README, Variant B (pending the reply; use from K0).**
+
+```text
+## Build history and disclosure
+
+- The first version of this project (git tags sp1-sp4) was built between 7 and 9 October 2026, before the hackathon's build window opened on 9 October 2026 at 19:00 ET. We have disclosed this to the organizers and are awaiting their answer. The git history is unedited.
+- Work done inside the window starts at tag window-start (commit <hash>) and consists of: <list from Section 1.1>.
+- Planning documents in docs/ (the v1 plan and checklists, written before the window, and the v2 checklists, written inside it) are disclosed as such.
+- AI assistance: the code was generated with Claude Code (Anthropic), an AI coding assistant, from prompts in the checklists, under the authors' direction; every change was reviewed by the authors and checked by tests and the validation checks V1-V16.
+- The physics, the parameter choices and sources, and the conclusions are the authors' responsibility.
+```
+
+**README, Variant A (after the organizers accept).** As Variant B, with the first bullet replaced by: "The first version of this project (git tags sp1-sp4) was built between 7 and 9 October 2026, before the build window. We disclosed this to the organizers on <date>; their answer: <one-line summary>. The git history is unedited."
+
+---
+
+## Appendix U9 — Demo-video script (2:00)
+
+| Time | Screen | Narration (spoken) |
 |---|---|---|
-| D8 | Shots per configuration | 4000 |
+| 0:00–0:20 | Hero question | "To read a qubit you listen to it. Listen longer and the readout gets cleaner, but the rest of the code keeps ageing. How long should you listen?" |
+| 0:20–0:50 | Hero slider, superconducting, then trapped ion | Move τ through the band. "The best readout time for one qubit is not the best for the code. Here it's earlier, because the waiting data qubits lose more than the readout gains." |
+| 0:50–1:20 | Level 3 budget bar | "Readout error shrinks, idle error grows, and the gate floor stays put. The optimum is where they balance." |
+| 1:20–1:50 | "Learn the noise": fault, naive failure, heatmap, toggle | "IonQ's noise model creates errors our first decoder couldn't see. Learned from the data itself, the decoder makes several times fewer mistakes." |
+| 1:50–2:00 | Level 5 scoreboard | "Two readout models, same gates. Open source on Qollab. Supported by Qollab and IonQ." |
 
-## Person A
+---
 
-| ID | Question | Answer | Evidence | Time |
-|---|---|---|---|---|
-| D1 | How the forte-1 noise model is selected (exact keyword or Run-dialog setting) | | Probe P3 | |
-| D2 | Seed option name (or "none") | | Probe P3 | |
-| D3 | Duration of a 25-qubit, 4000-shot noisy job | | Probe P4 | |
-| D6 | Python packages available on Qollab | | Probe P2 | |
-| D7 | Method to copy long Python output | | Probe P7 | |
+## Appendix U10 — Hallway-test protocol
 
-Fingerprint (V9), checks, deviations and handoff notes:
+1. Three people not on the team, ideally one without a physics background. Fresh signed-out browser, desktop.
+2. Say only: "This is a hackathon project. You have three minutes. Think aloud." Then stay silent; do not explain or help.
+3. Note where they stall (over 10 s without acting), what they skip, what they read aloud, and any wrong conclusion.
+4. At three minutes ask: "In one sentence, what did this project find?" Write the answer verbatim.
+5. Pass: two of three give roughly "listening longer helps readout but can hurt the code, and the decoder has to learn IonQ's real noise". Fix the top three findings, text cuts before features.
 
-## Person B
+---
 
-| ID | Question | Answer | Evidence | Time |
-|---|---|---|---|---|
-| D4 | Can JavaScript submit a job; exact call syntax | | Probe P5 | |
-| D5 | Largest JavaScript pane content that saves and reloads | | Probe P6 | |
-| D9 | HTML pane: full document or body fragment | | Probe P5 | |
-| D10 | Can two accounts edit one Qollab project | | B2 | |
-| D11 | Live run through a Python helper (P10) | | Probe P10 | |
+## Appendix U11 — Optional statistics work (only if the buffer allows)
 
-PyMatching tie counts, published links, deviations and handoff notes:
-~~~
+In this order, each as a FIX-style prompt for Person A:
 
-## Appendix T3 — Bridge and feature switches
+1. **Cluster bootstrap for every interval.** Replace Wilson intervals on pooled readout redraws (n = 4 × 8,000) with a bootstrap over quantum shots (B = 200), the same as τ*. Rerun Stages 2–4; update notes and page.
+2. **Ring-up in the superconducting belief model.** Use the tabulated ring-up mean for μ₀, μ₁ in the likelihoods; V10 with ring-up on must pass; τ*_phys then has a single value.
+3. **Dense τ grid near the superconducting optimum.** Add 0.55, 0.6, 0.65, 0.75, 0.8, 0.85, 0.9, 1.1, 1.2 µs; bootstrap τ*_phys as well; report the gap τ*_phys − τ*_log with an interval.
 
-Each switch changes one line in `src/ui/bridge_core.js` or `src/ui/bridge_data.js` (replace the old path with the new one), or one flag in `src/ui/features.js`. After any switch: `npm run build`, then `npm run check`.
-
-| # | Handoff | File | Old | New |
-|---|---|---|---|---|
-| 1 | H5 | `bridge_core.js` | `'./stubs/sweep_stub.js'` | `'../core/sweep.js'` |
-| 2 | H5 | `bridge_core.js` | `'./stubs/flat_stub.js'` | `'../core/readout/flat.js'` |
-| 3 | H4 | `bridge_data.js` | `'../../data/fixtures/rep_d3_r1_L0.json'` and `'../../data/fixtures/rep_d3_r3_L0.json'` | `'../../data/banks/rep_d3_r1_L0.json'` and `'../../data/banks/rep_d3_r3_L0.json'` |
-| 4 | H6 | `bridge_data.js` | `'../../data/fixtures/stage1_flat.json'` | `'../../data/results/stage1_flat.json'` |
-| 5 | H7 | `bridge_core.js`, `bridge_data.js` | `'./stubs/ion_stub.js'`; `'../../data/fixtures/params_ion.json'` | `'../core/readout/ion.js'`; `'../../params/ion.json'` |
-| 6 | H8 | `bridge_data.js` | `'../../data/fixtures/stage2_ion.json'` | `'../../data/results/stage2_ion.json'` |
-| 7 | — | `features.js` | `ion: false` (and `liveRun: false`) | `ion: true` (and `liveRun: true` if D11 passed and it works on Qollab) |
-| 8 | H9 | `bridge_core.js`, `bridge_data.js` | `'./stubs/sc_stub.js'`; `'../../data/fixtures/params_sc.json'` | `'../core/readout/sc.js'`; `'../../params/sc.json'` |
-| 9 | H10 | `bridge_data.js` | `'../../data/fixtures/stage3_sc.json'` | `'../../data/results/stage3_sc.json'` |
-| 10 | — | `features.js` | `superconducting: false` | `superconducting: true` |
-| 11 | H11 | `bridge_data.js` | `'../../data/fixtures/stage4_comparison.json'`; `'../../data/fixtures/params_cycle.json'` | `'../../data/results/stage4_comparison.json'`; `'../../params/cycle.json'` |
-| 12 | — | `features.js` | `level5: false` | `level5: true` |
-
-## Appendix T4 — Platform probes
-
-These are disposable platform tests; never save them into the repository. Person A runs P2, P3, P4 and P7; Person B runs P5 and P6, and P10 once before Saturday. P2–P7 were run on Tue 6 Oct; their answers are in `DECISIONS.md`.
-
-### P2 — Which Python packages are available
-
-**Why:** the bank generator may only use what exists in Qollab's in-browser Python.
-**Do:** Create a new Python/Qiskit project named `S2S probe` (private if possible). Paste and run:
-
-```python
-import sys
-print(sys.version)
-for m in ["numpy", "scipy", "networkx", "hashlib", "json", "qiskit"]:
-    try:
-        mod = __import__(m)
-        print(m, "OK", getattr(mod, "__version__", ""))
-    except Exception as e:
-        print(m, "MISSING", e)
-```
-
-**Pass:** output recorded as decision D6. `hashlib`, `json` and `qiskit` must be OK; the others are informational.
-
-### P3 — Can the `forte-1` noise model be selected
-
-**Why:** without circuit-level noise the syndromes are trivially zero and the quantum layer is decorative.
-**Do:** In the Run dialog choose the IonQ simulator. Replace the cell content with:
-
-```python
-from qiskit import QuantumCircuit
-from qiskit.providers.jobstatus import JobStatus
-import time
-
-print("backend:", backend, getattr(backend, "name", None))
-try:
-    print("options:", backend.options)
-except Exception as e:
-    print("options unavailable:", e)
-
-def run(qc, shots=1000, **kw):
-    job = backend.run(qc, shots=shots, **kw)
-    while job.status() not in (JobStatus.DONE, JobStatus.ERROR, JobStatus.CANCELLED):
-        time.sleep(5)
-    print("status:", job.status())
-    return job.result().get_counts()
-
-qc = QuantumCircuit(3, 3)
-qc.h(0); qc.cx(0, 1); qc.cx(1, 2)
-qc.measure(range(3), range(3))
-print("default:", run(qc))
-for kw in ({"noise_model": "forte-1"}, {"noise_model": "forte-enterprise-1"}):
-    try:
-        print(kw, run(qc, **kw))
-    except Exception as e:
-        print(kw, "FAILED:", e)
-```
-
-If the Run dialog itself offers a noise model, also run once with `forte-1` selected there and no keyword.
-**Pass:** a run shows outcomes other than `000` and `111` (noise is on), while the ideal run shows only `000` and `111`. Record the working method as D1. In the printed `options`, look for a seed option and record its name as D2 (or "none").
-
-### P4 — How long does a 25-qubit noisy job take
-
-**Why:** the largest banks are 25 qubits; if they take too long, $d=7$ is cut early.
-**Do:** Append and run (replace `NOISE` with the working method from P3):
-
-```python
-NOISE = {"noise_model": "forte-1"}
-n = 25
-qc = QuantumCircuit(n, n)
-for i in range(n - 1):
-    qc.cx(i, i + 1)
-qc.measure(range(n), range(n))
-t0 = time.time()
-c = run(qc, shots=4000, **NOISE)
-print(len(c), "distinct outcomes;", round((time.time() - t0) / 60, 1), "minutes")
-```
-
-Continue with probe P7 while it runs (open a second browser tab).
-**Pass:** time recorded as D3. Under 15 minutes keeps the full plan; otherwise mark "$d=7$ last" in D3.
-
-### P5 — JavaScript track: running a job and page format
-
-**Why:** the main project is a JavaScript page; you need to know whether it can submit jobs and how its HTML pane works.
-**Do:** Create a JavaScript/Qiskit project named `S2S probe JS`. Paste Qollab's own JavaScript example from your notes (J0 and B1) and run it. Then check:
-1. Does a job run, and how are keyword options (noise model) passed?
-2. Does the HTML pane expect a full HTML document or only body content?
-3. Do CSS and JavaScript panes apply to the preview as expected?
-
-**Pass:** answers recorded as D4 (job submission and syntax) and D9 (HTML pane format).
-
-### P6 — How much data can the JavaScript pane hold
-
-**Why:** shot banks and results are embedded in the bundle.
-**Do:** In TERMINAL, outside any repository:
-
-```bat
-mkdir %USERPROFILE%\s2s-probe
-cd /d %USERPROFILE%\s2s-probe
-node -e "const s='a'.repeat(600000); require('fs').writeFileSync('big.js', 'const BIG=\"'+s+'\"; document.body.append(\"length \"+BIG.length);');"
-notepad big.js
-```
-
-Copy all of `big.js` (Ctrl+A, Ctrl+C) into the JavaScript pane of `S2S probe JS`, save, reload the page and run the preview.
-**Pass:** the preview shows `length 600000` after a reload. Record the outcome as D5. If it fails, repeat with 300000 and record the largest size that works.
-
-### P7 — Can long Python output be copied out
-
-**Why:** shot banks leave Qollab as printed text in checksummed chunks.
-**Do:** In `S2S probe` (Python), run:
-
-```python
-import hashlib
-blob = ("0123456789abcdef" * 250) * 50          # 200,000 characters
-for i in range(0, len(blob), 4000):
-    print(f"--- chunk {i // 4000 + 1} ---")
-    print(blob[i:i + 4000])
-print("sha256", hashlib.sha256(blob.encode()).hexdigest())
-```
-
-Select and copy the whole output into a text file `%USERPROFILE%\s2s-probe\out.txt`. In TERMINAL:
-
-```bat
-cd /d %USERPROFILE%\s2s-probe
-node -e "const t=require('fs').readFileSync('out.txt','utf8'); const b=t.split(/\r?\n/).filter(l=>/^[0-9a-f]{4000}$/.test(l)).join(''); console.log(b.length, require('crypto').createHash('sha256').update(b).digest('hex'))"
-```
-
-**Pass:** length `200000` and the same hash as the Python output. Record as D7 (or record the method that worked, such as a download button).
-
-### P10 — Live run through a Python helper (Person B, before Saturday)
-
-**Why:** the live run (d=3, r=3, L0, 200 shots) needs native gates too, or IonQ's optimiser leaves it with no detector events (DECISIONS, platform facts). The documented way to run Python from a JavaScript project is a Python file called with `.callPromising` (`docs/qollab_js_api_example.txt`, section 2).
-**Do:** create a new JavaScript project `S2S probe live`; press Run with **IonQ Forte 1** picked in the dialog. Files:
-
-`index.html`
-
-```html
-<div id="out"></div>
-```
-
-`qollab/live.py` (create a folder `qollab` with this file; if Qollab will not make folders, put `live.py` at the top level and change the import in `main.js` to `'live'`)
-
-```python
-from qiskit import QuantumCircuit, transpile
-
-def run_live(backend, shots=200, seed=7):
-    d, r = 3, 3
-    n = d + (d - 1) * r
-    qc = QuantumCircuit(n, n)
-    for k in range(r):
-        for j in range(d - 1):
-            a = d + k * (d - 1) + j
-            qc.cx(j, a)
-            qc.cx(j + 1, a)
-    for k in range(r):
-        for j in range(d - 1):
-            qc.measure(d + k * (d - 1) + j, k * (d - 1) + j)
-    for i in range(d):
-        qc.measure(i, (d - 1) * r + i)
-    nb = backend.with_name(backend.name, gateset="native", noise_model="forte-1")
-    nb.set_options(noise_model="forte-1", sampler_seed=int(seed))
-    job = nb.run(transpile(qc, backend=nb), shots=int(shots))
-    return {k: int(v) for k, v in job.result().get_counts().items()}
-```
-
-`main.js`
-
-```js
-import * as live from 'qollab.live';
-
-const box = document.getElementById('out') || document.body;
-function R(...a) { const s = 'RESULT ' + a.join(' '); console.log(s); const p = document.createElement('div'); p.textContent = s; box.append(p); }
-
-const t0 = performance.now();
-try {
-  const raw = (await live.run_live.callPromising(backend, 200, 7)).toJs();
-  const c = raw instanceof Map ? Object.fromEntries(raw) : raw;
-  const keys = Object.keys(c);
-  const tot = keys.reduce((s, k) => s + Number(c[k]), 0);
-  const allZero = Number(c['0'.repeat(9)] || 0);
-  R('P10', `shots=${tot} distinct=${keys.length} allZeroFraction=${(allZero / tot).toFixed(4)} total=${((performance.now() - t0) / 1000).toFixed(1)}s`);
-} catch (e) { R('P10 ERROR', e.name, String(e.message).slice(0, 300)); }
-R('done');
-```
-
-**Pass:** `distinct` above 1 and `allZeroFraction` below 1 mean the live run works with noise: record D11 as "works" (with the numbers, the time, and whether the `qollab/` folder worked). Then Person A writes the real `qollab/live.py` in CC-A1 (part E), CC-B7 calls it, and the build adds the one import line allowed by `CLAUDE.md` rule 3. An `ERROR`, or `distinct=1`, means D11 "does not work": `liveRun` stays off and the page links to the bank generator.
-
-## Appendix T5 — Review and fix prompts
-
-### Review prompt (fresh Claude chat)
-
-Use it to review the other person's work: attach `CLAUDE.md`, `DECISIONS.md`, the diff (Appendix T7) and any delivery reports the owner shares.
-
-```text
-You are an independent reviewer for a hackathon project called Signal to Syndrome. Attached: CLAUDE.md (the contract and the highest authority), DECISIONS.md, a git diff, and the delivery reports from the coding sessions.
-
-Review the diff against the contract and report findings ordered by severity (blocking, major, minor), each with the file and function, the problem, and a concrete fix. Check specifically:
-1. Contract compliance: indexing, bit order (classical bit 0 is the least significant bit), the classical-bit layout, the idle rule, units, seeded randomness only, no network or DOM access in src/core, and scope (no files outside those named in the prompt).
-2. Physics and mathematics against the formulas stated in CLAUDE.md and in the prompts quoted in the reports. Re-derive at least one formula yourself instead of trusting comments.
-3. Tests: every test has a comment stating the break in words; boundary tests are non-vacuous (one case on the boundary, one past it, with different outcomes); statistical tolerances are at least 4 standard errors and stated; no test was weakened or removed.
-4. Claims in the delivery reports that the diff does not support.
-
-Do not rewrite the code; list findings only. If everything is fine, say so explicitly and list what you checked.
-```
-
-### Fix prompt (Claude Code)
-
-The owner of the affected files runs it.
-
-```text
-Read CLAUDE.md and DECISIONS.md first.
-Owner: Person <A or B>. Create or modify only files owned by that person (see CLAUDE.md).
-
-Task FIX-<number>: <one-line description of the bug or review finding>.
-Evidence: <paste the failing output, error message or review finding>.
-Allowed files: <list the files that may change>.
-
-First write a failing test that reproduces the problem, with the required break comment. Then fix the code until the new test and all existing tests pass. Do not modify existing tests. Run `npm test`, and also `npm run build` and `npm run check` if any file in src/ui or tools changed. End with the report format.
-```
-
-## Appendix T6 — Parameter-card templates
-
-`params/ion.json` (fill every `value` and `source` from A8; delete nothing):
-
-```json
-{
-  "schema": "s2s-params/1",
-  "platform": "trapped-ion",
-  "bright_is_bit": 1,
-  "R_bright_per_us": { "value": null, "source": "" },
-  "R_dark_per_us": { "value": null, "source": "" },
-  "gamma_bright_to_dark_per_us": { "value": null, "source": "" },
-  "gamma_dark_to_bright_per_us": { "value": null, "source": "" },
-  "T1_idle_us": { "value": null, "source": "" },
-  "tau_grid_us": { "value": [], "source": "spans the published detection-time range" }
-}
-```
-
-`params/sc.json` (defaults from plan §7.4; replace the sources):
-
-```json
-{
-  "schema": "s2s-params/1",
-  "platform": "superconducting",
-  "chi_over_2pi_MHz": { "value": 1.0, "source": "" },
-  "kappa_over_2pi_MHz": { "value": 2.0, "source": "" },
-  "nbar": { "value": 5, "source": "" },
-  "eta": { "value": 0.3, "source": "" },
-  "T1_us": { "value": 50, "source": "" },
-  "detection": "heterodyne",
-  "ringup": true,
-  "tau_grid_us": { "value": [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 3.0], "source": "spans published integration times" }
-}
-```
-
-`params/cycle.json`:
-
-```json
-{
-  "schema": "s2s-params/1",
-  "trapped-ion": {
-    "two_qubit_gate_us": { "value": null, "source": "" },
-    "gate_layers_per_round": { "value": 2, "source": "derived: each round is two parallel CNOT layers" },
-    "reset_us": { "value": null, "source": "" }
-  },
-  "superconducting": {
-    "two_qubit_gate_us": { "value": null, "source": "" },
-    "gate_layers_per_round": { "value": 2, "source": "derived: each round is two parallel CNOT layers" },
-    "reset_us": { "value": null, "source": "" }
-  }
-}
-```
-
-## Appendix T7 — Git for two people and other operating systems
-
-**Your cycle, every time.**
-
-| When | Commands |
-|---|---|
-| Before each Claude Code prompt | `git pull --rebase` |
-| After green tests | `git status --short` (check that only your files are listed), `git add -A`, `git commit -m "<what>"`, `git pull --rebase`, `git push` |
-| After the other person's handoff | `git pull --rebase`, then reply `ACK Hn` |
-| First push on a new machine | Git opens a browser window to sign in to GitHub; sign in and approve |
-
-**If `git status --short` lists a file you do not own.** Claude Code changed it by mistake. Undo that file only: `git checkout -- <path>` (or `git restore <path>`), and tell the other person if it was theirs.
-
-**If `git pull --rebase` reports a conflict.** It can only happen in a shared file (`DECISIONS.md`, `docs/project_page.md`, `CLAUDE.md`). Open the file in VS Code; keep both sides' content, delete the lines `<<<<<<<`, `=======` and `>>>>>>>`; then `git add <file>` and `git rebase --continue`.
-
-**Diffs for cross-review.** `git diff <from>..HEAD -- <paths> > review.diff`, where `<from>` is a tag (`start`, `sp1`, `sp2`, `sp3`, `sp4`). Delete the diff file after the review; never commit it.
-
-**Tags.** Only Person B creates and pushes tags.
-
-**On macOS or Linux.**
-
-| Windows cmd | macOS / Linux |
-|---|---|
-| `python -m venv %USERPROFILE%\venvs\s2s` | `python3 -m venv ~/venvs/s2s` |
-| `%USERPROFILE%\venvs\s2s\Scripts\activate.bat` | `source ~/venvs/s2s/bin/activate` |
-| `cd /d "E:\My Project\signal-to-syndrome"` | `cd ~/signal-to-syndrome` |
-| `start "" "dist\local\preview.html"` | `open dist/local/preview.html` (macOS) or `xdg-open dist/local/preview.html` (Linux) |
-| `data\raw\file.txt` (backslashes) | `data/raw/file.txt` (forward slashes) |
-| `dir` / `type file` | `ls` / `cat file` |
-| `notepad file` | any text editor |
+*This effort is supported by Qollab & IonQ.*
