@@ -1,0 +1,17 @@
+BEGIN_SPAM noise_model=forte-1 sampler_seed=544939246 part=AB shots=4000
+backend ionq_simulator job_id 01a126e4-00a6-742f-8fed-5b7592eb6a73 native_ops {'gpi2': 10, 'measure': 10, 'gpi': 5}
+circuit A: prepare |0>, measure; circuit B: one X, measure
+quantity          circuit qubit  count / shots   p         Wilson 95%
+P(read 1 | prep 0)  A       0          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 1 | prep 0)  A       1          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 1 | prep 0)  A       2          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 1 | prep 0)  A       3          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 1 | prep 0)  A       4          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 0 | prep 1)  B       0          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 0 | prep 1)  B       1          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 0 | prep 1)  B       2          0 /  4000   0.000000  [0.000000, 0.000959]
+P(read 0 | prep 1)  B       3          1 /  4000   0.000250  [0.000044, 0.001415]
+P(read 0 | prep 1)  B       4          1 /  4000   0.000250  [0.000044, 0.001415]
+P(read 1 | prep 0)  A       all        0 / 20000   0.000000  [0.000000, 0.000192]
+P(read 0 | prep 1)  B       all        2 / 20000   0.000100  [0.000027, 0.000365]
+END_SPAM noise_model=forte-1
