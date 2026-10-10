@@ -338,3 +338,155 @@ pL against ε = 0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12 (hard, r = 3, n = 8
 - **C2 on the ion arm, learned decoder: no point with soft above hard beyond the intervals** (0 of 39; soft at or below hard at 29 of 39 points). Naive: 11 of 39, as in v1. At d = 3, τ = 20 µs: learned soft 0.00356 [0.00297, 0.00428], hard 0.00350 [0.00291, 0.00421]; naive soft 0.00716, hard 0.00347. The v1 C2 loss ("Diagnosis: intrinsic asymmetry plus a gate-model mismatch") came from the gate-model mismatch: with the learned model it disappears. Soft still gains most at short τ (d = 3, τ = 1 µs: hard 0.352, soft 0.147).
 - τ*_log, learned (bootstrap B = 200): d = 3 hard 21.8 µs [20.0, 60.1], soft 31.6 µs [11.9, 500]; d = 5 hard 248 µs [11.0, 500], soft 269 µs [9.9, 500]. Above about 10 µs the learned curves are flat within their intervals, so these minima are not resolved. d = 7 learned has 0 to 2 errors out of 32 000 at every τ from 15 to 200 µs (the minimum is a 100% tie): not resolved.
 - Non-exact matchings: 0 in every run.
+
+## v2 verdicts at A49 (Sat 10 Oct, 22:10 IST)
+
+Sources: `data/results/stage2_ion.json`, `stage2_ion_x.json`, `stage3_sc.json`, `stage3_sc_x.json` (A48 rerun, commit 58fe92c: both decoders, both bases, ion crosstalk at the card rate 1.67e-5 /µs, R = 4, n = 32 000 per point) and `dem_forte1.json` (the `--stage dem` rerun at A48). Every number below names its file and field. The A48 rerun replaced the Stage 2 file used in the A44/A45 section above, so the Stage 2 numbers quoted there (learned τ*_log, the C2 example at τ = 20 µs, naive 11 of 39) are superseded by the ones here; the difference comes from switching ion crosstalk on at the card rate.
+
+**Stage 4.** No number from `stage4_comparison.json` is quoted: it was built on 8 Oct from Stage 2 and 3 files that have since been replaced. It is regenerated at A50 (provisional) and A53c (final).
+
+**Tie rule.** A τ*_log whose `fractionTied` ≥ 0.5 (half or more of the bootstrap replicates have a tied grid minimum) is **UNRESOLVED**: it is marked, kept in the tables, and excluded from every verdict. This applies to all τ*_log tables in this file. The v1 tables in Stages 2 and 3 have no such row (largest: 36%, ion d = 7 hard).
+
+### A49 check table
+
+| Check | Source | Result | Outcome |
+|---|---|---|---|
+| V7 (ion, both gammas 0), Z and X | `stage2_ion.json`, `stage2_ion_x.json` → `validation.V7` | Identical to v1 in both bases (readout only, no decoder): τ = 5 µs 0.0472 analytic, 0.0472 empirical; τ = 10 µs 4.48e-3 against 4.53e-3; τ = 20 µs 8.2e-5 against 6.5e-5; all 13 rows pass | **Pass** |
+| V8 (superconducting, T1 = 1e12 µs, ring-up off), Z and X | `stage3_sc.json`, `stage3_sc_x.json` → `validation.V8` | Identical to v1: τ = 0.05 µs SNR 1.94, 0.166 against 0.165; τ = 0.3 µs 8.70e-3 against 8.70e-3; all 12 rows pass | **Pass** |
+| V10 (llr calibration), both arms, Z and X | `validation.V10` | Identical to v1. Ion [1, 2): 0.1965 against 0.1957 (m = 124 883); superconducting [1, 2): 0.1856 against 0.1853 (m = 103 788); all bins pass | **Pass** |
+| V13 (phase-flip injection) | `npm test` (`tests/v4.test.js`) | The three `v13_*` banks each have one outcome, equal to the basis-Z `applyX` prediction; 252 of 253 tests pass, the one failure is Person B's `tests/hero.test.js` (HANDOFF N6) | **Pass** |
+| Budget magnitudes | `budget` arrays | See "Budget magnitudes" below: readout 5e-3 to 2e-2 near the superconducting optimum and 6e-4 to 5e-3 near the ion optimum (ion slightly below the 1e-3 guide, because pumping makes the ion readout very good at 20 µs); idle ≤ 2.9e-2 (superconducting Z at 3 µs); gate 0.0087–0.0090, classes 0.0066–0.0113 | **Pass** |
+
+### C1, ion part (`crosstalkScan`, learned decoder, R = 2, n = 16 000 per point, B = 200)
+
+τ*_phys = 23.5 µs (`crosstalkScan.tauPhys`). "Point" is `interiorBelowTauPhys` (the pre-registered rule, point estimate below τ*_phys); "Resolved" is `interiorBelowTauPhysResolved` (the whole interval below τ*_phys). Rows with Tied ≥ 50% are UNRESOLVED.
+
+| Rate (/µs) | Basis | d | Mode | τ*_log (µs) [95%] | Tied | Point | Resolved |
+|---|---|---|---|---|---|---|---|
+| 0 | Z | 3 | hard | 15.2 [13.9, 27.4] | 34% | true | false |
+| 0 | Z | 3 | soft | 14.1 [11.8, 500] | 28% | true | false |
+| 0 | Z | 5 | hard | 54.8 [11.6, 500] | 62% UNRESOLVED | false | false |
+| 0 | Z | 5 | soft | 500 [10.5, 500] | 45% | false | false |
+| 0 | X | 3 | hard | 38.7 [21.2, 57.1] | 26% | false | false |
+| 0 | X | 3 | soft | 38.7 [15.4, 70.7] | 34% | false | false |
+| 0 | X | 5 | hard | 54.8 [44.7, 54.8] | 100% UNRESOLVED | false | false |
+| 0 | X | 5 | soft | 54.8 [44.7, 86.6] | 100% UNRESOLVED | false | false |
+| 1e-6 | Z | 3 | hard | 15.2 [13.9, 27.4] | 34% | true | false |
+| 1e-6 | Z | 3 | soft | 14.1 [11.8, 206] | 40% | true | false |
+| 1e-6 | Z | 5 | hard | 54.8 [11.6, 500] | 60% UNRESOLVED | false | false |
+| 1e-6 | Z | 5 | soft | 70.7 [9.86, 500] | 47% | false | false |
+| 1e-6 | X | 3 | hard | 35.2 [21.2, 87.8] | 29% | false | false |
+| 1e-6 | X | 3 | soft | 38.7 [15.5, 86.2] | 32% | false | false |
+| 1e-6 | X | 5 | hard | 54.8 [44.7, 54.8] | 100% UNRESOLVED | false | false |
+| 1e-6 | X | 5 | soft | 54.8 [44.7, 86.6] | 100% UNRESOLVED | false | false |
+| 1e-5 | Z | 3 | hard | 31.6 [14.8, 85.1] | 26% | false | false |
+| 1e-5 | Z | 3 | soft | 15.3 [12.0, 87.1] | 26% | true | false |
+| 1e-5 | Z | 5 | hard | 105 [38.7, 224] | 45% | false | false |
+| 1e-5 | Z | 5 | soft | 500 [10.8, 500] | 39% | false | false |
+| 1e-5 | X | 3 | hard | 27.4 [14.8, 78.2] | 32% | false | false |
+| 1e-5 | X | 3 | soft | 27.4 [13.8, 81.2] | 37% | false | false |
+| 1e-5 | X | 5 | hard | 54.8 [44.7, 54.8] | 100% UNRESOLVED | false | false |
+| 1e-5 | X | 5 | soft | 54.8 [44.7, 54.8] | 100% UNRESOLVED | false | false |
+| **1.67e-5 (card)** | Z | 3 | hard | 30.2 [21.2, 36.8] | 28% | false | false |
+| **1.67e-5 (card)** | Z | 3 | soft | 30.6 [12.0, 38.8] | 37% | false | false |
+| **1.67e-5 (card)** | Z | 5 | hard | 100 [11.8, 224] | 40% | false | false |
+| **1.67e-5 (card)** | Z | 5 | soft | 100 [10.5, 500] | 33% | false | false |
+| **1.67e-5 (card)** | X | 3 | hard | 19.3 [16.2, 47.5] | 29% | true | false |
+| **1.67e-5 (card)** | X | 3 | soft | 17.3 [14.8, 47.5] | 42% | true | false |
+| **1.67e-5 (card)** | X | 5 | hard | 17.3 [17.2, 54.8] | 100% UNRESOLVED | true | false |
+| **1.67e-5 (card)** | X | 5 | soft | 17.3 [14.1, 54.8] | 100% UNRESOLVED | true | false |
+| 1e-4 | Z | 3 | hard | 16.1 [14.3, 46.5] | 18% | true | false |
+| 1e-4 | Z | 3 | soft | 28.6 [11.6, 51.8] | 14% | false | false |
+| 1e-4 | Z | 5 | hard | 17.3 [17.3, 94.8] | 94% UNRESOLVED | true | false |
+| 1e-4 | Z | 5 | soft | 22.4 [14.1, 97.7] | 56% UNRESOLVED | true | false |
+| 1e-4 | X | 3 | hard | 21.2 [14.8, 29.5] | 13% | true | false |
+| 1e-4 | X | 3 | soft | 19.3 [12.2, 28.6] | 16% | true | false |
+| 1e-4 | X | 5 | hard | 27.4 [22.4, 27.4] | 100% UNRESOLVED | false | false |
+| 1e-4 | X | 5 | soft | 22.4 [22.4, 87.1] | 88% UNRESOLVED | true | false |
+| 1e-3 | Z | 3 | hard | 14.1 [11.4, 17.5] | 4% | true | **true** |
+| 1e-3 | Z | 3 | soft | 12.9 [11.1, 18.7] | 7% | true | **true** |
+| 1e-3 | Z | 5 | hard | 17.3 [10.9, 20.3] | 15% | true | **true** |
+| 1e-3 | Z | 5 | soft | 11.2 [9.80, 19.6] | 10% | true | **true** |
+| 1e-3 | X | 3 | hard | 12.8 [11.4, 14.1] | 0.5% | true | **true** |
+| 1e-3 | X | 3 | soft | 13.0 [11.1, 14.6] | 2.5% | true | **true** |
+| 1e-3 | X | 5 | hard | 17.3 [11.5, 25.4] | 14% | true | false |
+| 1e-3 | X | 5 | soft | 15.5 [7.55, 24.5] | 21% | true | false |
+
+No non-exact matchings (`crosstalkScan.nonExact` 0 in both files).
+
+**C1 (ion), three sub-verdicts.** The pre-registered rule uses the point flag; the resolved flag was added after seeing the data (DECISIONS E12). Both are given.
+
+- **(a) Crosstalk off, no idle-driven optimum: holds.** The point flag is true at rate 0 only in Z at d = 3 (hard 15.2 µs, soft 14.1 µs), and both intervals contain τ*_phys = 23.5 µs (hard [13.9, 27.4]). With crosstalk off the idle probability is 5e-8 to 2.5e-5 per round (`stage2_ion.json` → `budget.idle`; about 1e-6 near τ*_phys): this is noise in the location of a flat minimum, not physics. X at rate 0 has the point flag false everywhere.
+- **(b) Crosstalk at the card value 1.67e-5 /µs, an interior τ*_log < τ*_phys appears: REFUTED under the resolved flag.** Every interval contains τ*_phys in both bases. Under the pre-registered point flag the result is **split between the bases**: Z says none at every (d, mode) (d = 3 hard 30.2 [21.2, 36.8]); X says one exists at every (d, mode) (d = 3 hard 19.3 [16.2, 47.5]), but the X d = 5 rows are 100% tied and therefore UNRESOLVED. The split is a sign that the point flag reads noise at this rate, which is why the resolved flag is reported beside it.
+- **(c) "No interior optimum at any scanned rate" is not met, but it was a weak clause.** At 1e-4 /µs most point estimates sit below τ*_phys but every interval overlaps it. An optimum below τ*_phys is resolved only at 1e-3 /µs, 60× the card value: in Z at d = 3 and 5 (both modes) and in X at d = 3 (both modes); X at d = 5 is not resolved (upper bounds 25.4 and 24.5 µs). At that rate crosstalk per detection is ½(1 − e^(−0.014)) ≈ 0.7% near 14 µs, as large as the learned gate classes (0.0066–0.0113, `budget.gateClasses`). The clause can only be met where crosstalk is as large as gate noise, so meeting it says little.
+
+### C1, superconducting part (learned, `optima.tauLog`, against `optima.tauPhysEmpirical` = 0.906 µs)
+
+"Below" only if the upper bound is below 0.906 µs. No row has Tied ≥ 50%.
+
+| Basis | d | Mode | τ*_log (µs) [95%] | Tied | Below 0.906? |
+|---|---|---|---|---|---|
+| Z | 3 | hard | 0.764 [0.732, 0.802] | 0% | **yes** |
+| Z | 3 | soft | 0.716 [0.659, 0.785] | 0.5% | **yes** |
+| Z | 5 | hard | 0.781 [0.680, 0.896] | 5.5% | **yes** |
+| Z | 5 | soft | 0.850 [0.586, 0.957] | 7% | no |
+| Z | 7 | hard | 0.810 [0.744, 0.920] | 19% | no |
+| Z | 7 | soft | 0.777 [0.698, 0.990] | 15% | no |
+| X | 3 | hard | 0.820 [0.772, 0.896] | 1.5% | **yes** |
+| X | 3 | soft | 0.812 [0.730, 0.904] | 1% | **yes** (by 0.002 µs) |
+| X | 5 | hard | 0.837 [0.658, 0.944] | 7% | no |
+| X | 5 | soft | 0.801 [0.729, 1.05] | 14% | no |
+| X | 7 | hard | 0.721 [0.636, 0.990] | 35.5% | no |
+| X | 7 | soft | 1.30 [0.837, 1.41] | 44.5% | no |
+
+**C1 (superconducting): holds at d = 3 in both bases and both modes; not met at d = 5** (only Z hard resolves below 0.906 µs; Z soft, X hard and X soft intervals contain it). The pre-registered refutation is "the interval contains or exceeds τ*_phys at d = 3 and 5", so the revised C1 is **refuted at d = 5 and holds at d = 3**. Changed from v1: the v1 naive decoder resolved the shift at d = 3 and 5 in Z (upper bounds 0.854, 0.668, 0.875, 0.857 µs; the naive rows in `stage3_sc.json` are unchanged). The learned optima sit later (Z d = 3 soft 0.716 µs against naive 0.601 µs), so the size of the v1 shift was partly a property of the naive decoder.
+
+### C6 (`stage3_sc.json`, `stage3_sc_x.json`, learned, `optima.tauLog`)
+
+**NOT APPLICABLE with the card.** C6 is conditional on T2 < T1; `params/sc.json` has T2 = 77 µs > T1 = 50 µs. With this card the phase-flip idle probability is the smaller one (`budget.idle` at 1 µs: X 0.0065, Z 0.0099), so physics predicts an X optimum at or beyond the Z one. The data are consistent with that but do not resolve it: the X point estimate is later at d = 3 (hard 0.820 [0.772, 0.896] against 0.764 [0.732, 0.802]; soft 0.812 against 0.716), d = 5 hard (0.837 against 0.781) and d = 7 soft (1.30 against 0.777), and earlier at d = 5 soft (0.801 against 0.850) and d = 7 hard (0.721 against 0.810); the intervals overlap at every (d, mode). C6 is tested with a variant card (T2 = 25 µs) at CC-A19 (DECISIONS E12).
+
+### C2 (learned, Wilson intervals)
+
+Points with soft above hard beyond the Wilson intervals (`validation.C2` → `softAboveBeyondIntervals`):
+
+| Arm | Basis | Learned | Naive (for comparison) |
+|---|---|---|---|
+| Trapped ion | Z | **0 of 39** (soft ≤ hard at 32) | 13 of 39 |
+| Trapped ion | X | **0 of 39** (soft ≤ hard at 37) | 9 of 39 |
+| Superconducting | Z | **0 of 36** (soft ≤ hard at 33) | 0 of 36 |
+| Superconducting | X | **0 of 36** (soft ≤ hard at 35) | 0 of 36 |
+
+**C2 (learned): holds on both arms in both bases at this level of evidence.** Wilson intervals treat the R readout draws of one quantum shot as independent, so they are too narrow where gate faults dominate; CC-A19 adds cluster and paired intervals and these counts are redone at A53a.
+
+### O4 (`dem_forte1.json` → `ratioXoverZ`, bulk detector rate, X-basis over Z-basis banks)
+
+| d | r | Ratio [95%] | Z rate | X rate |
+|---|---|---|---|---|
+| 3 | 1 | 1.041 [0.894, 1.213] | 0.0198 | 0.0206 |
+| 3 | 3 | 1.027 [0.959, 1.100] | 0.0478 | 0.0491 |
+| 5 | 3 | 1.000 [0.953, 1.048] | 0.0504 | 0.0504 |
+| 5 | 5 | 1.029 [0.995, 1.064] | 0.0498 | 0.0513 |
+| 7 | 3 | 1.021 [0.983, 1.061] | 0.0517 | 0.0528 |
+
+All intervals contain or nearly contain 1: forte-1 gate noise looks unbiased to the decoder, so X-against-Z differences in our results come from the classical idle model, not from the simulator. (Here every interval contains 1; the lowest lower bound is 0.995, at d5 r5.)
+
+### Finding F1 (post hoc, not pre-registered): the v1 soft-decoding loss was a decoder-model artefact
+
+From `stage2_ion.json` (Z, d = 3, τ = 20 µs, `series`): naive soft 0.00738 [0.00649, 0.00837] against hard 0.00347 [0.00288, 0.00418]; soft is worse beyond the intervals at 13 of 39 points with the naive decoder. Learned soft 0.00356 [0.00297, 0.00428] against hard 0.00331 [0.00274, 0.00400]; 0 of 39. The X basis shows the same (naive 9 of 39, learned 0 of 39). Mechanism: the diagonal edge class is as strong as the time-like class (`dem_forte1.json` → `banks`, d3 r3 Z: diag 0.0099, time 0.0100) and is missing from the naive graph. Caveats: this is in sample (the rates are learned from the banks being decoded), and V12(b) is underpowered at d = 5 (13 → 7 and 20 → 9 errors, DECISIONS E4). The held-out test is V18 (CC-A18, CC-A21).
+
+### Budget magnitudes (`budget`, per round, per qubit)
+
+| Arm | Basis | τ range (µs) | Readout | Idle | Crosstalk | Gate (pGate; classes) |
+|---|---|---|---|---|---|---|
+| Trapped ion | Z | 1–500 | 5.7e-4 (20 µs) – 0.31 (1 µs) | 5e-8 – 2.5e-5 | 8.3e-6 – 4.2e-3 (card rate) | 0.0087; 0.0066–0.0100 |
+| Trapped ion | X | 1–500 | same as Z | 5e-7 – 2.5e-4 | same as Z | 0.0090; 0.0070–0.0113 |
+| Superconducting | Z | 0.05–3 | 5.0e-3 (1 µs) – 0.49 (0.05 µs) | 5.0e-4 – 2.9e-2 | 0 | 0.0087; 0.0066–0.0100 |
+| Superconducting | X | 0.05–3 | same as Z | 3.2e-4 – 1.9e-2 | 0 | 0.0090; 0.0070–0.0113 |
+
+Near the optima: ion readout 4.8e-3, 5.7e-4, 9.3e-4 at 10, 20, 50 µs (idle ≤ 2.5e-5); superconducting readout 2.3e-2, 5.7e-3, 5.0e-3 at 0.5, 0.7, 1 µs with idle 5.0e-3, 7.0e-3, 9.9e-3 (Z) and 3.2e-3, 4.5e-3, 6.5e-3 (X). On the superconducting arm readout, idle and gate are all of order 1e-2 near the optimum; on the ion arm gate noise dominates from about 10 µs on.
+
+### Tie rule applied to earlier tables
+
+- A44/A45 Stage 2 rerun: ion d = 7 learned (100% tie): **UNRESOLVED**, as already stated there. The A48 file confirms it (`stage2_ion.json` learned d = 7 hard 54.8 [44.7, 70.7], soft 27.4 [22.4, 86.6], both 100% tied).
+- A48 Stage 2, X basis (`stage2_ion_x.json` → `optima.tauLog`): learned d = 5 hard 31.6 [27.4, 44.7] and soft 22.4 [22.4, 31.6], learned d = 7 hard 38.7 and soft 44.7, naive d = 5 hard 17.3 and naive d = 7 hard 54.8 are all ≥ 98% tied: **UNRESOLVED**.
+- v1 Stage 2 and Stage 3 tables: no row reaches 50% (unchanged).
