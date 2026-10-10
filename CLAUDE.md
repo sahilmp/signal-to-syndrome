@@ -2,6 +2,8 @@
 
 This file is the contract for all code in this repository. Authority order: this file > DECISIONS.md > docs/*.md plans > the current prompt. If a prompt conflicts with this file, stop and say so.
 
+Plans: `docs/signal-to-syndrome-team-checklist.md` and `docs/signal-to-syndrome-execution-checklist.md` (v2) govern all current work. The `-v1.md` files are a historical record; do not follow them.
+
 ## What the project is
 An open-source lab, published and runnable on Qollab, showing how qubit-readout physics sets the logical error rate of a repetition-code memory. Circuits: Qiskit on IonQ's simulator (forte-1 noise), submitted in native gates so IonQ's optimiser does not remove them. Readout models: classical, in JavaScript. Decoder: our own exact minimum-weight matching.
 
