@@ -1370,40 +1370,40 @@ const STATEMENTS = {
 // Draft plain-language sentences (at most 20 words each; Person A edits them at A55), per
 // conclusion and verdict, for the finding F1 and for the framing.
 export const PLAIN = {
-  framing: 'Two readout models on the same IonQ-simulated circuits and gate noise: a controlled comparison, not a hardware benchmark.',
+  framing: 'Same IonQ-simulated circuits and gate noise, two ways of reading qubits out: a controlled comparison, not a hardware benchmark.',
   C1: {
     held: 'The code’s best readout time is shorter than the best time for reading one qubit.',
-    refuted: 'For neither qubit type is the code’s best readout time reliably shorter than the single-qubit best.',
+    refuted: 'In neither qubit type does the code reliably want a shorter readout than a single qubit does.',
     undetermined: 'The data cannot yet say whether the code prefers a shorter readout than one qubit does.',
   },
   C2: {
-    held: 'With the learned decoder, using readout confidence never hurts and helps most when readouts are short.',
+    held: 'Weighing each readout by its confidence never hurt with the learned decoder, and helped most for short readouts.',
     refuted: 'Using readout confidence sometimes makes decoding worse, even with the learned decoder.',
     undetermined: 'The data cannot yet say whether using readout confidence always helps.',
   },
   C3: {
-    held: 'The ion is more accurate per round and the superconducting qubit faster; these cards guarantee that outcome.',
+    held: 'The ion makes fewer errors per round, the superconducting qubit more rounds per second; our parameters guaranteed this.',
     refuted: 'One qubit type is both more accurate per round and faster, with these cards.',
     undetermined: 'The data cannot separate the two qubit types on accuracy per round and speed.',
   },
   C4: {
     held: 'Both qubit types need about the same readout quality before distance 5 beats distance 3.',
     refuted: 'The two qubit types need different readout quality before distance 5 beats distance 3.',
-    undetermined: 'We cannot yet say whether both qubit types need the same readout quality for distance 5 to help.',
+    undetermined: 'Undecided: on the superconducting qubit, distance 5 beat distance 3 at every readout quality tried, leaving nothing to compare.',
   },
   C5: {
-    held: 'Learning the noise from the data never made decoding worse and usually made it clearly better.',
+    held: 'Learning the noise from the data never made decoding worse, and usually made it clearly better.',
     refuted: 'Learning the noise from the data made decoding worse somewhere.',
     undetermined: 'The data cannot yet say whether learning the noise always helps decoding.',
   },
   C6: {
-    'not applicable': 'This does not apply to our superconducting card; an illustrative card points the right way, unresolved.',
+    'not applicable': 'Does not apply: our superconducting qubit loses phase more slowly than energy. An invented faster-dephasing qubit leans yes, unresolved.',
     held: 'With faster dephasing, the phase-flip memory prefers a shorter readout than the bit-flip memory.',
     refuted: 'Even with faster dephasing, the phase-flip memory does not prefer a shorter readout.',
     undetermined: 'The data cannot yet say whether faster dephasing shortens the best readout time.',
   },
-  O4: { undetermined: 'IonQ’s simulated gate noise looks the same to the decoder for bit flips and phase flips.' },
-  F1: 'Readout confidence seemed to hurt the ion, but only because the first decoder missed a common error.',
+  O4: { undetermined: 'Measured, not tested: IonQ’s simulated gate noise looks the same to the decoder for bit flips and phase flips.' },
+  F1: 'Readout confidence seemed to hurt the ion only because the first decoder ignored a common error; fresh data confirm it.',
 };
 const plainOf = (id, verdict) => PLAIN[id]?.[verdict] ?? '';
 // v2 verdict words; a verdict is "refuted" if any part is, "held" if every part is. Callers
@@ -1634,7 +1634,9 @@ function c3Conclusion(tables, cycle) {
   const dom = dominance(a, b);
   const automated = dom === null ? 'held' : 'refuted';
   const who = dom === 'A' ? ION : dom === 'B' ? SC : null;
-  const note = 'The outcome is fixed by construction: cycle times differ by about 2000x and gate noise is shared, so with these cards the superconducting arm always has more rounds per second and the ion arm a lower error per round. Shown as a trade-off, not as a finding. '
+  // Cycle-time ratio at the two optima, to 2 significant figures (A55: replaces a fixed "about 2000x").
+  const cycleRatio = Number((b.roundsPerSecond / a.roundsPerSecond).toPrecision(2));
+  const note = `The outcome is fixed by construction: cycle times differ by about ${cycleRatio}x at d = 3 and gate noise is shared, so with these cards the superconducting arm always has more rounds per second and the ion arm a lower error per round. Shown as a trade-off, not as a finding. `
     + `At τ*_log (d = 3, hard, learned): ion ${g3(a.perRound)} ${iv(a.lo, a.hi)} per round at ${g3(a.roundsPerSecond)} rounds/s; superconducting ${g3(b.perRound)} ${iv(b.lo, b.hi)} at ${g3(b.roundsPerSecond)} rounds/s; ${who ? `${who} dominates` : 'neither dominates'}.`;
   return {
     conclusion: conclusion('C3', automated, note, { informative: false, deviations: ['E12 (c): reported with informative: false; the U4 rule itself is unchanged.'] }),

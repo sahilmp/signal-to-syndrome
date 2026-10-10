@@ -694,3 +694,22 @@ These are unchanged from A49. The X/Z bulk detector-rate ratio is 1.041 [0.894, 
 4. **C1 ion (b):** `shiftDelta` agrees with the resolved flag (refuted in both bases).
 5. **C1 superconducting:** `shiftDelta` resolves no learned row, which agrees with "refuted". Note that the verdict change from A49 (d = 3 holds → refuted) comes from the dense grid, not from cluster or paired intervals.
 6. **V18** (A53b): the cluster intervals agree with the Wilson verdict (learned upper bound 0.00122 against naive lower bound 0.00135 at d = 5).
+
+## Final verdicts in plain language (A55, Sun 11 Oct 03:18 IST)
+
+Final Stage 4 (`stage4_comparison.json`, 0fdb7c4; learned decoder). The plain texts are copied from `conclusions[*].plain`, `findings[*].plain` and `framingPlain`, edited by Person A at A55 (DECISIONS E15). This is the verdict column for the scoreboard and the page.
+
+**Framing:** Same IonQ-simulated circuits and gate noise, two ways of reading qubits out: a controlled comparison, not a hardware benchmark.
+
+| ID | Verdict | In plain language |
+|---|---|---|
+| C1 | **Refuted** | In neither qubit type does the code reliably want a shorter readout than a single qubit does. |
+| C2 | **Held** | Weighing each readout by its confidence never hurt with the learned decoder, and helped most for short readouts. |
+| C3 | **Held**, fixed by construction (`informative: false`) | The ion makes fewer errors per round, the superconducting qubit more rounds per second; our parameters guaranteed this. |
+| C4 | **Undetermined** | Undecided: on the superconducting qubit, distance 5 beat distance 3 at every readout quality tried, leaving nothing to compare. |
+| C5 | **Held** (out of sample for the ion, Z, d = 3 and 5) | Learning the noise from the data never made decoding worse, and usually made it clearly better. |
+| C6 | **Not applicable** with the card; T2 = 25 µs variant undetermined | Does not apply: our superconducting qubit loses phase more slowly than energy. An invented faster-dephasing qubit leans yes, unresolved. |
+| O4 | Measurement, no verdict | Measured, not tested: IonQ’s simulated gate noise looks the same to the decoder for bit flips and phase flips. |
+| F1 | Finding (post hoc), out of sample | Readout confidence seemed to hurt the ion only because the first decoder ignored a common error; fresh data confirm it. |
+
+C3's note now gives the cycle-time ratio from the files, about 3800× at d = 3 (3787×), instead of "about 2000×".

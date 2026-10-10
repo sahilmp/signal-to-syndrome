@@ -5,7 +5,7 @@
   "decoder": "learned",
   "provisional": false,
   "framing": "Two readout physics models at fixed gate noise: the same IonQ forte-1 banks and learned decoder; different readout models, idle physics and cycle times.",
-  "framingPlain": "Two readout models on the same IonQ-simulated circuits and gate noise: a controlled comparison, not a hardware benchmark.",
+  "framingPlain": "Same IonQ-simulated circuits and gate noise, two ways of reading qubits out: a controlled comparison, not a hardware benchmark.",
   "platforms": {
     "trapped-ion": {
       "tauLog": {
@@ -2526,7 +2526,7 @@
       "verdict": "refuted",
       "automated": "refuted",
       "note": "Superconducting (stage3_sc_dense.json, stage3_sc_x_dense.json; learned; against τ*_phys (empirical) = 0.910 µs): refuted. Interval below τ*_phys: X d3 soft 0.677 [0.599, 0.906] µs. Containing or above it: Z d3 hard 0.710 [0.662, 0.990] µs; Z d3 soft 0.694 [0.563, 0.912] µs; Z d5 hard 0.942 [0.643, 0.977] µs; Z d5 soft 0.844 [0.518, 0.983] µs; X d3 hard 0.696 [0.685, 0.946] µs; X d5 hard 0.653 [0.629, 1.01] µs; X d5 soft 0.900 [0.642, 1.01] µs. shiftDelta resolves no learned row. Trapped ion (crosstalkScan, learned), pre-registered point flag: crosstalk off refuted (flag at Z d3 hard, Z d3 soft); card rate undetermined (2 of 6 rows flagged); any rate held. Resolved flag (whole interval below τ*_phys, E12): off held, card rate refuted, any rate held (Z 0.001 /µs d3 hard, Z 0.001 /µs d3 soft, Z 0.001 /µs d5 hard, Z 0.001 /µs d5 soft, X 0.001 /µs d3 hard, X 0.001 /µs d3 soft). shiftDelta (E14): off held, card rate refuted, any rate held (X 0.001 /µs d3 hard, X 0.001 /µs d3 soft). Person A's reading of the ion parts uses the resolved flag (refuted), because the point flag reads noise in a flat minimum (E12 (a)). The overall verdict is refuted under either flag, because the superconducting part is.",
-      "plain": "For neither qubit type is the code’s best readout time reliably shorter than the single-qubit best.",
+      "plain": "In neither qubit type does the code reliably want a shorter readout than a single qubit does.",
       "informative": true,
       "deviations": [
         "E12 (a): the ion parts are also reported with interiorBelowTauPhysResolved (the whole interval below τ*_phys), decided after seeing the A48 data; the automated verdict uses the pre-registered point flag.",
@@ -2540,7 +2540,7 @@
       "verdict": "held",
       "automated": "held",
       "note": "Learned decoder, soft above hard beyond the intervals (Wilson / cluster / paired cluster): Z trapped-ion 0 / 0 / 0 of 39; Z superconducting 0 / 0 / 0 of 81; X trapped-ion 0 / 0 / 0 of 39; X superconducting 0 / 0 / 0 of 81. Soft below hard beyond the paired interval: Z trapped-ion 13; Z superconducting 31; X trapped-ion 15; X superconducting 35, most at short τ. The verdict uses the pre-registered Wilson rule; the paired count agrees.",
-      "plain": "With the learned decoder, using readout confidence never hurts and helps most when readouts are short.",
+      "plain": "Weighing each readout by its confidence never hurt with the learned decoder, and helped most for short readouts.",
       "informative": true,
       "deviations": []
     },
@@ -2548,8 +2548,8 @@
       "statement": "Neither readout model dominates: along the τ grids the ion arm has lower error per round and the superconducting arm more rounds per second",
       "verdict": "held",
       "automated": "held",
-      "note": "The outcome is fixed by construction: cycle times differ by about 2000x and gate noise is shared, so with these cards the superconducting arm always has more rounds per second and the ion arm a lower error per round. Shown as a trade-off, not as a finding. At τ*_log (d = 3, hard, learned): ion 0.00112 [0.000928, 0.00135] per round at 253 rounds/s; superconducting 0.00221 [0.00193, 0.00253] at 9.58e+5 rounds/s; neither dominates.",
-      "plain": "The ion is more accurate per round and the superconducting qubit faster; these cards guarantee that outcome.",
+      "note": "The outcome is fixed by construction: cycle times differ by about 3800x at d = 3 and gate noise is shared, so with these cards the superconducting arm always has more rounds per second and the ion arm a lower error per round. Shown as a trade-off, not as a finding. At τ*_log (d = 3, hard, learned): ion 0.00112 [0.000928, 0.00135] per round at 253 rounds/s; superconducting 0.00221 [0.00193, 0.00253] at 9.58e+5 rounds/s; neither dominates.",
+      "plain": "The ion makes fewer errors per round, the superconducting qubit more rounds per second; our parameters guaranteed this.",
       "informative": false,
       "deviations": [
         "E12 (c): reported with informative: false; the U4 rule itself is unchanged."
@@ -2560,7 +2560,7 @@
       "verdict": "undetermined",
       "automated": "undetermined",
       "note": "Empirical assignment-error axis, learned: hard: ion 0.237, superconducting no crossing (d = 5 below d = 3 at every grid point): undetermined; soft: ion no crossing (d = 5 below d = 3 at every grid point), superconducting no crossing (d = 5 below d = 3 at every grid point): undetermined. Wilson-based break-even intervals.",
-      "plain": "We cannot yet say whether both qubit types need the same readout quality for distance 5 to help.",
+      "plain": "Undecided: on the superconducting qubit, distance 5 beat distance 3 at every readout quality tried, leaving nothing to compare.",
       "informative": true,
       "deviations": []
     },
@@ -2569,7 +2569,7 @@
       "verdict": "held",
       "automated": "held",
       "note": "Out of sample at 4 rows (Z trapped-ion d3 hard, Z trapped-ion d3 soft, Z trapped-ion d5 hard, Z trapped-ion d5 soft; holdout.json -> setting2, rates learned from the original banks only). In sample at 11 rows (the X basis and the superconducting arm have no held-out banks). V18 (holdout.json -> setting1, flat ε = 0.02, hard): pass. Learned above naive beyond the Wilson intervals at 0 of 15 resolved rows; below beyond them at 13 (3 of them out of sample). Equal within the intervals at Z trapped-ion d3 hard, X trapped-ion d3 hard, so \"lowers at every (d, arm, mode)\" is met only in the sense that learned is never higher. 9 rows have an UNRESOLVED τ*_log and are excluded.",
-      "plain": "Learning the noise from the data never made decoding worse and usually made it clearly better.",
+      "plain": "Learning the noise from the data never made decoding worse, and usually made it clearly better.",
       "informative": true,
       "deviations": [
         "Out of sample only where held-out banks exist (DECISIONS E11): trapped ion, Z basis, d = 3 and 5; the other rows decode the banks the rates were learned from and carry inSample: true."
@@ -2580,7 +2580,7 @@
       "verdict": "not applicable",
       "automated": "not applicable",
       "note": "Not applicable with the card: the statement is conditional on T2 < T1, and the card has T2 = 77 µs ≥ T1 = 50 µs (DECISIONS E7, E12 (b)). Variant card T2 = 25 µs (UNSOURCED, illustrative; stage3_sc_x_T2_25.json against stage3_sc_dense.json, learned): d3 hard: X 0.691 [0.640, 0.792] µs against Z 0.710 [0.662, 0.990] µs; d3 soft: X 0.644 [0.548, 0.728] µs against Z 0.694 [0.563, 0.912] µs; d5 hard: X 0.798 [0.596, 0.810] µs against Z 0.942 [0.643, 0.977] µs; d5 soft: X 0.603 [0.561, 0.805] µs against Z 0.844 [0.518, 0.983] µs. The rule gives \"undetermined\": X is shorter in every point estimate, but the intervals overlap. pL(X) − pL(Z) at the grid point nearest the Z τ*_log (unpaired, different banks; cluster half-widths in quadrature): d3 hard +0.00300 [0.000983, 0.00500] at 0.7 µs; d3 soft +0.00263 [0.000633, 0.00476] at 0.7 µs; d5 hard +0.00103 [0.000427, 0.00163] at 0.95 µs; d5 soft +0.000219 [-0.000444, 0.000816] at 0.85 µs.",
-      "plain": "This does not apply to our superconducting card; an illustrative card points the right way, unresolved.",
+      "plain": "Does not apply: our superconducting qubit loses phase more slowly than energy. An invented faster-dephasing qubit leans yes, unresolved.",
       "informative": true,
       "deviations": [
         "E14 (c): the variant card T2 = 25 µs is UNSOURCED (illustrative) and post hoc, chosen only to meet the premise T2 < T1.",
@@ -2592,7 +2592,7 @@
       "verdict": "undetermined",
       "automated": "undetermined",
       "note": "Measurement, no hypothesis (no verdict). X over Z bulk detector rate (dem_forte1.json -> ratioXoverZ): d3 r1 1.041 [0.894, 1.213]; d3 r3 1.027 [0.959, 1.100]; d5 r3 1.000 [0.953, 1.048]; d5 r5 1.029 [0.995, 1.064]; d7 r3 1.021 [0.983, 1.061]; 5 of 5 intervals contain 1 (DECISIONS E5).",
-      "plain": "IonQ’s simulated gate noise looks the same to the decoder for bit flips and phase flips.",
+      "plain": "Measured, not tested: IonQ’s simulated gate noise looks the same to the decoder for bit flips and phase flips.",
       "informative": true,
       "deviations": []
     }
@@ -4095,7 +4095,7 @@
       },
       "source": "holdout.json -> setting2 (out of sample); stage2_ion_v2b.json, stage2_ion_x_v2b.json (in sample)",
       "inSample": false,
-      "plain": "Readout confidence seemed to hurt the ion, but only because the first decoder missed a common error."
+      "plain": "Readout confidence seemed to hurt the ion only because the first decoder ignored a common error; fresh data confirm it."
     }
   ],
   "decoderComparison": [
