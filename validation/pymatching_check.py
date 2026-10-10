@@ -1,9 +1,11 @@
 """Independent cross-check of src/core/matching.js against PyMatching (validation V2).
 
-Usage: python validation/pymatching_check.py data/vectors/vectors_d3_r3.json ...
+Usage: python validation/pymatching_check.py [data/vectors/vectors_d3_r3.json ...]
+With no arguments, every data/vectors/vectors_*.json is checked.
 
 For each vector file (written by tools/export_vectors.mjs) the decoding graph is
-rebuilt in PyMatching and every shot's syndrome is decoded. On every shot where
+rebuilt in PyMatching from the file's edge list (space, time and, since V2b,
+diagonal edges) and every shot's syndrome is decoded. On every shot where
 our decoder was exact, ourCost must equal PyMatching's solution weight to 1e-9;
 otherwise it is a cost mismatch (our matching is not minimum-weight, whatever the
 flip). A prediction that differs from ourFlip on an exact shot is a tie when the
@@ -12,7 +14,9 @@ decoder was not exact (greedy) are reported but do not fail.
 Exit status 1 on any genuine mismatch or cost mismatch.
 """
 
+import glob
 import json
+import os
 import sys
 
 import numpy as np
@@ -74,10 +78,13 @@ def check_file(path):
 
 def main(paths):
     if not paths:
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "vectors")
+        paths = sorted(glob.glob(os.path.join(root, "vectors_*.json")))
+    if not paths:
         print(__doc__)
         return 2
     print(f"pymatching {pymatching.__version__}")
-    header = f"{'file':<24} {'d':>2} {'r':>2} {'shots':>6} {'agree':>6} {'ties':>5} {'genuine':>7} " \
+    header = f"{'file':<24} {'d':>2} {'r':>2} {'diag':>4} {'edges':>5} {'shots':>6} {'agree':>6} {'ties':>5} {'genuine':>7} " \
              f"{'costMis':>7} {'nonExact':>8} {'nonExMis':>8} {'pL ours':>8} {'pL PM':>8}"
     print(header)
     print("-" * len(header))
@@ -87,7 +94,8 @@ def main(paths):
         data, s, examples, cost_examples = check_file(path)
         name = path.replace("\\", "/").split("/")[-1]
         n = s["shots"]
-        print(f"{name:<24} {data['d']:>2} {data['r']:>2} {n:>6} {s['agree']:>6} {s['ties']:>5} "
+        diag = "yes" if data.get("diagonal") else "no"
+        print(f"{name:<24} {data['d']:>2} {data['r']:>2} {diag:>4} {len(data['edges']):>5} {n:>6} {s['agree']:>6} {s['ties']:>5} "
               f"{s['genuine']:>7} {s['costMismatch']:>7} {s['nonExact']:>8} {s['nonExactMismatch']:>8} "
               f"{s['ourLogical'] / n:>8.5f} {s['pmLogical'] / n:>8.5f}")
         for idx, lit, ours, pm in examples:

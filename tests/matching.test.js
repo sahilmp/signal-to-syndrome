@@ -269,3 +269,60 @@ test('decode rejects malformed inputs', () => {
   assert.throws(() => decode(g, neg, D), /non-negative/);
   assert.throws(() => decode(g, uniformWeights(g), new Uint8Array(g.nDetectors + 1)), /detectorBits/);
 });
+
+// Weights for the diagonal tests: space 1, time 0.5, diag 1.2. A diag pair (k, j+1),(k+1, j)
+// then has a unique optimum on the diagonal graph (the diag edge, 1.2 < space + time 1.5 <
+// two boundary edges 2), and on the naive graph its optimum is one space plus one time edge.
+function diagWeights(g) {
+  return new Float64Array(g.edges.map((e) => (e.kind === 'diag' ? 1.2 : e.kind === 'time' ? 0.5 : 1)));
+}
+
+// Catches: fails if matching.js mishandles the appended diag edges (ignores them, reads the
+// weight of another id, or counts them as observable): a single fired diag edge on
+// buildGraph(3, 3, { diagonal: true }) must decode with nDefects 2, flip 0 and the diag
+// weight, while on the naive graph the same detectors cost one space plus one time edge.
+test('single diag edge: diagonal graph pays its weight, naive graph pays space + time', () => {
+  const d = 3;
+  const r = 3;
+  const g = buildGraph(d, r, { diagonal: true });
+  const naive = buildGraph(d, r);
+  const w = diagWeights(g);
+  const wNaive = diagWeights(naive);
+  const diag = g.edges.filter((e) => e.kind === 'diag');
+  assert.equal(diag.length, r * (d - 2));
+  for (const e of diag) {
+    const { D, obs } = syndromeOf(g, [e.id]);
+    assert.equal(obs, 0);
+    const res = decode(g, w, D);
+    assert.equal(res.nDefects, 2, `edge ${e.id}`);
+    assert.equal(res.flip, 0, `edge ${e.id}`);
+    assert.ok(Math.abs(res.cost - w[e.id]) < 1e-12, `edge ${e.id}: cost ${res.cost}`);
+    assert.deepEqual(res.paths.flatMap((p) => p.edges), [e.id]);
+    assertPathsConsistent(g, w, D, res);
+    const resNaive = decode(naive, wNaive, D);
+    assert.equal(resNaive.nDefects, 2);
+    assert.equal(resNaive.flip, 0, `naive, edge ${e.id}`);
+    assert.ok(Math.abs(resNaive.cost - 1.5) < 1e-12, `naive, edge ${e.id}: cost ${resNaive.cost}`);
+    const kinds = resNaive.paths.flatMap((p) => p.edges).map((id) => naive.edges[id].kind).sort();
+    assert.deepEqual(kinds, ['space', 'time']);
+    assertPathsConsistent(naive, wNaive, D, resNaive);
+  }
+});
+
+// Catches: fails if a diag edge is marked observable or matching.js toggles the flip when a
+// path crosses one: across d = 3, 5, 7 every diag edge is unobservable and, fired alone with
+// uniform weights (its unique optimum, cost 1), decodes to flip 0 through that edge only.
+test('diag edges never set the observable', () => {
+  for (const [d, r] of [[3, 3], [5, 3], [7, 3]]) {
+    const g = buildGraph(d, r, { diagonal: true });
+    const w = uniformWeights(g);
+    for (const e of g.edges.filter((x) => x.kind === 'diag')) {
+      assert.equal(e.observable, false);
+      const { D } = syndromeOf(g, [e.id]);
+      const res = decode(g, w, D);
+      assert.equal(res.flip, 0, `d=${d} edge ${e.id}`);
+      assert.equal(res.cost, 1, `d=${d} edge ${e.id}`);
+      assert.deepEqual(res.paths.flatMap((p) => p.edges), [e.id]);
+    }
+  }
+});

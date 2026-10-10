@@ -1,12 +1,13 @@
 // Decoding graph of the repetition-code memory and edge-weight helpers.
 // Nodes: detectors 0..(d-1)*(r+1)-1 (index k*(d-1) + j) and the boundary node
 // B = (d-1)*(r+1). Space-like edges are data-qubit flips within a layer; time-like
-// edges are wrong reports of m[k][j]. Observable edges are flips of data qubit 0.
+// edges are wrong reports of m[k][j]; diagonal edges (opt-in, { diagonal: true }) join
+// (k, j+1) to (k+1, j). Observable edges are flips of data qubit 0.
 
 const P_MIN = 1e-12;
 const P_MAX = 0.5;
 
-export function buildGraph(d, r) {
+export function buildGraph(d, r, { diagonal = false } = {}) {
   if (!Number.isInteger(d) || d < 3 || d % 2 === 0) throw new Error(`buildGraph: d must be an odd integer >= 3, got ${d}`);
   if (!Number.isInteger(r) || r < 1) throw new Error(`buildGraph: r must be an integer >= 1, got ${r}`);
   const nc = d - 1;
@@ -28,6 +29,16 @@ export function buildGraph(d, r) {
   for (let k = 0; k < r; k++) {
     for (let j = 0; j < nc; j++) {
       add({ u: node(k, j), v: node(k + 1, j), kind: 'time', layer: null, dataQubit: null, check: j, round: k, observable: false });
+    }
+  }
+  // Diagonal (only if requested, after all space and time edges so their ids are unchanged):
+  // a fault on data qubit j+1 between its CNOT into check j and its CNOT into check j+1 in
+  // round k flips m[k][j+1] and, from round k+1 on, m[k'][j]. Never observable (j+1 >= 1).
+  if (diagonal) {
+    for (let k = 0; k < r; k++) {
+      for (let j = 0; j <= d - 3; j++) {
+        add({ u: node(k, j + 1), v: node(k + 1, j), kind: 'diag', layer: null, dataQubit: j + 1, check: null, round: k, observable: false });
+      }
     }
   }
   return { d, r, nDetectors, boundary, edges };
