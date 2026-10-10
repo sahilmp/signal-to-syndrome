@@ -422,17 +422,17 @@ node tools/sweep.mjs --stage 4 --basis X
 ### K3 · Both · Sat 22:30 — GATE SP6
 
 **Gate:**
-- [ ] V13, V14, V15 (provisional), V16 pass
-- [ ] `npm test` has no failures (CC-B20)
-- [ ] X-basis results and the crosstalk scan are real, not fixtures; the crosstalk table shows intervals and the resolved verdict, never the raw boolean
-- [ ] Level 1 game, Level 3 budget, "Learn the noise" on real data
-- [ ] Level 5 v2 on the provisional Stage 4 (or moved to SP7 by the cut rule); its numbers are not quoted anywhere
-- [ ] V9 and V9L still match on Qollab (private)
+- [x] V13, V14, V15 (provisional), V16 pass
+- [x] `npm test` has no failures (CC-B20)
+- [x] X-basis results and the crosstalk scan are real, not fixtures; the crosstalk table shows intervals and the resolved verdict, never the raw boolean
+- [x] Level 1 game, Level 3 budget, "Learn the noise" on real data
+- [x] Level 5 v2 on the provisional Stage 4 (or moved to SP7 by the cut rule); its numbers are not quoted anywhere
+- [x] V9 and V9L still match on Qollab (private)
 
 **Cut deadline:** Sat 22:15. **Cut rule:** cut the crosstalk scan to the rates 0, 1e-5 and 1e-3 per µs; cut the X basis to d = 3 and 5; move Level 5 v2 to SP7.
 
 **Do:** team checklist K3 (as K2, plus the phase-flip and crosstalk views); tag `sp6`.
-- [ ] Done
+- [x] Done
 
 ### A52 · A · Sat 23:00 — CC-A19: statistics, dense grid, C6 variant; start the overnight runs
 

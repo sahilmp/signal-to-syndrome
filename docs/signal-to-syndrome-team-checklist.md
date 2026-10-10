@@ -370,7 +370,7 @@ git push --tags
 ### K3 · JOINT · Sat 22:30 — SP6 integration
 
 As K2, with handoffs N5–N7 (N7 is the provisional Stage 4), switches rows 17–24 (row 24 only if Level 5 v2 is ready), and tag `sp6`. `npm test` must be clean (CC-B20). Level 5 numbers are provisional and must not be quoted. Also: play "Learn the noise" end to end; switch to phase-flip in the header and check Levels 3–5; check the ion crosstalk view.
-- [ ] Done
+- [x] Done
 
 ### K4 · JOINT · Sun 13:00 — SP7 integration
 
