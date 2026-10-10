@@ -9,7 +9,7 @@
 // (holdout.json, setting2). The curves and the band are heroCurves and bandInfo from hero.js.
 // No function throws on missing data: it returns null.
 
-import { stage4v2, stage4x } from './bridge_data.js';
+import { stage4v2, stage4x, holdout } from './bridge_data.js';
 import { formatNumber } from './charts.js';
 import { formatTau } from './level3.js';
 
@@ -132,7 +132,9 @@ export function whySentence({ platformId, basis, curves, band, budget } = {}) {
 
 // The twist: F1 out of sample (held-out banks, trapped ion, d = 3, 20 µs), always from the
 // bit-flip file. lo and hi are the cluster bounds; yMax leaves 15% headroom above the
-// largest hi.
+// largest hi. Extra field (beyond the contract): distances, the code distances of the held-out
+// setting (holdout.json setting2, sorted), or null when the setting does not carry them or its
+// points are not distances x readout times, or differ from F1's pointsPerDecoder.
 export function twistData() {
   const f1 = (stage4v2?.findings || []).find((f) => f?.id === 'F1');
   const o = f1?.numbers?.outOfSample;
@@ -149,9 +151,21 @@ export function twistData() {
   const counts = { naive: o.softWorseCount?.naive, learned: o.softWorseCount?.learned, n: o.pointsPerDecoder };
   if (!Object.values(counts).every(finite)) return null;
   out.counts = counts;
+  out.distances = settingDistances(counts.n);
   out.yMax = Math.max(out.naive.hard.hi, out.naive.soft.hi, out.learned.hard.hi, out.learned.soft.hi) * 1.15;
   return out;
 }
+
+function settingDistances(n) {
+  const s = holdout?.setting2;
+  const ds = s?.distances;
+  const times = s?.x?.values;
+  if (!Array.isArray(ds) || ds.length === 0 || !ds.every(finite) || !Array.isArray(times)) return null;
+  const sorted = [...new Set(ds)].sort((a, b) => a - b);
+  if (s.pointsPerDecoder !== n || n !== sorted.length * times.length) return null;
+  return sorted;
+}
+const joinAnd = (xs) => (xs.length === 1 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 const percent = (p) => (p * 100).toPrecision(2);
 
@@ -164,8 +178,10 @@ export function twistCaption(decoder, data) {
   return null;
 }
 
+// The counts are settings (readout times x distances), not readout times.
 export function twistFootnote(data) {
   const c = data?.counts;
-  if (!c || ![c.naive, c.learned, c.n].every(finite)) return null;
-  return `On fresh simulator circuits, confidence hurt at ${c.naive} of ${c.n} readout times with the first decoder and ${c.learned} of ${c.n} with the learned one. Trapped ion, d = 3, 20 µs. Found after seeing the data.`;
+  const ds = data?.distances;
+  if (!c || ![c.naive, c.learned, c.n].every(finite) || !Array.isArray(ds) || ds.length === 0) return null;
+  return `On fresh simulator circuits, confidence hurt at ${c.naive} of ${c.n} settings (readout times at d = ${joinAnd(ds)}) with the first decoder and ${c.learned} with the learned one. Chart: d = 3, 20 µs. Found after seeing the data.`;
 }

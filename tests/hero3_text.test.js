@@ -14,6 +14,7 @@ import { formatNumber } from '../src/ui/charts.js';
 import stage4z from '../data/results/stage4_comparison.json' with { type: 'json' };
 import stage4x from '../data/results/stage4_comparison_x.json' with { type: 'json' };
 import stage3dense from '../data/results/stage3_sc_dense.json' with { type: 'json' };
+import holdout from '../data/results/holdout.json' with { type: 'json' };
 
 // The release check's forbidden-text list, read from its source so the two never drift apart.
 const releaseSrc = readFileSync(new URL('../tools/release_check.mjs', import.meta.url), 'utf8');
@@ -119,6 +120,21 @@ test('whySentence, superconducting Z and X: "nudges earlier" with the valley min
   }
 });
 
+// Catches: fails if omitting the optional budget does not fall back to budgetFor(platformId,
+// basis), i.e. if the default and the explicit file budget give different sentences on any of
+// the four real cases.
+test('whySentence: omitting budget equals passing budgetFor, on all four real cases', () => {
+  for (const basis of ['Z', 'X']) {
+    for (const platformId of PLATFORM_IDS) {
+      const { curves, band } = heroCase(platformId, basis);
+      const implicit = whySentence({ platformId, basis, curves, band });
+      const explicit = whySentence({ platformId, basis, curves, band, budget: budgetFor(platformId, basis) });
+      assert.equal(typeof implicit, 'string', `${platformId} ${basis}`);
+      assert.equal(implicit, explicit, `${platformId} ${basis}`);
+    }
+  }
+});
+
 // Synthetic case for the branches no platform reaches: tau*_log 2 [1, 4], tau*_phys 3.
 const SYN_CURVES = { tau: [0.5, 1, 2, 4, 8], logical: { y: [0.5, 0.2, 0.1, 0.3, 0.6] } };
 const SYN_BAND = { kind: 'coincide', tauLog: 2, x0: 2, x1: 3, ciLo: 1, ciHi: 4 };
@@ -207,8 +223,22 @@ test('twistData equals F1; caption and footnote carry its numbers', () => {
   const pct = (p) => `${(p * 100).toPrecision(2)}%`;
   assert.equal(twistCaption('naive', d), `Using each reading’s confidence made things worse: ${pct(ex.naive.soft.pL)} against ${pct(ex.naive.hard.pL)} of stored bits lost.`);
   assert.equal(twistCaption('learned', d), `Using each reading’s confidence no longer hurts: ${pct(ex.learned.soft.pL)} against ${pct(ex.learned.hard.pL)} of stored bits lost.`);
+  // Footnote: the counts are settings (readout times x distances of holdout.json setting2),
+  // not readout times; fails if it calls the 26 "readout times" again, mixes the chart's
+  // d = 3, 20 µs into the settings phrase, or quotes numbers other than the files'.
+  const s2 = holdout.setting2;
+  const ds = [...new Set(s2.distances)].sort((a, b) => a - b);
+  assert.equal(s2.pointsPerDecoder, ds.length * s2.x.values.length);
+  assert.equal(s2.pointsPerDecoder, o.pointsPerDecoder);
+  assert.deepEqual(d.distances, ds);
   const f = twistFootnote(d);
-  assert.ok(f.includes(`${o.softWorseCount.naive} of ${o.pointsPerDecoder}`) && f.includes(`${o.softWorseCount.learned} of ${o.pointsPerDecoder}`), f);
+  assert.ok(f.includes('settings'), f);
+  assert.ok(f.includes(`${o.softWorseCount.naive} of ${o.pointsPerDecoder} settings (readout times at d = ${ds.slice(0, -1).join(', ')} and ${ds[ds.length - 1]})`), f);
+  assert.ok(f.includes(`first decoder and ${o.softWorseCount.learned} with the learned one`), f);
+  assert.ok(!/readout times at d = [^)]*µs/.test(f) && !/of \d+ readout times/.test(f), f);
+  assert.ok(f.includes('Chart: d = 3, 20 µs.'), f);
+  assert.ok(words(f) <= 40, `${words(f)} words: ${f}`);
+  assert.equal(twistFootnote({ ...d, distances: null }), null);
   assert.equal(twistCaption('other', d), null);
   assert.equal(twistCaption('naive', null), null);
   assert.equal(twistFootnote(null), null);
