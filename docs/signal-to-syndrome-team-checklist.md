@@ -776,7 +776,7 @@ Then commit `src\core tools tests data\results DECISIONS.md` ("CC-A19: cluster a
 ### A53 · REVIEW · Sun 05:45 — Review Person B's SP6 interface
 
 **Do:** pull; open N8's preview with every flag on. Check every number shown against the results files, the physics wording of "Learn the noise" (fault position, why the naive decoder needs two edges), the budget bar's labels and the framing caption. Send findings as a numbered list (blocking, major, minor) in B's DECISIONS-style format.
-- [ ] Done
+- [x] Done
 
 ### A53a · CLAUDE CODE · SELF · Sun 06:30 — CC-A20: results notes v2 (formerly A52)
 

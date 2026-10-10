@@ -481,7 +481,7 @@ If a run failed, restart it for d = 3 and 5 only and go on while it runs. Restar
 
 **Do:** team checklist A53 on N8's preview.
 **Pass:** findings sent (or "no findings").
-- [ ] Done
+- [x] Done
 
 ### A53a · A · Sun 06:30 — CC-A20: results notes v2; hand over N12
 
