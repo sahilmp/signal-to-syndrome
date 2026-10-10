@@ -6,6 +6,7 @@ import { HERO_PLATFORMS, heroResults, heroCurves, heroOptima, bandInfo, HERO_DEC
 import {
   STEP_LABELS, LOCK_LABEL, NEXT_LABEL, CHART_LABELS, MODE_LABELS, guessVerdict, twistData,
 } from '../src/ui/bridge_hero3.js';
+import * as heroText from '../src/ui/hero3_text.js';
 
 // UX1-H follow-up: the guess starts at the shortest readout time, one guess per platform, and
 // the keyboard, values-table and reduced-motion checks of the v3 hero. Structure and contract use
@@ -84,7 +85,7 @@ const lineLabels = (step) => all(step, (n) => hasClass(n, 'vline-label')).map((n
 const guessX = (step) => all(step, (n) => hasClass(n, 'vline-label') && n.textContent === CHART_LABELS.guess).map((n) => n.attributes.x)[0];
 
 // Mounts the v3 hero with heroV3 on, a fake document and an optional matchMedia; restores all three.
-function withHero(fn, { matchMedia = undefined } = {}) {
+function withHero(fn, { matchMedia = undefined, text = {} } = {}) {
   const saved = { document: globalThis.document, matchMedia: globalThis.matchMedia, flag: FEATURES.heroV3 };
   globalThis.document = {
     createElement: (t) => new FakeEl(t),
@@ -96,7 +97,7 @@ function withHero(fn, { matchMedia = undefined } = {}) {
   focused = null;
   try {
     const root = new FakeEl('section');
-    mountHero3(root, { goDeeper: () => {}, openLearnNoise: () => {} });
+    mountHero3(root, { goDeeper: () => {}, openLearnNoise: () => {}, text });
     return fn(root);
   } finally {
     FEATURES.heroV3 = saved.flag;
@@ -262,4 +263,32 @@ test('prefers-reduced-motion: no transition or animation anywhere in the three s
     buttonIn(root, NEXT_LABEL).click();
     check();
   }, { matchMedia });
+});
+
+// Addendum. Catches: fails if a null twistFootnote (hero3_text.js returns null when the held-out
+// distances are missing or do not match pointsPerDecoder) shows an empty footnote or the word
+// "null". Non-vacuous: the same data with its distances gives a footnote string, without them null.
+test('twist footnote: hidden when twistFootnote returns null, and no "null" on the page', () => {
+  const full = heroText.twistData();
+  assert.ok(full && full.distances, 'the real twistData carries distances');
+  assert.equal(typeof heroText.twistFootnote(full), 'string');
+  const { distances, ...noDistances } = full;
+  assert.equal(heroText.twistFootnote(noDistances), null);
+  withHero((root) => {
+    buttonIn(root, LOCK_LABEL).click();
+    buttonIn(root, NEXT_LABEL).click();
+    const s3 = steps(root)[2];
+    assert.ok(all(s3, (n) => n.localName === 'figure').length === 1, 'the twist chart still shows');
+    const foot = all(s3, (n) => hasClass(n, 'hero3-twist-footnote'));
+    assert.ok(foot.every((f) => f.hidden && f.textContent === ''), 'footnote shown');
+    assert.ok(!/null/.test(root.textContent), 'the text "null" is rendered');
+  }, { text: { twistData: () => noDistances, twistFootnote: heroText.twistFootnote, twistCaption: heroText.twistCaption } });
+  // With the distances the footnote shows.
+  withHero((root) => {
+    buttonIn(root, LOCK_LABEL).click();
+    buttonIn(root, NEXT_LABEL).click();
+    const f = byClass(steps(root)[2], 'hero3-twist-footnote');
+    assert.equal(f.hidden, false);
+    assert.equal(f.textContent, heroText.twistFootnote(full));
+  }, { text: { twistData: () => full, twistFootnote: heroText.twistFootnote, twistCaption: heroText.twistCaption } });
 });

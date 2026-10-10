@@ -202,7 +202,10 @@ function radioPair(name, options, checked, onChange, { legend = null, labelledBy
 
 // goDeeper(platformId): opens Level 3 on that platform; openLearnNoise(): opens "Learn the
 // noise" at its step 3. Either may be null (that level is off), and its control is then left out.
-export function mountHero3(container, { goDeeper = null, openLearnNoise = null } = {}) {
+// text: optional replacements for the twist functions of the contract (twistData, twistCaption,
+// twistFootnote), so the tests can reach cases the bridged module's data does not have.
+export function mountHero3(container, { goDeeper = null, openLearnNoise = null, text = {} } = {}) {
+  const tx = { twistData, twistCaption, twistFootnote, ...text };
   let basis = currentBasis();
   let platformId = 'superconducting';
   let step = 0;
@@ -299,7 +302,7 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   // Step 3: the twist.
   const s3 = steps[2].section;
   s3.appendChild(el('p', { id: 'hero3-twist-intro', class: 'hero-live' }, TWIST_INTRO));
-  const data = twistData();
+  const data = tx.twistData();
   let twist = null;
   let resetDecoder = null;
   let captionP = null;
@@ -313,7 +316,10 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
     s3.appendChild(twist.root);
     captionP = el('p', { class: 'hero3-twist-caption', 'aria-live': 'polite' });
     s3.appendChild(captionP);
-    s3.appendChild(el('p', { class: 'hero-note hero3-twist-footnote' }, twistFootnote(data)));
+    // twistFootnote returns null when the held-out distances are missing or do not add up: no footnote then.
+    const foot = tx.twistFootnote(data);
+    const footP = s3.appendChild(el('p', { class: 'hero-note hero3-twist-footnote' }, typeof foot === 'string' ? foot : ''));
+    footP.hidden = !(typeof foot === 'string' && foot);
     resetDecoder = () => {
       decoder = 'naive';
       decoders.inputs.get('naive').checked = true;
@@ -328,7 +334,7 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   function renderTwist() {
     if (!data) return;
     twist.update({ data, decoder });
-    captionP.textContent = twistCaption(decoder, data);
+    captionP.textContent = tx.twistCaption(decoder, data);
   }
 
   const chartBase = () => ({
