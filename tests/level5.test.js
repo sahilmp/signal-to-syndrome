@@ -64,11 +64,24 @@ test('isResolved on the real results: only ion d = 7 is not resolved', () => {
   assert.deepEqual(flagged, ['trapped-ion 7 hard', 'trapped-ion 7 soft']);
 });
 
-// Catches: fails if the soft rows repeat the hard break-even (A28 item 3): the ion has
-// ε̄ = 0.236 in hard mode and none in soft mode.
+// Catches: fails if the break-even text drops the interval or the τ, rounds to other than
+// three significant figures, or reorders its parts (fixed input: the v1 ion hard values).
+test('breakEvenParts: exact text for a fixed break-even', () => {
+  assert.equal(breakEvenParts({ epsBar: 0.2364465, lo: 0.2095594, hi: 0.2666399, tau_us: 1.5620687 }).join(''),
+    'ε̄ = 0.236 [0.210 to 0.267] at τ = 1.56 µs');
+  assert.equal(breakEvenParts({ epsBar: null, note: 'd = 5 below d = 3 at every grid point' }).join(''),
+    'none (d = 5 below d = 3 at every grid point)');
+});
+
+// Catches: fails if the soft rows repeat the hard break-even (A28 item 3): on the real
+// stage-4 file the ion has a break-even in hard mode and none in soft mode, and the hard
+// text carries that file's own ε̄, interval and τ (read from the file, so a re-run of
+// Person A's sweep does not break the test).
 test('breakEvenParts: per decoding mode from breakEven.byMode', () => {
   const be = stage4.platforms['trapped-ion'].breakEven.byMode;
-  assert.match(breakEvenParts(be.hard).join(''), /^ε̄ = 0\.236 \[0\.210 to 0\.267\] at τ = 1\.56 µs$/);
+  const t = (x) => numText(sig3(x));
+  assert.equal(breakEvenParts(be.hard).join(''),
+    `ε̄ = ${t(be.hard.epsBar)} [${t(be.hard.lo)} to ${t(be.hard.hi)}] at τ = ${t(be.hard.tau_us)} µs`);
   assert.match(breakEvenParts(be.soft).join(''), /^none \(d = 5 below d = 3 at every grid point\)$/);
 });
 
@@ -79,11 +92,36 @@ test('unitOf: units from the parameter name suffix', () => {
     ['counts/µs', '/µs', 'µs', 'MHz', '']);
 });
 
-// Catches: fails if the verdict table miscounts the sensitivity rows (Person A's table:
-// C1 flips 28/28, C3 flips 27 and undetermined 1).
+// Catches: fails if the verdict table miscounts the sensitivity rows, lists the verdicts
+// other than most frequent first, or reads the wrong conclusion column (fixed rows).
+test('sensitivityCounts: exact text for fixed rows', () => {
+  const rows = ['flips', 'undetermined', 'flips', 'holds', 'flips', 'undetermined']
+    .map((v, i) => ({ C1: v, C3: i === 0 ? 'holds' : 'flips' }));
+  assert.equal(sensitivityCounts(rows, 'C1'), 'flips 3, undetermined 2, holds 1 (of 6)');
+  assert.equal(sensitivityCounts(rows, 'C3'), 'flips 5, holds 1 (of 6)');
+  assert.equal(sensitivityCounts([], 'C1'), '—');
+});
+
+// Catches: fails if the verdict table miscounts the real sensitivity rows: every count in
+// the text equals the number of rows with that verdict, they add up to the row count, and
+// no verdict present in the file is left out (counts read from the file, so a re-run of
+// Person A's sweep does not break the test).
 test('sensitivityCounts on the real sweep', () => {
-  assert.equal(sensitivityCounts(stage4.sensitivity, 'C1'), 'flips 28 (of 28)');
-  assert.equal(sensitivityCounts(stage4.sensitivity, 'C3'), 'flips 27, undetermined 1 (of 28)');
+  const rows = stage4.sensitivity;
+  assert.ok(rows.length > 0);
+  for (const c of ['C1', 'C3']) {
+    const text = sensitivityCounts(rows, c);
+    const m = text.match(/^(.*) \(of (\d+)\)$/);
+    assert.ok(m, text);
+    assert.equal(Number(m[2]), rows.length);
+    const shown = new Map(m[1].split(', ').map((p) => {
+      const [v, n] = p.split(' ');
+      return [v, Number(n)];
+    }));
+    const want = new Map();
+    for (const r of rows) want.set(r[c], (want.get(r[c]) || 0) + 1);
+    assert.deepEqual(shown, want);
+  }
 });
 
 // ---- Level 5 v2 (U7.7) ----
