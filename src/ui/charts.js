@@ -472,3 +472,157 @@ export function takeawayCard(text) {
   }
   return { node: slot, show };
 }
+
+// Sequential colour of a heatmap cell, t in [0, 1]: from --panel (0) to a dark blue (1), so a
+// larger value is always darker (one hue; readable without colour vision).
+const HEAT_LO = [0xf4, 0xf6, 0xf9];
+const HEAT_HI = [0x08, 0x30, 0x6b];
+export function heatColor(t) {
+  const u = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0));
+  const c = HEAT_LO.map((lo, i) => Math.round(lo + (HEAT_HI[i] - lo) * u));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// Heatmap of a square matrix, with a colour key and a table as its text alternative.
+// opts: { title, matrix (n x n numbers), labels (n names, for the cell titles), valueLabel,
+// mask(i, j) -> true to leave a cell blank, maskNote, groups: [{ start, size, label }] (axis
+// labels for runs of rows), bands: [{ label, cells: [[i, j]], dash? }] (outlined cells, labelled
+// beside the matrix at the last cell's row), table: { columns, rows } }.
+// Returns { root, update(opts) } where root is a <figure>.
+export function createHeatmap(opts) {
+  const id = `heat${++chartCounter}`;
+  const root = document.createElement('figure');
+  root.className = 'chart heatmap';
+  const figcaption = document.createElement('figcaption');
+  figcaption.id = `${id}-title`;
+  root.appendChild(figcaption);
+  const holder = document.createElement('div');
+  holder.className = 'chart-svg';
+  root.appendChild(holder);
+  const keyHolder = document.createElement('div');
+  root.appendChild(keyHolder);
+  const details = document.createElement('details');
+  details.className = 'chart-data';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Heatmap values as a table';
+  summary.setAttribute('aria-describedby', figcaption.id);
+  details.appendChild(summary);
+  const tableHolder = document.createElement('div');
+  details.appendChild(tableHolder);
+  root.appendChild(details);
+
+  let current = opts;
+  function render(o) {
+    current = { ...current, ...o };
+    const {
+      title, matrix, labels = [], valueLabel = 'value', mask = () => false, maskNote = null,
+      groups = [], bands = [], table = null,
+    } = current;
+    const n = matrix.length;
+    const narrow = isNarrow();
+    // Font size of .tick and .band-label (style.css: 12 px, 22 px below 600 px).
+    const font = narrow ? 22 : 12;
+    const left = narrow ? 84 : 76;
+    const top = narrow ? 70 : 44;
+    const bandChars = Math.max(0, ...bands.map((b) => b.label.length));
+    const right = Math.ceil(0.62 * font * bandChars) + 16;
+    const size = 480;
+    const cell = size / n;
+    const width = left + size + right;
+    const height = top + size + 8;
+    figcaption.textContent = title;
+
+    let vMax = 0;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (!mask(i, j) && matrix[i][j] > vMax) vMax = matrix[i][j];
+
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-labelledby': `${id}-title ${id}-desc`, class: 'chart-svg-el' });
+    svgEl('desc', { id: `${id}-desc` }, svg).textContent = `${n} by ${n} grid of ${valueLabel}; darker cells are larger. The largest values are listed in the table below the heatmap.`;
+    const x0 = left;
+    const y0 = top;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const masked = mask(i, j);
+        const rect = svgEl('rect', {
+          x: x0 + j * cell, y: y0 + i * cell, width: cell, height: cell,
+          fill: masked ? '#ffffff' : heatColor(vMax > 0 ? matrix[i][j] / vMax : 0),
+          stroke: '#ffffff', 'stroke-width': 0.5,
+        }, svg);
+        if (labels.length) {
+          svgEl('title', {}, rect).textContent = masked
+            ? `${labels[i]} with ${labels[j]}${maskNote ? `: ${maskNote}` : ''}`
+            : `${labels[i]} with ${labels[j]}: ${formatNumber(matrix[i][j])}`;
+        }
+      }
+    }
+    // Group labels and separators on both axes.
+    for (const g of groups) {
+      const a = g.start * cell;
+      if (g.start > 0) {
+        svgEl('line', { x1: x0 + a, x2: x0 + a, y1: y0, y2: y0 + size, stroke: '#c4c8cf', 'stroke-width': 1 }, svg);
+        svgEl('line', { x1: x0, x2: x0 + size, y1: y0 + a, y2: y0 + a, stroke: '#c4c8cf', 'stroke-width': 1 }, svg);
+      }
+      const mid = a + (g.size * cell) / 2;
+      const ty = svgEl('text', { x: x0 - 6, y: y0 + mid + font / 3, 'text-anchor': 'end', class: 'tick' }, svg);
+      ty.textContent = g.label;
+      const tx = svgEl('text', { x: x0 + mid, y: y0 - 8, 'text-anchor': 'middle', class: 'tick' }, svg);
+      tx.textContent = g.label;
+    }
+    // Outlined bands, each labelled to the right of the matrix at its last cell's row.
+    for (const b of bands) {
+      const g = svgEl('g', { class: 'heat-band' }, svg);
+      for (const [i, j] of b.cells) {
+        svgEl('rect', {
+          x: x0 + j * cell + 1, y: y0 + i * cell + 1, width: cell - 2, height: cell - 2, fill: 'none',
+          stroke: 'var(--match)', 'stroke-width': 2, ...(b.dash ? { 'stroke-dasharray': b.dash } : {}),
+        }, g);
+      }
+      if (b.cells.length) {
+        const [li, lj] = b.cells.reduce((m, c) => (c[0] > m[0] || (c[0] === m[0] && c[1] > m[1]) ? c : m));
+        svgEl('line', { x1: x0 + (lj + 1) * cell, x2: x0 + size + 6, y1: y0 + (li + 0.5) * cell, y2: y0 + (li + 0.5) * cell, stroke: 'var(--match)', 'stroke-width': 1 }, g);
+        const t = svgEl('text', { x: x0 + size + 10, y: y0 + (li + 0.5) * cell + font / 3, class: 'band-label' }, g);
+        t.textContent = b.label;
+      }
+    }
+    holder.replaceChildren(svg);
+
+    // Colour key: a gradient bar from 0 to the largest value, as HTML so it wraps.
+    const key = document.createElement('div');
+    key.className = 'chart-legend';
+    const kw = 160;
+    const ksvg = svgEl('svg', { width: kw, height: 14, viewBox: `0 0 ${kw} 14`, 'aria-hidden': 'true', focusable: 'false' });
+    const steps = 16;
+    for (let s = 0; s < steps; s++) svgEl('rect', { x: (s * kw) / steps, y: 0, width: kw / steps + 0.5, height: 14, fill: heatColor(s / (steps - 1)) }, ksvg);
+    const lo = document.createElement('span');
+    lo.textContent = '0 ';
+    const hi = document.createElement('span');
+    hi.textContent = ` ${formatNumber(vMax)} (${valueLabel})`;
+    key.append(lo, ksvg, hi);
+    if (maskNote) {
+      const note = document.createElement('span');
+      note.textContent = `Blank cells: ${maskNote}.`;
+      key.appendChild(note);
+    }
+    keyHolder.replaceChildren(key);
+
+    if (table) {
+      const t = document.createElement('table');
+      const head = t.createTHead().insertRow();
+      for (const h of table.columns) {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = h;
+        head.appendChild(th);
+      }
+      const body = t.createTBody();
+      for (const r of table.rows) {
+        const tr = body.insertRow();
+        for (const v of r) tr.insertCell().textContent = typeof v === 'number' ? formatNumber(v) : (v ?? '—');
+      }
+      tableHolder.replaceChildren(scrollBox(t, `Values of the heatmap: ${title}`));
+    } else tableHolder.replaceChildren();
+  }
+
+  render(opts);
+  onNarrowChange(() => render({}));
+  return { root, update: render };
+}
