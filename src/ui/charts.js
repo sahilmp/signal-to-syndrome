@@ -200,6 +200,8 @@ function makeScale(lo, hi, a, b, log) {
 // with filled: true), in the HIGHLIGHT style unless shape or color is given
 // vlines: [{ x, label }] vertical marker lines
 // bands: [{ x0, x1, label }] shaded x intervals, drawn behind everything else
+// extra: { key, label } adds a column to the values table: series[key][i] and points[key]
+// (e.g. the readout time of each point on a trade-off curve)
 // Returns { root, update(opts) } where root is a <figure> holding the SVG and its table.
 export function createChart(opts) {
   const id = `chart${++chartCounter}`;
@@ -381,29 +383,30 @@ export function createChart(opts) {
   return { root, update: render };
 }
 
-function valuesTable({ xLabel, yLabel, series = [], points = [], vlines = [], bands = [] }) {
+function valuesTable({ xLabel, yLabel, series = [], points = [], vlines = [], bands = [], extra = null }) {
   const table = document.createElement('table');
   const head = table.createTHead().insertRow();
-  for (const h of ['Series', xLabel, yLabel, 'Lower bound', 'Upper bound']) {
+  for (const h of ['Series', ...(extra ? [extra.label] : []), xLabel, yLabel, 'Lower bound', 'Upper bound']) {
     const th = document.createElement('th');
     th.scope = 'col';
     th.textContent = h;
     head.appendChild(th);
   }
   const body = table.createTBody();
-  const row = (name, x, y, lo, hi) => {
+  const row = (name, ex, x, y, lo, hi) => {
     const tr = body.insertRow();
-    for (const v of [name, x, y, lo, hi]) {
+    for (const v of [name, ...(extra ? [ex] : []), x, y, lo, hi]) {
       tr.insertCell().textContent = typeof v === 'number' ? formatNumber(v) : (v ?? '—');
     }
   };
-  for (const s of series) s.x.forEach((x, i) => row(s.name, x, s.y[i], s.lo?.[i], s.hi?.[i]));
-  for (const p of points) row(p.name, p.x, p.y, p.lo, p.hi);
-  for (const v of vlines) row(v.label || 'Marker', v.x, undefined, undefined, undefined);
+  const ex = (o, i) => (extra ? (i === undefined ? o[extra.key] : o[extra.key]?.[i]) : undefined);
+  for (const s of series) s.x.forEach((x, i) => row(s.name, ex(s, i), x, s.y[i], s.lo?.[i], s.hi?.[i]));
+  for (const p of points) row(p.name, ex(p), p.x, p.y, p.lo, p.hi);
+  for (const v of vlines) row(v.label || 'Marker', undefined, v.x, undefined, undefined, undefined);
   for (const b of bands) {
     const name = `Shaded band${b.label ? ` (${b.label})` : ''}`;
-    row(`${name}, from`, Math.min(b.x0, b.x1), undefined, undefined, undefined);
-    row(`${name}, to`, Math.max(b.x0, b.x1), undefined, undefined, undefined);
+    row(`${name}, from`, undefined, Math.min(b.x0, b.x1), undefined, undefined, undefined);
+    row(`${name}, to`, undefined, Math.max(b.x0, b.x1), undefined, undefined, undefined);
   }
   return table;
 }
@@ -625,4 +628,188 @@ export function createHeatmap(opts) {
   render(opts);
   onNarrowChange(() => render({}));
   return { root, update: render };
+}
+
+// A <figure> as createChart builds it: caption, SVG holder, HTML legend, and a values table
+// under a <details>. Used by the bar charts below.
+function figureShell(prefix) {
+  const id = `${prefix}${++chartCounter}`;
+  const root = document.createElement('figure');
+  root.className = 'chart';
+  const figcaption = document.createElement('figcaption');
+  figcaption.id = `${id}-title`;
+  root.appendChild(figcaption);
+  const holder = document.createElement('div');
+  holder.className = 'chart-svg';
+  root.appendChild(holder);
+  const legendHolder = document.createElement('div');
+  root.appendChild(legendHolder);
+  const details = document.createElement('details');
+  details.className = 'chart-data';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Chart values as a table';
+  summary.setAttribute('aria-describedby', figcaption.id);
+  details.appendChild(summary);
+  const tableHolder = document.createElement('div');
+  details.appendChild(tableHolder);
+  root.appendChild(details);
+  return { id, root, figcaption, holder, legendHolder, tableHolder };
+}
+
+// Values table from column names and rows; numbers through formatNumber.
+function rowsTable(columns, rows) {
+  const t = document.createElement('table');
+  const head = t.createTHead().insertRow();
+  for (const h of columns) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = h;
+    head.appendChild(th);
+  }
+  const body = t.createTBody();
+  for (const r of rows) {
+    const tr = body.insertRow();
+    for (const v of r) tr.insertCell().textContent = typeof v === 'number' ? formatNumber(v) : (v ?? '—');
+  }
+  return t;
+}
+
+const squareKey = (color, filled) => ({ shape: 'square', color, filled });
+
+// Horizontal stacked bars, one per category, on a linear axis from 0.
+// opts: { title, valueLabel, categories: [{ label, segments: [{ name, value, color }] }] }.
+// Each segment is named inside the bar when it is wide enough, and always in the legend and
+// the values table, so colour is never the only cue.
+export function createStackedBars(opts) {
+  const shell = figureShell('bars');
+  let current = opts;
+  function render(o) {
+    current = { ...current, ...o };
+    const { title, valueLabel, categories = [] } = current;
+    const narrow = isNarrow();
+    const font = narrow ? 22 : 12;
+    const width = 640;
+    const barH = narrow ? 48 : 30;
+    const gap = narrow ? 44 : 30;
+    const m = { left: 8, right: 16, top: 8, bottom: narrow ? 80 : 52 };
+    const height = m.top + categories.length * (barH + gap) + m.bottom;
+    const totals = categories.map((c) => c.segments.reduce((s, g) => s + (Number.isFinite(g.value) && g.value > 0 ? g.value : 0), 0));
+    const xMax = Math.max(...totals, 0) * 1.05 || 1;
+    const sx = makeScale(0, xMax, m.left, width - m.right, false);
+    shell.figcaption.textContent = title;
+
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-labelledby': `${shell.id}-title ${shell.id}-desc`, class: 'chart-svg-el' });
+    svgEl('desc', { id: `${shell.id}-desc` }, svg).textContent = `${categories.length} stacked bars of ${valueLabel}; the values are listed in the table below the chart.`;
+    const axes = svgEl('g', { class: 'axes' }, svg);
+    const yAxis = height - m.bottom;
+    for (const t of linearTicks(0, xMax)) {
+      if (t > xMax * (1 + 1e-9)) continue;
+      const x = sx(t);
+      svgEl('line', { x1: x, x2: x, y1: m.top, y2: yAxis, class: 'grid' }, axes);
+      svgEl('text', { x, y: yAxis + (narrow ? 28 : 19), 'text-anchor': 'middle', class: 'tick' }, axes).textContent = formatTick(t, false);
+    }
+    svgEl('line', { x1: m.left, x2: width - m.right, y1: yAxis, y2: yAxis, class: 'axis' }, axes);
+    svgEl('text', { x: (m.left + width - m.right) / 2, y: height - 12, 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = valueLabel;
+
+    categories.forEach((c, ci) => {
+      const y = m.top + ci * (barH + gap) + gap - 4;
+      // The category label sits above its bar, so long labels never squeeze the bars.
+      svgEl('text', { x: m.left, y: y - 6, class: 'tick' }, svg).textContent = c.label;
+      let acc = 0;
+      for (const g of c.segments) {
+        if (!(Number.isFinite(g.value) && g.value > 0)) continue;
+        const x0 = sx(acc);
+        const x1 = sx(acc + g.value);
+        acc += g.value;
+        const rect = svgEl('rect', { x: x0, y, width: Math.max(1, x1 - x0), height: barH, fill: g.color, stroke: '#ffffff', 'stroke-width': 1.5 }, svg);
+        svgEl('title', {}, rect).textContent = `${c.label}, ${g.name}: ${formatNumber(g.value)}`;
+        if (x1 - x0 >= 0.62 * font * g.name.length + 8) {
+          svgEl('text', { x: (x0 + x1) / 2, y: y + barH / 2 + font / 3, 'text-anchor': 'middle', fill: '#ffffff', class: 'tick' }, svg).textContent = g.name;
+        }
+      }
+    });
+
+    const names = [];
+    for (const c of categories) for (const g of c.segments) if (!names.some((n) => n.name === g.name)) names.push({ name: g.name, color: g.color });
+    shell.holder.replaceChildren(svg);
+    shell.legendHolder.replaceChildren(...(names.length ? [htmlLegend(names.map((n) => ({ name: n.name, ...squareKey(n.color, true) })))] : []));
+    const columns = ['Bar', ...names.map((n) => n.name), 'Total'];
+    const rows = categories.map((c, ci) => [c.label, ...names.map((n) => c.segments.find((g) => g.name === n.name)?.value), totals[ci]]);
+    shell.tableHolder.replaceChildren(scrollBox(rowsTable(columns, rows), `Values of the chart: ${title}`));
+  }
+  render(opts);
+  onNarrowChange(() => render({}));
+  return { root: shell.root, update: render };
+}
+
+// Tornado chart: horizontal bars of a signed change around a zero line, in groups (one group
+// per parameter, drawn in the order given; the caller sorts them).
+// opts: { title, valueLabel, groups: [{ label, bars: [{ label, value, color, filled = true }] }],
+// legend: [{ name, color, filled }], table: { columns, rows } (values table; default: group,
+// bar, value) }. Every bar is named in text beside it, so colour and fill are never the only cue.
+export function createTornado(opts) {
+  const shell = figureShell('tornado');
+  let current = opts;
+  function render(o) {
+    current = { ...current, ...o };
+    const { title, valueLabel, groups = [], legend = [], table = null } = current;
+    const narrow = isNarrow();
+    const font = narrow ? 22 : 12;
+    const width = 640;
+    const barH = narrow ? 22 : 12;
+    const rowGap = narrow ? 8 : 5;
+    const headH = font + 10;
+    const groupGap = narrow ? 14 : 10;
+    const barChars = Math.max(0, ...groups.flatMap((g) => g.bars.map((b) => b.label.length)));
+    const m = { left: Math.min(300, Math.ceil(0.6 * font * barChars) + 16), right: 16, top: 8, bottom: narrow ? 80 : 52 };
+    let y = m.top;
+    const layout = groups.map((g) => {
+      const head = y + font;
+      y += headH;
+      const bars = g.bars.map((b) => { const by = y; y += barH + rowGap; return { ...b, y: by }; });
+      y += groupGap;
+      return { ...g, head, bars };
+    });
+    const height = y + m.bottom;
+    const vals = groups.flatMap((g) => g.bars.map((b) => b.value)).filter(Number.isFinite);
+    const M = Math.max(...vals.map(Math.abs), 0) * 1.1 || 1;
+    const sx = makeScale(-M, M, m.left, width - m.right, false);
+    shell.figcaption.textContent = title;
+
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-labelledby': `${shell.id}-title ${shell.id}-desc`, class: 'chart-svg-el' });
+    svgEl('desc', { id: `${shell.id}-desc` }, svg).textContent = `${valueLabel} for ${groups.length} parameters, largest effect first; bars to the right are increases, to the left decreases. The values are listed in the table below the chart.`;
+    const axes = svgEl('g', { class: 'axes' }, svg);
+    const yAxis = height - m.bottom;
+    for (const t of linearTicks(-M, M)) {
+      if (t < -M * (1 + 1e-9) || t > M * (1 + 1e-9)) continue;
+      const x = sx(t);
+      svgEl('line', { x1: x, x2: x, y1: m.top, y2: yAxis, class: 'grid' }, axes);
+      svgEl('text', { x, y: yAxis + (narrow ? 28 : 19), 'text-anchor': 'middle', class: 'tick' }, axes).textContent = formatTick(t, false);
+    }
+    svgEl('line', { x1: m.left, x2: width - m.right, y1: yAxis, y2: yAxis, class: 'axis' }, axes);
+    svgEl('line', { x1: sx(0), x2: sx(0), y1: m.top, y2: yAxis, class: 'axis' }, axes);
+    svgEl('text', { x: (m.left + width - m.right) / 2, y: height - 12, 'text-anchor': 'middle', class: 'axis-label' }, axes).textContent = valueLabel;
+
+    for (const g of layout) {
+      svgEl('text', { x: 4, y: g.head, class: 'axis-label' }, svg).textContent = g.label;
+      for (const b of g.bars) {
+        svgEl('text', { x: m.left - 6, y: b.y + barH / 2 + font / 3, 'text-anchor': 'end', class: 'tick' }, svg).textContent = b.label;
+        if (!Number.isFinite(b.value)) continue;
+        const x0 = sx(Math.min(0, b.value));
+        const x1 = sx(Math.max(0, b.value));
+        const filled = b.filled !== false;
+        const rect = svgEl('rect', {
+          x: x0, y: b.y, width: Math.max(1, x1 - x0), height: barH, fill: filled ? b.color : '#ffffff', stroke: b.color, 'stroke-width': 1.5,
+        }, svg);
+        svgEl('title', {}, rect).textContent = `${g.label}, ${b.label}: ${formatNumber(b.value)}`;
+      }
+    }
+    shell.holder.replaceChildren(svg);
+    shell.legendHolder.replaceChildren(...(legend.length ? [htmlLegend(legend.map((e) => ({ name: e.name, ...squareKey(e.color, e.filled !== false) })))] : []));
+    const t = table ?? { columns: ['Parameter', 'Bar', valueLabel], rows: groups.flatMap((g) => g.bars.map((b) => [g.label, b.label, b.value])) };
+    shell.tableHolder.replaceChildren(scrollBox(rowsTable(t.columns, t.rows), `Values of the chart: ${title}`));
+  }
+  render(opts);
+  onNarrowChange(() => render({}));
+  return { root: shell.root, update: render };
 }

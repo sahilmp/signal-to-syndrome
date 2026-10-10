@@ -23,8 +23,13 @@ const LEVELS = [
   { id: 'level4', flags: ['ion', 'superconducting'], label: 'Level 4: Trust but verify', mount: mountLevel4 },
   // Learn the noise (U7.6): fault injection, the naive decoder's limit and the learned edge rates.
   { id: 'learnnoise', flag: 'learnNoise', label: 'Learn the noise', mount: mountLearnNoise },
-  // Platform comparison: both platforms side by side, from the stage 2-4 results.
-  { id: 'level5', flag: 'level5', label: 'Level 5: Two platforms', mount: mountLevel5 },
+  // Platform comparison: both platforms side by side, from the stage 2-4 results; with
+  // FEATURES.level5v2 the U7.7 version, whose title the tab label matches.
+  {
+    id: 'level5', flag: 'level5',
+    label: FEATURES.level5v2 === true ? 'Level 5: Two readout models, same gates' : 'Level 5: Two platforms',
+    mount: mountLevel5,
+  },
 ];
 
 const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
