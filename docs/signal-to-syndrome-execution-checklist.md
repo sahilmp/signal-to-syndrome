@@ -515,7 +515,7 @@ node tools/sweep.mjs --stage 4 --basis X
 
 Hand-check V15 for one point per arm (as at A51) on the new file. Read every conclusion; C3 must carry `informative: false`, C6 the verdict "not applicable" with the variant result in its note, and `findings` must hold F1. Commit, push, send `HANDOFF N7b`.
 **Pass:** V15 agrees to 3 significant figures; no automated verdict contradicts your reading without a note.
-- [ ] Done
+- [x] Done
 
 ### B50 · B · Sun 08:00 — CC-B18: tour, curated examples, live-run panel
 

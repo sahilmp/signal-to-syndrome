@@ -863,7 +863,7 @@ Run `npm test`, `node tools/sweep.mjs --stage 4`, `node tools/sweep.mjs --stage 
 
 Hand-check V15 for one point per arm against the file. Commit `tools tests data\results DECISIONS.md`, push, send `HANDOFF N7b`.
 **Pass:** tests pass; V15 agrees to 3 significant figures; every conclusion has a note wherever the automated verdict differs from your reading.
-- [ ] Done
+- [x] Done
 
 ### A54 · CLAUDE CODE · Sun 08:45 — CC-A16 (revision 2.1): the project page around the findings
 
