@@ -83,21 +83,28 @@ export function parseBlocks(text, source = 'input') {
 }
 
 // The block name becomes the file name, so it must describe the bank inside it:
-// rep_d{d}_r{r}_L{logical}, or v4_d{d}_r{r}_i{i}_k{k} with logical 0 and inject [[i, k]]
-// (the names of qollab/bank_generator.py). A mislabelled paste would otherwise be written
-// under the wrong name.
+// rep_d{d}_r{r}_L{logical} or repx_d{d}_r{r}_L{logical} (basis X), or v4_d{d}_r{r}_i{i}_k{k}
+// or v13_d{d}_r{r}_i{i}_k{k} (basis X) with logical 0 and inject [[i, k]] (the names of
+// qollab/bank_generator.py). A bank without a basis field is basis Z. A mislabelled paste
+// would otherwise be written under the wrong name.
 function checkName(name, bank) {
-  const rep = /^rep_d(\d+)_r(\d+)_L([01])$/.exec(name);
-  const v4 = /^v4_d(\d+)_r(\d+)_i(\d+)_k(\d+)$/.exec(name);
-  if (!rep && !v4) throw new Error(`bank ${name}: name is neither rep_d<d>_r<r>_L<0|1> nor v4_d<d>_r<r>_i<i>_k<k>`);
-  const [, d, r] = (rep ?? v4).map(Number);
-  const logical = rep ? Number(rep[3]) : 0;
+  const mem = /^(rep|repx)_d(\d+)_r(\d+)_L([01])$/.exec(name);
+  const inj = /^(v4|v13)_d(\d+)_r(\d+)_i(\d+)_k(\d+)$/.exec(name);
+  if (!mem && !inj) throw new Error(`bank ${name}: name is neither rep(x)_d<d>_r<r>_L<0|1> nor v4_ / v13_d<d>_r<r>_i<i>_k<k>`);
+  const match = mem ?? inj;
+  const prefix = match[1];
+  const d = Number(match[2]);
+  const r = Number(match[3]);
+  const logical = mem ? Number(mem[4]) : 0;
+  const basis = prefix === 'repx' || prefix === 'v13' ? 'X' : 'Z';
+  const bankBasis = bank.basis ?? 'Z';
   const mismatch = [];
   if (bank.d !== d) mismatch.push(`d ${bank.d} (name says ${d})`);
   if (bank.r !== r) mismatch.push(`r ${bank.r} (name says ${r})`);
   if (bank.logical !== logical) mismatch.push(`logical ${bank.logical} (name says ${logical})`);
-  if (v4) {
-    const site = JSON.stringify([[Number(v4[3]), Number(v4[4])]]);
+  if (bankBasis !== basis) mismatch.push(`basis ${bankBasis} (name says ${basis})`);
+  if (inj) {
+    const site = JSON.stringify([[Number(inj[4]), Number(inj[5])]]);
     if (JSON.stringify(bank.inject) !== site) mismatch.push(`inject ${JSON.stringify(bank.inject)} (name says ${site})`);
   }
   if (mismatch.length) throw new Error(`bank ${name}: the bank inside does not match its name: ${mismatch.join(', ')}`);
@@ -129,7 +136,7 @@ export function verifyBlock(block) {
     throw new Error(`bank ${name}: ${err.message}`);
   }
   checkName(name, bank);
-  if (name.startsWith('rep_') && !(typeof bank.detector_rate === 'number' && bank.detector_rate > 0)) {
+  if ((name.startsWith('rep_') || name.startsWith('repx_')) && !(typeof bank.detector_rate === 'number' && bank.detector_rate > 0)) {
     throw new Error(`bank ${name}: detector_rate is ${bank.detector_rate ?? 'missing'}; the circuit was optimised away, do not use this bank`);
   }
   return bank;

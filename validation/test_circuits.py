@@ -105,10 +105,12 @@ def test_detector_rate_zero_and_positive():
 
 
 # Catches: a configuration without its own seed, two banks sharing a seed (correlated noise),
-# or a seed outside the range IonQ accepts (DECISIONS D2: integer 1 to 2^31).
+# or a seed outside the range IonQ accepts (DECISIONS D2: integer 1 to 2^31). Covers the
+# basis-X lists (CONFIGS_X, V13_BATCH) as well as the basis-Z ones.
 def test_seeds_table():
-    names = set(bg.CONFIGS) | set(bg.V4_BATCH)
-    assert len(names) == len(bg.CONFIGS) + len(bg.V4_BATCH)
+    tables = (bg.CONFIGS, bg.V4_BATCH, bg.CONFIGS_X, bg.V13_BATCH)
+    names = set().union(*tables)
+    assert len(names) == sum(len(t) for t in tables)
     assert set(bg.SEEDS) == names
     values = list(bg.SEEDS.values())
     assert len(set(values)) == len(values)
@@ -196,3 +198,92 @@ def test_live_circuit_matches_bank_generator():
     counts_live = run_counts(qc_live)
     assert len(counts_live) == 1
     assert counts_live == run_counts(qc_bank)
+
+
+# V13. Catches: a phase-flip memory with a wrong preparation (no H, or X and H in the wrong
+# order, so |-> is not prepared), a check that is not conjugated by H on the ancilla, a CNOT
+# with control and target swapped, or a missing final H on the data; any of these gives a
+# random (several outcomes) or wrong outcome on the noiseless simulator.
+@pytest.mark.parametrize("d,r", [(3, 1), (3, 3), (5, 3)])
+@pytest.mark.parametrize("logical", [0, 1])
+def test_x_basis_noiseless_memory_single_outcome(d, r, logical):
+    qc, layout = bg.build_memory_circuit(d, r, logical, basis="X")
+    n_clbits = (d - 1) * r + d
+    assert qc.num_qubits == d + (d - 1) * r
+    assert qc.num_clbits == n_clbits
+    counts = run_counts(qc)
+    assert len(counts) == 1
+    m, x = split(bits_of(next(iter(counts)), n_clbits), layout)
+    assert all(b == 0 for row in m for b in row)
+    assert x == [logical] * d
+
+
+# Catches: an X-basis memory that is really the Z-basis circuit (a Z injection would then leave
+# every bit 0), a Z injected at the wrong round or qubit, or checks that read the wrong
+# neighbours. Basis X with an injected Z must give exactly the bit pattern of basis Z with an
+# injected X at the same site. Non-vacuous control: an X injected into the X-basis memory
+# commutes with every X_j X_{j+1} check and with |+++>, so it leaves the clean outcome.
+@pytest.mark.parametrize("i", range(3))
+@pytest.mark.parametrize("k", range(3))
+def test_x_basis_z_injection_matches_z_basis(i, k):
+    d, r = 3, 3
+    qc_x, _ = bg.build_memory_circuit(d, r, 0, inject=[(i, k)], basis="X", inject_pauli="Z")
+    qc_z, _ = bg.build_memory_circuit(d, r, 0, inject=[(i, k)])
+    counts_x = run_counts(qc_x)
+    assert len(counts_x) == 1
+    assert counts_x == run_counts(qc_z)
+    assert next(iter(counts_x)) != "0" * ((d - 1) * r + d)
+    qc_ctrl, _ = bg.build_memory_circuit(d, r, 0, inject=[(i, k)], basis="X", inject_pauli="X")
+    assert run_counts(qc_ctrl) == {"0" * ((d - 1) * r + d): 64}
+
+
+# Catches: an X-basis circuit whose classical-bit layout differs from the basis-Z one.
+def test_x_basis_layout_matches_z_basis():
+    d, r = 5, 3
+    qc_x, layout_x = bg.build_memory_circuit(d, r, 0, basis="X")
+    qc_z, layout_z = bg.build_memory_circuit(d, r, 0)
+    assert layout_x == layout_z
+
+    def measure_map(qc):
+        return {qc.find_bit(inst.qubits[0]).index: qc.find_bit(inst.clbits[0]).index
+                for inst in qc.data if inst.operation.name == "measure"}
+
+    assert measure_map(qc_x) == measure_map(qc_z)
+
+
+# Catches: a typo in basis or inject_pauli silently building the basis-Z circuit or an X
+# injection instead of failing.
+def test_bad_basis_or_pauli_rejected():
+    with pytest.raises(ValueError, match="basis"):
+        bg.build_memory_circuit(3, 1, 0, basis="Y")
+    with pytest.raises(ValueError, match="inject_pauli"):
+        bg.build_memory_circuit(3, 1, 0, inject=[(0, 0)], inject_pauli="Y")
+
+
+# Catches: a wrong basis-X configuration list (missing banks, wrong noise model or shots, V13
+# sites other than (0, 0), (1, 1), (2, 2), a V13 batch that injects X, or a repx_ entry that
+# builds the basis-Z circuit).
+def test_config_lists_x():
+    assert sorted(bg.CONFIGS_X) == sorted(
+        f"repx_d{d}_r{r}_L{L}" for d, r in [(3, 1), (3, 3), (5, 3), (5, 5), (7, 3)] for L in (0, 1))
+    for name, cfg in bg.CONFIGS_X.items():
+        assert cfg["basis"] == "X" and cfg["noise_model"] == "forte-1" and cfg["shots"] == bg.SHOTS
+        assert cfg["inject"] is None and cfg["logical"] == int(name[-1])
+    assert sorted(bg.V13_BATCH) == ["v13_d3_r3_i0_k0", "v13_d3_r3_i1_k1", "v13_d3_r3_i2_k2"]
+    for cfg in bg.V13_BATCH.values():
+        assert cfg["basis"] == "X" and cfg["inject_pauli"] == "Z" and cfg["noise_model"] == "ideal"
+        assert cfg["shots"] == bg.V4_SHOTS and cfg["logical"] == 0 and (cfg["d"], cfg["r"]) == (3, 3)
+    assert all(c["basis"] == "Z" and c["inject_pauli"] == "X" for c in {**bg.CONFIGS, **bg.V4_BATCH}.values())
+
+
+# Catches: a basis-X bank packaged without "basis": "X" (readers would decode it as a
+# bit-flip memory), or a basis field added to basis-Z banks.
+def test_to_bank_basis_field():
+    d, r = 3, 1
+    n_clbits = (d - 1) * r + d
+    _, layout = bg.build_memory_circuit(d, r, 0, basis="X")
+    kw = dict(backend_name="t", noise_model="forte-1", sampler_seed=1, job_id="j", native_ops={}, det_rate=0.1)
+    raw = {"0" * n_clbits: 1}
+    assert bg.to_bank(d, r, 0, layout, raw, basis="X", **kw)["basis"] == "X"
+    assert "basis" not in bg.to_bank(d, r, 0, layout, raw, **kw)
+    assert "basis" not in bg.to_bank(d, r, 0, layout, raw, basis="Z", **kw)

@@ -1,4 +1,5 @@
-# Signal to Syndrome: shot-bank generator for the repetition-code memory (runs on Qollab).
+# Signal to Syndrome: shot-bank generator for the repetition-code memories, bit-flip (basis Z)
+# and phase-flip (basis X) (runs on Qollab).
 #
 # How to use: pick IonQ Forte 1 in the Select QPU dialog, set CONFIG below to one
 # configuration name, run, then copy everything from BEGIN_BANK to END_BANK out of the
@@ -45,6 +46,19 @@ SEEDS = {
     "v4_d5_r3_i4_k0": 1546938092,
     "v4_d5_r3_i4_k1": 719605923,
     "v4_d5_r3_i4_k2": 943539033,
+    "repx_d3_r1_L0": 578224596,
+    "repx_d3_r1_L1": 775324624,
+    "repx_d3_r3_L0": 1650977695,
+    "repx_d3_r3_L1": 1561649148,
+    "repx_d5_r3_L0": 1365818493,
+    "repx_d5_r3_L1": 2100966606,
+    "repx_d5_r5_L0": 2016568614,
+    "repx_d5_r5_L1": 1680679233,
+    "repx_d7_r3_L0": 1543903548,
+    "repx_d7_r3_L1": 827448134,
+    "v13_d3_r3_i0_k0": 1053593574,
+    "v13_d3_r3_i1_k1": 2040420216,
+    "v13_d3_r3_i2_k2": 1511624236,
 }
 # -------------------------------------------------------------------------------------------
 
@@ -69,10 +83,17 @@ def _check_clbits(d, r):
     return n_clbits
 
 
-def build_memory_circuit(d, r, logical, inject=None):
+def build_memory_circuit(d, r, logical, inject=None, basis="Z", inject_pauli="X"):
     """Fresh-ancilla repetition-code memory: data qubits 0..d-1, then one ancilla per
     check per round. Returns (circuit, layout) with the CLAUDE.md classical-bit layout:
-    check j of round k -> bit k*(d-1) + j, data qubit i -> bit (d-1)*r + i."""
+    check j of round k -> bit k*(d-1) + j, data qubit i -> bit (d-1)*r + i.
+    basis "Z" (bit-flip memory) measures Z_j Z_{j+1}; basis "X" (phase-flip memory) prepares
+    |+...+> or |-...->, measures X_j X_{j+1} and reads the data out in the X basis.
+    inject applies inject_pauli ("X" or "Z") to data qubit i after round k for each (i, k)."""
+    if basis not in ("Z", "X"):
+        raise ValueError(f"basis must be 'Z' or 'X', got {basis!r}")
+    if inject_pauli not in ("X", "Z"):
+        raise ValueError(f"inject_pauli must be 'X' or 'Z', got {inject_pauli!r}")
     n_checks = d - 1
     n_qubits = d + n_checks * r
     n_clbits = _check_clbits(d, r)
@@ -89,18 +110,34 @@ def build_memory_circuit(d, r, logical, inject=None):
     if logical == 1:
         for i in range(d):
             qc.x(i)
+    if basis == "X":
+        for i in range(d):
+            qc.h(i)
 
     ancilla = []
     for k in range(r):
         row = []
         for j in range(n_checks):
             a = d + k * n_checks + j
-            qc.cx(j, a)
-            qc.cx(j + 1, a)
+            if basis == "Z":
+                qc.cx(j, a)
+                qc.cx(j + 1, a)
+            else:
+                qc.h(a)
+                qc.cx(a, j)
+                qc.cx(a, j + 1)
+                qc.h(a)
             row.append(a)
         ancilla.append(row)
         for i in inject_after.get(k, []):
-            qc.x(i)
+            if inject_pauli == "X":
+                qc.x(i)
+            else:
+                qc.z(i)
+
+    if basis == "X":
+        for i in range(d):
+            qc.h(i)
 
     layout = {
         "ancilla": [[k * n_checks + j for j in range(n_checks)] for k in range(r)],
@@ -117,11 +154,15 @@ def build_memory_circuit(d, r, logical, inject=None):
 def _parse_name(name):
     parts = name.split("_")
     d, r = int(parts[1][1:]), int(parts[2][1:])
-    if name.startswith("rep_"):
+    if parts[0] in ("rep", "repx"):
         return {"d": d, "r": r, "logical": int(parts[3][1:]), "inject": None,
-                "shots": SHOTS, "noise_model": "forte-1"}
+                "shots": SHOTS, "noise_model": "forte-1",
+                "basis": "X" if parts[0] == "repx" else "Z", "inject_pauli": "X"}
+    # v4_ (basis Z, X injected) or v13_ (basis X, Z injected)
     return {"d": d, "r": r, "logical": 0, "inject": [[int(parts[3][1:]), int(parts[4][1:])]],
-            "shots": V4_SHOTS, "noise_model": "ideal"}
+            "shots": V4_SHOTS, "noise_model": "ideal",
+            "basis": "X" if parts[0] == "v13" else "Z",
+            "inject_pauli": "Z" if parts[0] == "v13" else "X"}
 
 
 CONFIGS = {}
@@ -136,6 +177,17 @@ for _d, _r in [(3, 3), (5, 3)]:
         for _k in range(_r):
             _n = f"v4_d{_d}_r{_r}_i{_i}_k{_k}"
             V4_BATCH[_n] = _parse_name(_n)
+
+CONFIGS_X = {}
+for _d, _r in [(3, 1), (3, 3), (5, 3), (5, 5), (7, 3)]:
+    for _L in (0, 1):  # L0 is |+...+>, L1 is |-...->
+        _n = f"repx_d{_d}_r{_r}_L{_L}"
+        CONFIGS_X[_n] = _parse_name(_n)
+
+V13_BATCH = {}
+for _i, _k in [(0, 0), (1, 1), (2, 2)]:
+    _n = f"v13_d3_r3_i{_i}_k{_k}"
+    V13_BATCH[_n] = _parse_name(_n)
 
 
 def run_native(qc, shots, noise_model, seed):
@@ -194,8 +246,9 @@ def counts_sha256(counts):
 
 
 def to_bank(d, r, logical, layout, raw_counts, *, backend_name, noise_model, sampler_seed,
-            job_id, native_ops, det_rate, inject=None):
-    """Build the s2s-bank/1 object from Qiskit binary counts."""
+            job_id, native_ops, det_rate, inject=None, basis="Z"):
+    """Build the s2s-bank/1 object from Qiskit binary counts. Basis X banks carry
+    "basis": "X"; basis Z banks have no basis field (readers default to "Z")."""
     n_clbits = _check_clbits(d, r)
     counts = {}
     for key, c in raw_counts.items():
@@ -230,6 +283,8 @@ def to_bank(d, r, logical, layout, raw_counts, *, backend_name, noise_model, sam
     }
     if inject is not None:
         bank["inject"] = [list(site) for site in inject]
+    if basis == "X":
+        bank["basis"] = "X"
     return bank
 
 
@@ -254,25 +309,27 @@ def _expected_duration(cfg):
 
 
 def main():
-    all_configs = {**CONFIGS, **V4_BATCH}
+    all_configs = {**CONFIGS, **V4_BATCH, **CONFIGS_X, **V13_BATCH}
     if CONFIG not in all_configs:
         raise ValueError(f"Unknown CONFIG '{CONFIG}'. Valid names: {', '.join(all_configs)}")
     cfg = all_configs[CONFIG]
     d, r, logical = cfg["d"], cfg["r"], cfg["logical"]
     seed = SEEDS[CONFIG]
-    qc, layout = build_memory_circuit(d, r, logical, cfg["inject"])
-    print(f"{CONFIG}: {qc.num_qubits} qubits, {cfg['shots']} shots, noise model {cfg['noise_model']}, "
+    qc, layout = build_memory_circuit(d, r, logical, cfg["inject"], basis=cfg["basis"],
+                                      inject_pauli=cfg["inject_pauli"])
+    print(f"{CONFIG}: basis {cfg['basis']}, {qc.num_qubits} qubits, {cfg['shots']} shots, noise model {cfg['noise_model']}, "
           f"seed {seed}; expected {_expected_duration(cfg)}")
 
     raw_counts, job_id, native_ops = run_native(qc, cfg["shots"], cfg["noise_model"], seed)
     rate = detector_rate(raw_counts, d, r, layout)
     print(f"detector_rate = {rate:.6f}")
-    if CONFIG.startswith("rep_") and rate == 0:
+    if CONFIG.startswith(("rep_", "repx_")) and rate == 0:
         raise RuntimeError(f"{CONFIG}: detector_rate is 0, so the circuit was optimised away. "
                            "Do not use this bank; nothing was emitted.")
     bank = to_bank(d, r, logical, layout, raw_counts, backend_name=backend.name,  # noqa: F821
                    noise_model=cfg["noise_model"], sampler_seed=seed, job_id=job_id,
-                   native_ops=native_ops, det_rate=rate, inject=cfg["inject"])
+                   native_ops=native_ops, det_rate=rate, inject=cfg["inject"],
+                   basis=cfg["basis"])
     emit(bank, CONFIG)
 
 

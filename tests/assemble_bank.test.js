@@ -152,3 +152,41 @@ test('command line: folder input, --out, exit codes', () => {
   assert.match(bad.stderr, /optimised away/);
   assert.equal(existsSync(join(outDir2, 'rep_d3_r1_L0.json')), false);
 });
+
+// Catches: a phase-flip (repx_) block rejected by the name check, or the basis field lost or
+// altered on the way through. Same framing and checks as the rep_ round trip.
+test('round trip of a repx_ block with basis X', () => {
+  const bank = makeBank({ basis: 'X', sampler_seed: 578224596 });
+  const { text } = makeBlock('repx_d3_r1_L0', bank);
+  const out = assembleTexts([{ text, source: 'synthetic' }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, 'repx_d3_r1_L0');
+  assert.deepEqual(out[0].bank, bank);
+});
+
+// Catches: a basis Z bank pasted under a phase-flip name (or the reverse) being written as the
+// wrong memory. Non-vacuous pairs: repx_ passes with basis "X" and fails with basis "Z" or
+// with no basis field (absent means Z); rep_ passes without a basis field and fails with
+// basis "X"; a v13 bank passes with basis X and its own site, and fails as basis Z or under
+// another site.
+test('block name must match the bank basis', () => {
+  const run = (name, bank) => assembleTexts([{ text: makeBlock(name, bank).text, source: 's' }]);
+  assert.equal(run('repx_d3_r1_L0', makeBank({ basis: 'X' })).length, 1);
+  assert.throws(() => run('repx_d3_r1_L0', makeBank({ basis: 'Z' })), /basis Z \(name says X\)/);
+  assert.throws(() => run('repx_d3_r1_L0', makeBank()), /basis Z \(name says X\)/);
+  assert.equal(run('rep_d3_r1_L0', makeBank()).length, 1);
+  assert.throws(() => run('rep_d3_r1_L0', makeBank({ basis: 'X' })), /basis X \(name says Z\)/);
+
+  const v13 = makeBank({ noise_model: 'ideal', inject: [[1, 0]], basis: 'X' });
+  assert.equal(run('v13_d3_r1_i1_k0', v13).length, 1);
+  assert.throws(() => run('v13_d3_r1_i1_k0', { ...v13, basis: 'Z' }), /basis Z \(name says X\)/);
+  assert.throws(() => run('v13_d3_r1_i0_k0', v13), /inject \[\[1,0\]\] \(name says \[\[0,0\]\]\)/);
+});
+
+// Catches: the optimised-away rule applied only to rep_ banks, letting a repx_ bank with no
+// detector events through. Non-vacuous pair: 0.03 passes, exactly 0 fails.
+test('repx_ bank with detector_rate 0 fails, 0.03 passes', () => {
+  const run = (bank) => assembleTexts([{ text: makeBlock('repx_d3_r1_L0', bank).text, source: 's' }]);
+  assert.equal(run(makeBank({ basis: 'X', detector_rate: 0.03 })).length, 1);
+  assert.throws(() => run(makeBank({ basis: 'X', detector_rate: 0 })), /optimised away/);
+});
