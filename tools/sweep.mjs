@@ -5,10 +5,19 @@
 //   node tools/sweep.mjs --stage 3   superconducting readout over tau; writes data/results/stage3_sc.json
 //   node tools/sweep.mjs --stage 4   platform comparison, break-even, sensitivity; writes data/results/stage4_comparison.json
 //                                    (reads stage2_ion.json, stage3_sc.json and params/cycle.json, ion.json, sc.json)
+//   node tools/sweep.mjs --stage dem learned edge rates, out-of-sample check (V12b) and naive
+//                                    against learned decoding; writes data/results/dem_forte1.json
 //   node tools/sweep.mjs --diag      prints only the V9 fingerprint of data/banks/rep_d3_r3_L0.json
+//   node tools/sweep.mjs --diag --decoder learned   prints only the V9L fingerprint
 //
-// Banks: every data/banks/rep_*.json (the v4_*.json validation banks are never read).
-// pGate is calibrated per bank from its raw bits (readout off) with estimatePGate.
+// Options for --stage 1, 2, 3, 4:
+//   --decoder naive | learned | both (default both): every series carries "decoder".
+//   --basis Z | X (default Z): rep_*.json (Z) or repx_*.json (X) banks; X results go to *_x.json.
+//
+// Banks: data/banks/rep_*.json and repx_*.json (the v4_*.json validation banks are never read).
+// Naive model: pGate calibrated per bank from its raw bits (readout off) with estimatePGate.
+// Learned model: edge-class rates from ratesFromBanks of the L0 and L1 banks of the same
+// (d, r, basis), pooled.
 
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -16,6 +25,7 @@ import { join } from 'node:path';
 import { validateBank, expandShots, split } from '../src/core/bank.js';
 import { computeDetectors } from '../src/core/detectors.js';
 import { estimatePGate } from '../src/core/calibrate.js';
+import { estimateEdgeRates, ratesFromBanks } from '../src/core/dem.js';
 import { wilson } from '../src/core/stats.js';
 import { createRng } from '../src/core/rng.js';
 import { createFlatReadout } from '../src/core/readout/flat.js';
@@ -44,19 +54,178 @@ function loadBank(file) {
   return bank;
 }
 
-function loadRepBanks() {
-  const files = readdirSync(BANK_DIR).filter((f) => /^rep_.*\.json$/.test(f)).sort();
-  if (files.length === 0) throw new Error(`no rep_*.json banks in ${BANK_DIR}`);
-  return files.map((file) => ({ file, bank: loadBank(file) }));
+const BANK_PREFIX = { Z: 'rep', X: 'repx' };
+
+// Thrown for a run that cannot start (missing banks); printed without a stack trace.
+class UsageError extends Error {}
+
+// Memory banks of one basis: rep_*.json (Z) or repx_*.json (X). Every bank must carry the
+// basis its file name says (absent means "Z").
+function loadRepBanks(basis = 'Z') {
+  const prefix = BANK_PREFIX[basis];
+  const re = new RegExp(`^${prefix}_.*\\.json$`);
+  const files = readdirSync(BANK_DIR).filter((f) => re.test(f)).sort();
+  if (files.length === 0) {
+    throw new UsageError(basis === 'X'
+      ? `no repx_*.json banks in ${BANK_DIR}: the X-basis (phase-flip) banks have not been assembled yet (team checklist A43, A48)`
+      : `no rep_*.json banks in ${BANK_DIR}`);
+  }
+  return files.map((file) => {
+    const bank = loadBank(file);
+    if ((bank.basis ?? 'Z') !== basis) throw new Error(`${file}: basis ${bank.basis ?? 'Z'}, expected ${basis} from the file name`);
+    return { file, bank };
+  });
 }
 
-function calibrate(bank) {
-  const det = expandShots(bank).map((bits) => {
+function detectorArraysOf(bank) {
+  return expandShots(bank).map((bits) => {
     const { m, x } = split(bits, bank.layout, bank.d, bank.r);
     return computeDetectors(m, x, bank.d, bank.r);
   });
-  return estimatePGate(det, bank.d, bank.r);
 }
+
+function calibrate(bank) {
+  return estimatePGate(detectorArraysOf(bank), bank.d, bank.r);
+}
+
+// Learned edge-class rates of (d, r), L0 and L1 banks pooled (byKey: "d,r,logical" -> { bank }).
+function pooledRates(byKey, d, r) {
+  const banks = [0, 1].map((logical) => byKey.get(`${d},${r},${logical}`)).filter(Boolean).map((b) => b.bank);
+  if (banks.length === 0) throw new Error(`no banks for learned rates at d=${d}, r=${r}`);
+  return ratesFromBanks(banks).classes;
+}
+
+// Noise argument of decodeShot / runPoint for one decoder.
+function noiseFor(decoder, pGate, rates) {
+  return decoder === 'naive' ? { model: 'naive', pGate } : { model: 'learned', rates };
+}
+
+const decoderArg = (decoders) => (decoders.length === 2 ? 'both' : decoders[0]);
+const keyOf = (decoder, d, mode) => `${decoder},${d},${mode}`;
+
+// F2 of stages 2 and 3: per bank, R readout draws per quantum shot. Hard and soft share the
+// draws, and so do the two decoders (the same seeds: common random numbers). Returns the
+// pooled series (one per decoder, d, mode, in that nesting order), per-logical rows, per-shot
+// mean errors (key decoder,d,mode -> per grid point Float64Array over pooled quantum shots),
+// seeds, the banks used and the number of non-exact matchings.
+function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf, cal, rates, basis }) {
+  const perShot = new Map();
+  const series = [];
+  const perLogical = [];
+  const seeds = {};
+  const used = [];
+  let nonExact = 0;
+  for (const decoder of decoders) {
+    for (const d of distances) {
+      const nShots = [0, 1].map((logical) => expandShots(byKey.get(`${d},${r},${logical}`).bank).length);
+      const nPooled = nShots[0] + nShots[1];
+      for (const mode of modes) perShot.set(keyOf(decoder, d, mode), taus.map(() => new Float64Array(nPooled)));
+      for (const logical of [0, 1]) {
+        const { file, bank } = byKey.get(`${d},${r},${logical}`);
+        const first = decoder === decoders[0];
+        if (first) {
+          used.push(file);
+          seeds[file] = [];
+        }
+        if (!cal.has(file)) cal.set(file, calibrate(bank));
+        const noise = noiseFor(decoder, cal.get(file).p, rates.get(d));
+        const shots = expandShots(bank);
+        const offset = logical === 0 ? 0 : nShots[0];
+        const rows = Object.fromEntries(modes.map((mode) => {
+          const row = { d, r, logical, mode, decoder, bank: file, k: [], n: [] };
+          if (decoder === 'naive') row.pGate = round(noise.pGate);
+          return [mode, row];
+        }));
+        taus.forEach((tau, t) => {
+          const tauSeeds = [];
+          for (const mode of modes) {
+            const target = perShot.get(keyOf(decoder, d, mode))[t];
+            let k = 0;
+            for (let draw = 0; draw < READOUT_DRAWS; draw++) {
+              const seed = seedOf(d, logical, t, draw);
+              if (mode === modes[0]) tauSeeds.push(seed);
+              const rng = createRng(seed);
+              for (let s = 0; s < shots.length; s++) {
+                const res = decodeShot({
+                  shotBits: shots[s], layout: bank.layout, d, r: bank.r,
+                  readout: readouts[t], mode, noise, basis, rng, logical: bank.logical,
+                });
+                if (!res.exact) nonExact++;
+                if (res.logicalError) {
+                  k++;
+                  target[offset + s] += 1 / READOUT_DRAWS;
+                }
+              }
+            }
+            rows[mode].k.push(k);
+            rows[mode].n.push(shots.length * READOUT_DRAWS);
+          }
+          if (first) seeds[file].push(tauSeeds);
+        });
+        for (const mode of modes) perLogical.push(rows[mode]);
+      }
+      for (const mode of modes) {
+        const [l0, l1] = perLogical.filter((row) => row.d === d && row.mode === mode && row.decoder === decoder);
+        const ws = taus.map((_, t) => wilson(l0.k[t] + l1.k[t], l0.n[t] + l1.n[t]));
+        series.push({
+          d, r, mode, decoder,
+          pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)),
+          n: taus.map((_, t) => l0.n[t] + l1.n[t]),
+        });
+      }
+    }
+  }
+  return { perShot, series, perLogical, seeds, used, nonExact };
+}
+
+// tau*_log per decoder, distance and mode from the per-shot values, bootstrapped over pooled
+// quantum shots. The bootstrap seed does not depend on the decoder (common random numbers).
+function tauLogTable({ taus, distances, modes, decoders, perShot, bootSeed }) {
+  const out = [];
+  for (const decoder of decoders) {
+    for (const d of distances) {
+      for (const mode of modes) {
+        const m = minimumWithBootstrap(taus, perShot.get(keyOf(decoder, d, mode)), BOOT_B, createRng(bootSeed + 10 * d + (mode === 'soft' ? 1 : 0)));
+        out.push({ d, mode, decoder, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied });
+      }
+    }
+  }
+  return out;
+}
+
+// C2 rows: soft at or below hard at every tau, per decoder (pooled counts).
+function c2Table({ taus, distances, decoders, series }) {
+  const c2 = [];
+  for (const decoder of decoders) {
+    for (const d of distances) {
+      const hard = series.find((s) => s.d === d && s.mode === 'hard' && s.decoder === decoder);
+      const soft = series.find((s) => s.d === d && s.mode === 'soft' && s.decoder === decoder);
+      taus.forEach((tau, t) => {
+        c2.push({ d, decoder, tau, hard: hard.pL[t], soft: soft.pL[t], softAtOrBelow: soft.pL[t] <= hard.pL[t], softAboveBeyondIntervals: soft.lo[t] > hard.hi[t] });
+      });
+    }
+  }
+  return c2;
+}
+
+function printF2Summary({ series, taus, tauLog, c2, r, xDigits }) {
+  for (const s of series) console.log(`  ${s.decoder.padEnd(7)} d = ${s.d} ${s.mode.padEnd(4)}: ${s.pL.map((p) => fmt(p)).join(' ')}`);
+  console.log(`  tau grid: ${taus.join(' ')}`);
+  console.log(`\nC2: soft at or below hard (point estimates) at ${c2.filter((c) => c.softAtOrBelow).length} of ${c2.length} points; soft above hard beyond the intervals at ${c2.filter((c) => c.softAboveBeyondIntervals).length}`);
+  for (const c of c2.filter((x) => !x.softAtOrBelow)) console.log(`  soft > hard: ${c.decoder}, d = ${c.d}, tau ${c.tau}: soft ${fmt(c.soft)} hard ${fmt(c.hard)}${c.softAboveBeyondIntervals ? ' (beyond intervals)' : ''}`);
+  console.log(`\ntau*_log (bootstrap B = ${BOOT_B} over quantum shots, 95% percentile interval), r = ${r}:`);
+  for (const m of tauLog) {
+    const where = m.atEdge ? `no interior minimum (lowest at tau ${m.xMin})` : `${fmt(m.xMin, xDigits)} us [${fmt(m.lo, xDigits)}, ${fmt(m.hi, xDigits)}]`;
+    console.log(`  ${m.decoder.padEnd(7)} d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%, tied ${(100 * m.fractionTied).toFixed(1)}%`);
+  }
+}
+
+// Learned rates as written to results: { d3_r3: { space, spaceBoundary, time, diag }, ... }.
+function ratesRecord(rates, r) {
+  return Object.fromEntries([...rates].map(([d, c]) => [`d${d}_r${r}`, Object.fromEntries(Object.entries(c).map(([k, v]) => [k, round(v)]))]));
+}
+
+const resultFile = (name, basis) => (basis === 'X' ? name.replace(/\.json$/, '_x.json') : name);
 
 function gitCommit() {
   try {
@@ -70,9 +239,13 @@ const fmt = (v, digits = 5) => v.toFixed(digits);
 const round = (v) => Number(v.toPrecision(6));
 const interval = (w) => `${fmt(w.p)} [${fmt(w.lo)}, ${fmt(w.hi)}]`;
 
-function stage1() {
+// V11: the learned decoder at epsilon = 0 against epsilon = 1e-9 (the naive decoder's
+// tie-breaking spike at epsilon = 0 must be gone). Seed index EPS_GRID.length for 1e-9.
+const V11_EPS = [0, 1e-9];
+
+function stage1({ decoders, basis }) {
   const t0 = Date.now();
-  const banks = loadRepBanks();
+  const banks = loadRepBanks(basis);
 
   // V5: bulk detector firing rate and the gate-noise floor per bank.
   console.log('V5: bulk detector firing rate (Wilson 95%) and calibrated pGate, readout off');
@@ -96,51 +269,88 @@ function stage1() {
     }
   }
 
+  // Learned rates per distance (L0 + L1 pooled); computed only if the learned decoder runs.
+  const rates = new Map();
+  if (decoders.includes('learned')) for (const d of STAGE1_D) rates.set(d, pooledRates(byKey, d, STAGE1_R));
+  const noiseOf = (decoder, file, d) => noiseFor(decoder, cal.get(file).p, rates.get(d));
+
   // Soft decoding must equal hard decoding for the flat model (same |llr| for every bit).
-  {
+  for (const decoder of decoders) {
     const { file, bank } = used[0];
     const epsIndex = EPS_GRID.indexOf(V1_EPS);
-    const args = { bank, readout: createFlatReadout({ epsilon: V1_EPS }), pGate: cal.get(file).p, seed: seedFor(bank.d, bank.logical, epsIndex) };
+    const args = { bank, readout: createFlatReadout({ epsilon: V1_EPS }), noise: noiseOf(decoder, file, bank.d), seed: seedFor(bank.d, bank.logical, epsIndex) };
     const hard = runPoint({ ...args, mode: 'hard' });
     const soft = runPoint({ ...args, mode: 'soft' });
     if (hard.k !== soft.k || hard.n !== soft.n) {
-      throw new Error(`soft != hard for the flat model on ${file} at epsilon ${V1_EPS}: k ${soft.k} vs ${hard.k}`);
+      throw new Error(`soft != hard for the flat model (${decoder}) on ${file} at epsilon ${V1_EPS}: k ${soft.k} vs ${hard.k}`);
     }
-    console.log(`\nCheck: soft == hard for flat readout on ${file} at epsilon ${V1_EPS} (k = ${hard.k} of ${hard.n})`);
+    console.log(`\nCheck: soft == hard for flat readout (${decoder}) on ${file} at epsilon ${V1_EPS} (k = ${hard.k} of ${hard.n})`);
   }
 
-  // Sweep, hard mode. Per logical state for V6, pooled for the series.
+  // Sweep, hard mode. Per logical state for V6, pooled for the series. Both decoders use the
+  // same seeds (common random numbers), so they see the same readout draws.
   const series = [];
   const perLogical = [];
   const seeds = {};
   let nonExactTotal = 0;
-  for (const d of STAGE1_D) {
-    const pooled = { k: new Array(EPS_GRID.length).fill(0), n: new Array(EPS_GRID.length).fill(0) };
-    for (const logical of [0, 1]) {
-      const { file, bank } = byKey.get(`${d},${STAGE1_R},${logical}`);
-      const pGate = cal.get(file).p;
-      const row = { d, r: STAGE1_R, logical, bank: file, pGate: round(pGate), k: [], n: [], pL: [], lo: [], hi: [] };
-      seeds[file] = [];
-      EPS_GRID.forEach((epsilon, e) => {
-        const seed = seedFor(d, logical, e);
-        seeds[file].push(seed);
-        const res = runPoint({ bank, readout: createFlatReadout({ epsilon }), mode: 'hard', pGate, seed });
-        nonExactTotal += res.nonExact;
-        row.k.push(res.k);
-        row.n.push(res.n);
-        row.pL.push(round(res.wilson.p));
-        row.lo.push(round(res.wilson.lo));
-        row.hi.push(round(res.wilson.hi));
-        pooled.k[e] += res.k;
-        pooled.n[e] += res.n;
+  for (const decoder of decoders) {
+    for (const d of STAGE1_D) {
+      const pooled = { k: new Array(EPS_GRID.length).fill(0), n: new Array(EPS_GRID.length).fill(0) };
+      for (const logical of [0, 1]) {
+        const { file, bank } = byKey.get(`${d},${STAGE1_R},${logical}`);
+        const noise = noiseOf(decoder, file, d);
+        const row = { d, r: STAGE1_R, logical, decoder, bank: file, k: [], n: [], pL: [], lo: [], hi: [] };
+        if (decoder === 'naive') row.pGate = round(noise.pGate);
+        seeds[file] = [];
+        EPS_GRID.forEach((epsilon, e) => {
+          const seed = seedFor(d, logical, e);
+          seeds[file].push(seed);
+          const res = runPoint({ bank, readout: createFlatReadout({ epsilon }), mode: 'hard', noise, seed });
+          nonExactTotal += res.nonExact;
+          row.k.push(res.k);
+          row.n.push(res.n);
+          row.pL.push(round(res.wilson.p));
+          row.lo.push(round(res.wilson.lo));
+          row.hi.push(round(res.wilson.hi));
+          pooled.k[e] += res.k;
+          pooled.n[e] += res.n;
+        });
+        perLogical.push(row);
+      }
+      const ws = pooled.k.map((k, e) => wilson(k, pooled.n[e]));
+      series.push({
+        d, r: STAGE1_R, mode: 'hard', decoder,
+        pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)), n: pooled.n,
       });
-      perLogical.push(row);
     }
-    const ws = pooled.k.map((k, e) => wilson(k, pooled.n[e]));
-    series.push({
-      d, r: STAGE1_R, mode: 'hard',
-      pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)), n: pooled.n,
-    });
+  }
+
+  // V11: learned decoder at epsilon = 0 and 1e-9, L0 + L1 pooled; PASS when the Wilson
+  // intervals overlap. The naive decoder at the same points is printed for comparison.
+  const v11 = [];
+  if (decoders.includes('learned')) {
+    for (const d of STAGE1_D) {
+      const entry = { d, r: STAGE1_R, epsilon: V11_EPS };
+      for (const decoder of ['learned', 'naive']) {
+        entry[decoder] = V11_EPS.map((epsilon) => {
+          let k = 0;
+          let n = 0;
+          for (const logical of [0, 1]) {
+            const { file, bank } = byKey.get(`${d},${STAGE1_R},${logical}`);
+            const e = epsilon === 0 ? EPS_GRID.indexOf(0) : EPS_GRID.length;
+            const res = runPoint({ bank, readout: createFlatReadout({ epsilon }), mode: 'hard', noise: noiseOf(decoder, file, d), seed: seedFor(d, logical, e) });
+            nonExactTotal += res.nonExact;
+            k += res.k;
+            n += res.n;
+          }
+          const w = wilson(k, n);
+          return { k, n, pL: round(w.p), lo: round(w.lo), hi: round(w.hi) };
+        });
+      }
+      const [a, b] = entry.learned;
+      entry.pass = a.lo <= b.hi && b.lo <= a.hi;
+      v11.push(entry);
+    }
   }
 
   // V1: flat flip rate at epsilon = 0.05.
@@ -151,16 +361,25 @@ function stage1() {
   const v1 = wilson(flips, V1_DRAWS);
   const v1Pass = Math.abs(v1.p - V1_EPS) <= 4 * Math.sqrt((V1_EPS * (1 - V1_EPS)) / V1_DRAWS);
 
-  const diagHash = diagnostic(byKey.get(`3,3,0`).bank);
+  // V9 and V9L are defined on the Z-basis bank rep_d3_r3_L0 only.
+  const diagBank = basis === 'Z' ? byKey.get('3,3,0').bank : null;
+  const diagHash = diagBank ? diagnostic(diagBank) : null;
+  const diagHashL = diagBank ? diagnostic(diagBank, { decoder: 'learned' }) : null;
   const runtimeS = (Date.now() - t0) / 1000;
 
   const result = {
     schema: 's2s-results/1',
     stage: 1,
     platform: 'flat',
+    basis,
     x: { name: 'epsilon', values: EPS_GRID },
     series,
-    params: { epsilon_grid: EPS_GRID, distances: STAGE1_D, r: STAGE1_R, mode: 'hard', logical_states: 'pooled (L0 + L1)', readout: 'createFlatReadout({ epsilon })' },
+    params: {
+      epsilon_grid: EPS_GRID, distances: STAGE1_D, r: STAGE1_R, mode: 'hard', decoders, basis,
+      logical_states: 'pooled (L0 + L1)', readout: 'createFlatReadout({ epsilon })',
+      noise: { naive: 'estimatePGate per bank, readout off', learned: 'ratesFromBanks(L0, L1) per (d, r, basis)' },
+      learnedRates: ratesRecord(rates, STAGE1_R),
+    },
     validation: {
       V1: { epsilon: V1_EPS, draws: V1_DRAWS, seed: V1_SEED, flips, p: round(v1.p), lo: round(v1.lo), hi: round(v1.hi), pass: v1Pass },
       V5: banks.map(({ file, bank }) => {
@@ -170,43 +389,57 @@ function stage1() {
         return { bank: file, d: bank.d, r: bank.r, logical: bank.logical, rate: round(c.rate), lo: round(w.lo), hi: round(w.hi), pGate: round(c.p) };
       }),
       V6: perLogical,
-      softEqualsHard: { bank: used[0].file, epsilon: V1_EPS, pass: true },
-      V9: { bank: DIAG_BANK, hash: diagHash },
+      softEqualsHard: { bank: used[0].file, epsilon: V1_EPS, decoders, pass: true },
+      ...(v11.length ? { V11: { rows: v11, pass: v11.every((v) => v.pass) } } : {}),
+      ...(diagBank ? { V9: { bank: DIAG_BANK, hash: diagHash }, V9L: { bank: DIAG_BANK, hash: diagHashL } } : {}),
     },
     provenance: {
-      tool: 'tools/sweep.mjs --stage 1',
+      tool: `tools/sweep.mjs --stage 1 --decoder ${decoderArg(decoders)} --basis ${basis}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
       banks: used.map((b) => b.file),
       bankJobIds: Object.fromEntries(used.map((b) => [b.file, b.bank.job_id ?? 'unknown'])),
       seeds,
-      seedRule: 'seed = 1000000 + 1000*d + 100*logical + epsilonIndex',
+      seedRule: 'seed = 1000000 + 1000*d + 100*logical + epsilonIndex (both decoders share it; V11 epsilon 1e-9 uses epsilonIndex 8)',
       nonExact: nonExactTotal,
       runtime_s: runtimeS,
     },
   };
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, 'stage1_flat.json');
+  const out = join(RESULTS_DIR, resultFile('stage1_flat.json', basis));
   writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
 
   console.log(`\nV1: flat flip rate at epsilon ${V1_EPS} (${V1_DRAWS} draws, seed ${V1_SEED}): ${interval(v1)} -> ${v1Pass ? 'PASS' : 'FAIL'} (|p - eps| <= 4 SE)`);
-  console.log(`\nV6: logical error, L0 against L1 (hard, r = ${STAGE1_R}, Wilson 95%)`);
-  for (const d of STAGE1_D) {
-    const [l0, l1] = perLogical.filter((row) => row.d === d);
-    console.log(`  d = ${d}`);
-    EPS_GRID.forEach((epsilon, e) => {
-      const w0 = { p: l0.pL[e], lo: l0.lo[e], hi: l0.hi[e] };
-      const w1 = { p: l1.pL[e], lo: l1.lo[e], hi: l1.hi[e] };
-      const overlap = w0.lo <= w1.hi && w1.lo <= w0.hi;
-      console.log(`    eps ${String(epsilon).padEnd(6)} L0 ${interval(w0)}  L1 ${interval(w1)}  ${overlap ? 'overlap' : 'DIFFER'}`);
-    });
+  for (const decoder of decoders) {
+    console.log(`\nV6 (${decoder}): logical error, L0 against L1 (hard, r = ${STAGE1_R}, basis ${basis}, Wilson 95%)`);
+    for (const d of STAGE1_D) {
+      const [l0, l1] = perLogical.filter((row) => row.d === d && row.decoder === decoder);
+      console.log(`  d = ${d}`);
+      EPS_GRID.forEach((epsilon, e) => {
+        const w0 = { p: l0.pL[e], lo: l0.lo[e], hi: l0.hi[e] };
+        const w1 = { p: l1.pL[e], lo: l1.lo[e], hi: l1.hi[e] };
+        const overlap = w0.lo <= w1.hi && w1.lo <= w0.hi;
+        console.log(`    eps ${String(epsilon).padEnd(6)} L0 ${interval(w0)}  L1 ${interval(w1)}  ${overlap ? 'overlap' : 'DIFFER'}`);
+      });
+    }
   }
   console.log(`\nPooled series (L0 + L1), pL by epsilon ${JSON.stringify(EPS_GRID)}:`);
-  for (const s of series) console.log(`  d = ${s.d}: ${s.pL.map((p) => fmt(p)).join('  ')}  (n = ${s.n[0]})`);
+  for (const s of series) console.log(`  ${s.decoder.padEnd(7)} d = ${s.d}: ${s.pL.map((p) => fmt(p)).join('  ')}  (n = ${s.n[0]})`);
+  if (v11.length) {
+    console.log('\nV11: learned decoder at epsilon = 0 against 1e-9 (L0 + L1 pooled, Wilson 95%; naive shown for comparison)');
+    for (const v of v11) {
+      const [l0, l9] = v.learned;
+      const [n0, n9] = v.naive;
+      console.log(`  d = ${v.d}: learned eps 0 ${interval({ p: l0.pL, lo: l0.lo, hi: l0.hi })}  eps 1e-9 ${interval({ p: l9.pL, lo: l9.lo, hi: l9.hi })}  ${v.pass ? 'PASS' : 'FAIL'}   (naive: ${fmt(n0.pL)} / ${fmt(n9.pL)})`);
+    }
+  }
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (${runtimeS.toFixed(1)} s)`);
-  console.log(`\nV9 diagnostic(${DIAG_BANK}): ${diagHash}`);
+  if (diagBank) {
+    console.log(`\nV9 diagnostic(${DIAG_BANK}): ${diagHash}`);
+    console.log(`V9L diagnostic(${DIAG_BANK}, learned): ${diagHashL}`);
+  }
 }
 
 // ---- Stage 2: trapped-ion readout over the detection time tau ----
@@ -239,14 +472,15 @@ function poisCdf(m, lambda) {
   return Math.min(1, s);
 }
 
-function stage2() {
+function stage2({ decoders, basis }) {
   const t0 = Date.now();
   const card = JSON.parse(readFileSync(ION_PARAMS, 'utf8'));
   const taus = fieldValue(card, 'tau_grid_us');
-  const banks = loadRepBanks();
+  const banks = loadRepBanks(basis);
   const byKey = new Map(banks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
   const distances = STAGE2_D.filter((d) => byKey.has(`${d},${STAGE2_R},0`) && byKey.has(`${d},${STAGE2_R},1`));
   for (const d of [3, 5]) if (!distances.includes(d)) throw new Error(`missing banks for d=${d}, r=${STAGE2_R}`);
+  const rates = new Map(decoders.includes('learned') ? distances.map((d) => [d, pooledRates(byKey, d, STAGE2_R)]) : []);
   const noPump = { ...card, gamma_bright_to_dark_per_us: 0, gamma_dark_to_bright_per_us: 0 };
   const readouts = taus.map((tau) => createIonReadout(card, tau));
 
@@ -281,7 +515,7 @@ function stage2() {
     assignment.lo.push(round(w.lo));
     assignment.hi.push(round(w.hi));
     f1Detail.push({
-      tau, nTh: ro.threshold(), idleFlip: round(ro.idleFlipProbability()),
+      tau, nTh: ro.threshold(), idleFlip: round(ro.idleFlipProbability(basis)),
       beliefNoPumping: round(createIonReadout(noPump, tau).averageAssignmentError()),
       errors, agree4SE: Math.abs(w.p - belief) <= 4 * se + 1e-12,
     });
@@ -316,85 +550,18 @@ function stage2() {
 
   // F2-ion: per bank, R readout draws per quantum shot; hard and soft share the draws.
   const cal = new Map();
-  const perShot = new Map(); // `${d},${mode}` -> per grid point Float64Array of pooled per-shot mean error
-  const series = [];
-  const perLogical = [];
-  const seeds = {};
-  const used = [];
-  let nonExactTotal = 0;
-  for (const d of distances) {
-    const nShots = [0, 1].map((logical) => expandShots(byKey.get(`${d},${STAGE2_R},${logical}`).bank).length);
-    const nPooled = nShots[0] + nShots[1];
-    for (const mode of STAGE2_MODES) perShot.set(`${d},${mode}`, taus.map(() => new Float64Array(nPooled)));
-    for (const logical of [0, 1]) {
-      const { file, bank } = byKey.get(`${d},${STAGE2_R},${logical}`);
-      used.push(file);
-      if (!cal.has(file)) cal.set(file, calibrate(bank));
-      const pGate = cal.get(file).p;
-      const shots = expandShots(bank);
-      const offset = logical === 0 ? 0 : nShots[0];
-      seeds[file] = [];
-      const rows = Object.fromEntries(STAGE2_MODES.map((mode) => [mode, { d, r: STAGE2_R, logical, mode, bank: file, pGate: round(pGate), k: [], n: [] }]));
-      taus.forEach((tau, t) => {
-        const tauSeeds = [];
-        for (const mode of STAGE2_MODES) {
-          const target = perShot.get(`${d},${mode}`)[t];
-          let k = 0;
-          for (let draw = 0; draw < READOUT_DRAWS; draw++) {
-            const seed = seedFor2(d, logical, t, draw);
-            if (mode === STAGE2_MODES[0]) tauSeeds.push(seed);
-            const rng = createRng(seed);
-            for (let s = 0; s < shots.length; s++) {
-              const res = decodeShot({
-                shotBits: shots[s], layout: bank.layout, d, r: bank.r,
-                readout: readouts[t], mode, pGate, rng, logical: bank.logical,
-              });
-              if (!res.exact) nonExactTotal++;
-              if (res.logicalError) {
-                k++;
-                target[offset + s] += 1 / READOUT_DRAWS;
-              }
-            }
-          }
-          rows[mode].k.push(k);
-          rows[mode].n.push(shots.length * READOUT_DRAWS);
-        }
-        seeds[file].push(tauSeeds);
-      });
-      for (const mode of STAGE2_MODES) perLogical.push(rows[mode]);
-    }
-    for (const mode of STAGE2_MODES) {
-      const [l0, l1] = perLogical.filter((row) => row.d === d && row.mode === mode);
-      const ws = taus.map((_, t) => wilson(l0.k[t] + l1.k[t], l0.n[t] + l1.n[t]));
-      series.push({
-        d, r: STAGE2_R, mode,
-        pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)),
-        n: taus.map((_, t) => l0.n[t] + l1.n[t]),
-      });
-    }
-  }
+  const { perShot, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
+    distances, byKey, r: STAGE2_R, taus, readouts, modes: STAGE2_MODES, decoders, seedOf: seedFor2, cal, rates, basis,
+  });
 
-  // Optima. tau*_phys from the belief curve; tau*_log per distance and mode from the
+  // Optima. tau*_phys from the belief curve; tau*_log per decoder, distance and mode from the
   // per-shot values, bootstrapped over pooled quantum shots.
   const tauPhys = findMinimum(taus, assignment.belief, { logX: true });
   const tauPhysNoPump = findMinimum(taus, f1Detail.map((f) => f.beliefNoPumping), { logX: true });
-  const tauLog = [];
-  for (const d of distances) {
-    for (const mode of STAGE2_MODES) {
-      const m = minimumWithBootstrap(taus, perShot.get(`${d},${mode}`), BOOT_B, createRng(BOOT_SEED + 10 * d + (mode === 'soft' ? 1 : 0)));
-      tauLog.push({ d, mode, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied });
-    }
-  }
+  const tauLog = tauLogTable({ taus, distances, modes: STAGE2_MODES, decoders, perShot, bootSeed: BOOT_SEED });
 
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
-  const c2 = [];
-  for (const d of distances) {
-    const hard = series.find((s) => s.d === d && s.mode === 'hard');
-    const soft = series.find((s) => s.d === d && s.mode === 'soft');
-    taus.forEach((tau, t) => {
-      c2.push({ d, tau, hard: hard.pL[t], soft: soft.pL[t], softAtOrBelow: soft.pL[t] <= hard.pL[t], softAboveBeyondIntervals: soft.lo[t] > hard.hi[t] });
-    });
-  }
+  const c2 = c2Table({ taus, distances, decoders, series });
 
   // The per-shot values stay in memory (about 2 MB as JSON); the seeds below reproduce them.
   const runtimeS = (Date.now() - t0) / 1000;
@@ -402,18 +569,21 @@ function stage2() {
     schema: 's2s-results/1',
     stage: 2,
     platform: 'trapped-ion',
+    basis,
     x: { name: 'tau_us', values: taus },
     series,
     assignment,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
-      tauLog: tauLog.map(({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
+      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
     },
     params: {
       card,
-      distances, r: STAGE2_R, modes: STAGE2_MODES, logical_states: 'pooled (L0 + L1)',
+      distances, r: STAGE2_R, modes: STAGE2_MODES, decoders, basis, logical_states: 'pooled (L0 + L1)',
       readoutDrawsPerShot: READOUT_DRAWS, bootstrapB: BOOT_B, f1Samples: F1_SAMPLES,
       readout: 'createIonReadout(card, tau)', pGate: 'estimatePGate per bank, readout off',
+      learned: 'ratesFromBanks(L0, L1) per (d, r, basis)',
+      learnedRates: ratesRecord(rates, STAGE2_R),
     },
     readout: {
       nTh: f1Detail.map((f) => f.nTh),
@@ -430,7 +600,7 @@ function stage2() {
       perLogical: perLogical.map((row) => ({ ...row, pL: row.k.map((k, t) => round(k / row.n[t])) })),
     },
     provenance: {
-      tool: 'tools/sweep.mjs --stage 2',
+      tool: `tools/sweep.mjs --stage 2 --decoder ${decoderArg(decoders)} --basis ${basis}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
@@ -439,13 +609,13 @@ function stage2() {
       bankJobIds: Object.fromEntries(used.map((f) => [f, byKey.get(`${f.match(/_d(\d+)_/)[1]},${STAGE2_R},${f.match(/_L(\d)/)[1]}`).bank.job_id ?? 'unknown'])),
       pGate: Object.fromEntries(used.map((f) => [f, round(cal.get(f).p)])),
       seeds,
-      seedRule: 'seed = 2000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft share it); F1 seed 201; V7 seed 1201 + tauIndex; bootstrap seed 202 + 10*d + (soft ? 1 : 0)',
+      seedRule: 'seed = 2000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft, and both decoders, share it); F1 seed 201; V7 seed 1201 + tauIndex; bootstrap seed 202 + 10*d + (soft ? 1 : 0)',
       nonExact: nonExactTotal,
       runtime_s: runtimeS,
     },
   };
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, 'stage2_ion.json');
+  const out = join(RESULTS_DIR, resultFile('stage2_ion.json', basis));
   writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
 
   const g = (v) => v.toExponential(2);
@@ -465,16 +635,8 @@ function stage2() {
   const edge = (m) => (m.atEdge ? ` (no interior minimum: lowest at the grid ${m.xMin === taus[0] ? 'start' : 'end'})` : '');
   console.log(`tau*_phys = ${fmt(tauPhys.xMin, 2)} us, error ${g(tauPhys.yMin)}${edge(tauPhys)}`);
   console.log(`tau*_phys without pumping = ${fmt(tauPhysNoPump.xMin, 2)} us${edge(tauPhysNoPump)}`);
-  console.log(`\nF2-ion: logical error by tau, r = ${STAGE2_R}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
-  for (const s of series) console.log(`  d = ${s.d} ${s.mode.padEnd(4)}: ${s.pL.map((p) => fmt(p)).join(' ')}`);
-  console.log(`  tau grid: ${taus.join(' ')}`);
-  console.log(`\nC2: soft at or below hard (point estimates) at ${c2.filter((c) => c.softAtOrBelow).length} of ${c2.length} points; soft above hard beyond the intervals at ${c2.filter((c) => c.softAboveBeyondIntervals).length}`);
-  for (const c of c2.filter((x) => !x.softAtOrBelow)) console.log(`  soft > hard: d = ${c.d}, tau ${c.tau}: soft ${fmt(c.soft)} hard ${fmt(c.hard)}`);
-  console.log(`\ntau*_log (bootstrap B = ${BOOT_B} over quantum shots, 95% percentile interval):`);
-  for (const m of tauLog) {
-    const where = m.atEdge ? `no interior minimum (lowest at tau ${m.xMin})` : `${fmt(m.xMin, 2)} us [${fmt(m.lo, 2)}, ${fmt(m.hi, 2)}]`;
-    console.log(`  d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%, tied ${(100 * m.fractionTied).toFixed(1)}%`);
-  }
+  console.log(`\nF2-ion: logical error by tau, r = ${STAGE2_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
+  printF2Summary({ series, taus, tauLog, c2, r: STAGE2_R, xDigits: 2 });
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
@@ -512,16 +674,17 @@ function addToBins(bins, llr, bit) {
   if ((llr > 0 ? 1 : 0) !== bit) bins[b].wrong++;
 }
 
-function stage3() {
+function stage3({ decoders, basis }) {
   const t0 = Date.now();
   if (!existsSync(SC_PARAMS)) throw new Error(`${SC_PARAMS} not found: create the superconducting parameter card first (team checklist Appendix T6)`);
   const card = JSON.parse(readFileSync(SC_PARAMS, 'utf8'));
   const taus = fieldValue(card, 'tau_grid_us');
   const ringup = fieldValue(card, 'ringup');
-  const banks = loadRepBanks();
+  const banks = loadRepBanks(basis);
   const byKey = new Map(banks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
   const distances = STAGE3_D.filter((d) => byKey.has(`${d},${STAGE3_R},0`) && byKey.has(`${d},${STAGE3_R},1`));
   for (const d of [3, 5]) if (!distances.includes(d)) throw new Error(`missing banks for d=${d}, r=${STAGE3_R}`);
+  const rates = new Map(decoders.includes('learned') ? distances.map((d) => [d, pooledRates(byKey, d, STAGE3_R)]) : []);
   const readouts = taus.map((tau) => createScReadout(card, tau));
   // V8 card: no decay, no ring-up (Gaussian readout). V10 card: no ring-up, so the belief
   // model (linear mean during a decay, no ring-up) is the truth model.
@@ -553,7 +716,7 @@ function stage3() {
     assignment.lo.push(round(w.lo));
     assignment.hi.push(round(w.hi));
     f1Detail.push({
-      tau, snr: round(ro.snr()), idleFlip: round(ro.idleFlipProbability()),
+      tau, snr: round(ro.snr()), idleFlip: round(ro.idleFlipProbability(basis)),
       errors, agree4SE: Math.abs(w.p - belief) <= 4 * se + 1e-12,
     });
 
@@ -586,103 +749,39 @@ function stage3() {
 
   // F2-sc: per bank, R readout draws per quantum shot; hard and soft share the draws.
   const cal = new Map();
-  const perShot = new Map(); // `${d},${mode}` -> per grid point Float64Array of pooled per-shot mean error
-  const series = [];
-  const perLogical = [];
-  const seeds = {};
-  const used = [];
-  let nonExactTotal = 0;
-  for (const d of distances) {
-    const nShots = [0, 1].map((logical) => expandShots(byKey.get(`${d},${STAGE3_R},${logical}`).bank).length);
-    const nPooled = nShots[0] + nShots[1];
-    for (const mode of STAGE3_MODES) perShot.set(`${d},${mode}`, taus.map(() => new Float64Array(nPooled)));
-    for (const logical of [0, 1]) {
-      const { file, bank } = byKey.get(`${d},${STAGE3_R},${logical}`);
-      used.push(file);
-      if (!cal.has(file)) cal.set(file, calibrate(bank));
-      const pGate = cal.get(file).p;
-      const shots = expandShots(bank);
-      const offset = logical === 0 ? 0 : nShots[0];
-      seeds[file] = [];
-      const rows = Object.fromEntries(STAGE3_MODES.map((mode) => [mode, { d, r: STAGE3_R, logical, mode, bank: file, pGate: round(pGate), k: [], n: [] }]));
-      taus.forEach((tau, t) => {
-        const tauSeeds = [];
-        for (const mode of STAGE3_MODES) {
-          const target = perShot.get(`${d},${mode}`)[t];
-          let k = 0;
-          for (let draw = 0; draw < READOUT_DRAWS; draw++) {
-            const seed = seedFor3(d, logical, t, draw);
-            if (mode === STAGE3_MODES[0]) tauSeeds.push(seed);
-            const rng = createRng(seed);
-            for (let s = 0; s < shots.length; s++) {
-              const res = decodeShot({
-                shotBits: shots[s], layout: bank.layout, d, r: bank.r,
-                readout: readouts[t], mode, pGate, rng, logical: bank.logical,
-              });
-              if (!res.exact) nonExactTotal++;
-              if (res.logicalError) {
-                k++;
-                target[offset + s] += 1 / READOUT_DRAWS;
-              }
-            }
-          }
-          rows[mode].k.push(k);
-          rows[mode].n.push(shots.length * READOUT_DRAWS);
-        }
-        seeds[file].push(tauSeeds);
-      });
-      for (const mode of STAGE3_MODES) perLogical.push(rows[mode]);
-    }
-    for (const mode of STAGE3_MODES) {
-      const [l0, l1] = perLogical.filter((row) => row.d === d && row.mode === mode);
-      const ws = taus.map((_, t) => wilson(l0.k[t] + l1.k[t], l0.n[t] + l1.n[t]));
-      series.push({
-        d, r: STAGE3_R, mode,
-        pL: ws.map((w) => round(w.p)), lo: ws.map((w) => round(w.lo)), hi: ws.map((w) => round(w.hi)),
-        n: taus.map((_, t) => l0.n[t] + l1.n[t]),
-      });
-    }
-  }
+  const { perShot, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
+    distances, byKey, r: STAGE3_R, taus, readouts, modes: STAGE3_MODES, decoders, seedOf: seedFor3, cal, rates, basis,
+  });
 
-  // Optima. tau*_phys from the belief curve; tau*_log per distance and mode from the
+  // Optima. tau*_phys from the belief curve; tau*_log per decoder, distance and mode from the
   // per-shot values, bootstrapped over pooled quantum shots.
   const tauPhys = findMinimum(taus, assignment.belief, { logX: true });
   const tauPhysEmp = findMinimum(taus, assignment.empirical, { logX: true });
-  const tauLog = [];
-  for (const d of distances) {
-    for (const mode of STAGE3_MODES) {
-      const m = minimumWithBootstrap(taus, perShot.get(`${d},${mode}`), BOOT_B, createRng(BOOT_SEED3 + 10 * d + (mode === 'soft' ? 1 : 0)));
-      tauLog.push({ d, mode, xMin: round(m.xMin), lo: round(m.lo), hi: round(m.hi), atEdge: m.atEdge, yMin: round(m.yMin), fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied });
-    }
-  }
+  const tauLog = tauLogTable({ taus, distances, modes: STAGE3_MODES, decoders, perShot, bootSeed: BOOT_SEED3 });
 
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
-  const c2 = [];
-  for (const d of distances) {
-    const hard = series.find((s) => s.d === d && s.mode === 'hard');
-    const soft = series.find((s) => s.d === d && s.mode === 'soft');
-    taus.forEach((tau, t) => {
-      c2.push({ d, tau, hard: hard.pL[t], soft: soft.pL[t], softAtOrBelow: soft.pL[t] <= hard.pL[t], softAboveBeyondIntervals: soft.lo[t] > hard.hi[t] });
-    });
-  }
+  const c2 = c2Table({ taus, distances, decoders, series });
 
   const runtimeS = (Date.now() - t0) / 1000;
   const result = {
     schema: 's2s-results/1',
     stage: 3,
     platform: 'superconducting',
+    basis,
     x: { name: 'tau_us', values: taus },
     series,
     assignment,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
-      tauLog: tauLog.map(({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
+      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
     },
     params: {
       card,
-      distances, r: STAGE3_R, modes: STAGE3_MODES, logical_states: 'pooled (L0 + L1)',
+      distances, r: STAGE3_R, modes: STAGE3_MODES, decoders, basis, logical_states: 'pooled (L0 + L1)',
       readoutDrawsPerShot: READOUT_DRAWS, bootstrapB: BOOT_B, f1Samples: F1_SAMPLES,
       readout: 'createScReadout(card, tau)', pGate: 'estimatePGate per bank, readout off',
+      learned: 'ratesFromBanks(L0, L1) per (d, r, basis)',
+      learnedRates: ratesRecord(rates, STAGE3_R),
     },
     readout: {
       ringup,
@@ -700,7 +799,7 @@ function stage3() {
       perLogical: perLogical.map((row) => ({ ...row, pL: row.k.map((k, t) => round(k / row.n[t])) })),
     },
     provenance: {
-      tool: 'tools/sweep.mjs --stage 3',
+      tool: `tools/sweep.mjs --stage 3 --decoder ${decoderArg(decoders)} --basis ${basis}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
@@ -709,13 +808,13 @@ function stage3() {
       bankJobIds: Object.fromEntries(used.map((f) => [f, byKey.get(`${f.match(/_d(\d+)_/)[1]},${STAGE3_R},${f.match(/_L(\d)/)[1]}`).bank.job_id ?? 'unknown'])),
       pGate: Object.fromEntries(used.map((f) => [f, round(cal.get(f).p)])),
       seeds,
-      seedRule: 'seed = 3000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft share it); F1 seed 301; V8 seed 1301 + tauIndex; V10 seed 2301 + tauIndex; bootstrap seed 302 + 10*d + (soft ? 1 : 0)',
+      seedRule: 'seed = 3000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft, and both decoders, share it); F1 seed 301; V8 seed 1301 + tauIndex; V10 seed 2301 + tauIndex; bootstrap seed 302 + 10*d + (soft ? 1 : 0)',
       nonExact: nonExactTotal,
       runtime_s: runtimeS,
     },
   };
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, 'stage3_sc.json');
+  const out = join(RESULTS_DIR, resultFile('stage3_sc.json', basis));
   writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
 
   const g = (v) => v.toExponential(2);
@@ -740,16 +839,8 @@ function stage3() {
   const edge = (m) => (m.atEdge ? ` (no interior minimum: lowest at the grid ${m.xMin === taus[0] ? 'start' : 'end'})` : '');
   console.log(`tau*_phys = ${fmt(tauPhys.xMin, 3)} us, error ${g(tauPhys.yMin)}${edge(tauPhys)}`);
   console.log(`tau*_phys from the empirical curve = ${fmt(tauPhysEmp.xMin, 3)} us${edge(tauPhysEmp)}`);
-  console.log(`\nF2-sc: logical error by tau, r = ${STAGE3_R}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
-  for (const s of series) console.log(`  d = ${s.d} ${s.mode.padEnd(4)}: ${s.pL.map((p) => fmt(p)).join(' ')}`);
-  console.log(`  tau grid: ${taus.join(' ')}`);
-  console.log(`\nC2: soft at or below hard (point estimates) at ${c2.filter((c) => c.softAtOrBelow).length} of ${c2.length} points; soft above hard beyond the intervals at ${c2.filter((c) => c.softAboveBeyondIntervals).length}`);
-  for (const c of c2.filter((x) => !x.softAtOrBelow)) console.log(`  soft > hard: d = ${c.d}, tau ${c.tau}: soft ${fmt(c.soft)} hard ${fmt(c.hard)}`);
-  console.log(`\ntau*_log (bootstrap B = ${BOOT_B} over quantum shots, 95% percentile interval):`);
-  for (const m of tauLog) {
-    const where = m.atEdge ? `no interior minimum (lowest at tau ${m.xMin})` : `${fmt(m.xMin, 3)} us [${fmt(m.lo, 3)}, ${fmt(m.hi, 3)}]`;
-    console.log(`  d = ${m.d} ${m.mode.padEnd(4)}: ${where}, pL ${fmt(m.yMin)}, replicates at edge ${(100 * m.fractionAtEdge).toFixed(1)}%, tied ${(100 * m.fractionTied).toFixed(1)}%`);
-  }
+  console.log(`\nF2-sc: logical error by tau, r = ${STAGE3_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
+  printF2Summary({ series, taus, tauLog, c2, r: STAGE3_R, xDigits: 3 });
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
@@ -829,21 +920,27 @@ function breakEvenWithInterval(taus, xs, s3, s5) {
   return { epsBar: det.x, tau_us: tau, lo, hi, halfWidth: (hi - lo) / 2, clamped: up.clamped || dn.clamped, segment: [taus[a], taus[b]] };
 }
 
-// The stage 2 or 3 results as an "arm": tau grid, pooled series, assignment curves, idle
-// probabilities and tau*_log (with bootstrap intervals for the full runs).
-function armFromResults(res) {
+// The stage 2 or 3 results as an "arm" for one decoder: tau grid, pooled series, assignment
+// curves, idle probabilities and tau*_log (with bootstrap intervals for the full runs).
+// Series and tau*_log entries without "decoder" (v1 files) are the naive decoder.
+function armFromResults(res, decoder) {
   const taus = res.x.values;
   const empMin = findMinimum(taus, res.assignment.empirical, { logX: true });
+  const mine = (x) => (x.decoder ?? 'naive') === decoder;
+  const series = res.series.filter(mine);
+  if (series.length === 0) {
+    throw new UsageError(`the ${res.platform} results have no ${decoder} series: rerun --stage ${res.stage} with --decoder ${decoder} or both`);
+  }
   return {
     platform: res.platform, taus, full: true,
-    distances: [...new Set(res.series.map((s) => s.d))].sort((a, b) => a - b),
-    series: res.series,
+    distances: [...new Set(series.map((s) => s.d))].sort((a, b) => a - b),
+    series,
     belief: res.assignment.belief,
     empirical: res.assignment.empirical,
     idle: res.readout.idleFlip,
     tauPhysBelief: res.optima.tauPhys,
     tauPhysEmp: { xMin: empMin.xMin, atEdge: empMin.atEdge },
-    tauLog: res.optima.tauLog,
+    tauLog: res.optima.tauLog.filter(mine),
   };
 }
 
@@ -869,12 +966,13 @@ function reducedArm(platform, card, ctx) {
     let n = 0;
     for (const logical of [0, 1]) {
       const { bank, shots, pGate } = ctx.banks.get(`${d},${logical}`);
+      const noise = noiseFor(ctx.decoder, pGate, ctx.rates.get(d));
       n += shots.length;
       taus.forEach((_, t) => {
         for (const mode of STAGE4_MODES) {
           const rng = createRng(seedFor4(platform, d, logical, t));
           for (const bits of shots) {
-            const res = decodeShot({ shotBits: bits, layout: bank.layout, d, r: bank.r, readout: readouts[t], mode, pGate, rng, logical: bank.logical });
+            const res = decodeShot({ shotBits: bits, layout: bank.layout, d, r: bank.r, readout: readouts[t], mode, noise, basis: ctx.basis, rng, logical: bank.logical });
             if (!res.exact) ctx.nonExact++;
             k[mode][t] += res.logicalError;
           }
@@ -883,7 +981,7 @@ function reducedArm(platform, card, ctx) {
     }
     for (const mode of STAGE4_MODES) {
       const ws = k[mode].map((kk) => wilson(kk, n));
-      const s = { d, r: ctx.r, mode, pL: ws.map((w) => w.p), lo: ws.map((w) => w.lo), hi: ws.map((w) => w.hi), n: taus.map(() => n) };
+      const s = { d, r: ctx.r, mode, decoder: ctx.decoder, pL: ws.map((w) => w.p), lo: ws.map((w) => w.lo), hi: ws.map((w) => w.hi), n: taus.map(() => n) };
       series.push(s);
       const m = findMinimum(taus, s.pL, { logX: true });
       tauLog.push({ d, mode, xMin: m.xMin, atEdge: m.atEdge, tied: m.tied });
@@ -893,7 +991,7 @@ function reducedArm(platform, card, ctx) {
   const belief = readouts.map((ro) => ro.averageAssignmentError());
   return {
     platform, taus, full: false, distances: ctx.distances, series, belief, empirical,
-    idle: readouts.map((ro) => ro.idleFlipProbability()),
+    idle: readouts.map((ro) => ro.idleFlipProbability(ctx.basis)),
     tauPhysBelief: (({ xMin, atEdge }) => ({ xMin, atEdge }))(findMinimum(taus, belief, { logX: true })),
     tauPhysEmp: { xMin: empMin.xMin, atEdge: empMin.atEdge },
     tauLog,
@@ -1048,14 +1146,20 @@ function evaluateConclusions(ion, sc, tables) {
   };
 }
 
-function stage4() {
+// Headline decoder of Stage 4: learned when it is requested, otherwise naive. The full
+// tables and conclusions of every requested decoder are in byDecoder; the sensitivity
+// reruns use the headline decoder.
+function stage4({ decoders, basis }) {
   const t0 = Date.now();
-  for (const f of [CYCLE_PARAMS, ION_PARAMS, SC_PARAMS, join(RESULTS_DIR, STAGE2_FILE), join(RESULTS_DIR, STAGE3_FILE)]) {
+  const headline = decoders.includes('learned') ? 'learned' : 'naive';
+  const stage2File = resultFile(STAGE2_FILE, basis);
+  const stage3File = resultFile(STAGE3_FILE, basis);
+  for (const f of [CYCLE_PARAMS, ION_PARAMS, SC_PARAMS, join(RESULTS_DIR, stage2File), join(RESULTS_DIR, stage3File)]) {
     if (!existsSync(f)) throw new Error(`${f} not found${f === CYCLE_PARAMS ? ': create the cycle-time card first (team checklist Appendix T6)' : ''}`);
   }
   const cycle = JSON.parse(readFileSync(CYCLE_PARAMS, 'utf8'));
   const cards = { [ION]: JSON.parse(readFileSync(ION_PARAMS, 'utf8')), [SC]: JSON.parse(readFileSync(SC_PARAMS, 'utf8')) };
-  const results = { [ION]: JSON.parse(readFileSync(join(RESULTS_DIR, STAGE2_FILE), 'utf8')), [SC]: JSON.parse(readFileSync(join(RESULTS_DIR, STAGE3_FILE), 'utf8')) };
+  const results = { [ION]: JSON.parse(readFileSync(join(RESULTS_DIR, stage2File), 'utf8')), [SC]: JSON.parse(readFileSync(join(RESULTS_DIR, stage3File), 'utf8')) };
   for (const p of [ION, SC]) {
     if (!cycle[p]) throw new Error(`${CYCLE_PARAMS} has no entry for ${p}`);
     cycleTime(cycle[p], 1); // throws on an unfilled (null) value
@@ -1063,17 +1167,22 @@ function stage4() {
   // The full tables come from the stage files; warn if their cards differ from params/.
   const cardsMatch = Object.fromEntries([ION, SC].map((p) => [p, JSON.stringify(results[p].params.card) === JSON.stringify(cards[p])]));
 
-  // Full statistics: tables and conclusions from the Stage 2 and 3 results.
-  const full = { [ION]: armFromResults(results[ION]), [SC]: armFromResults(results[SC]) };
-  const tables = { [ION]: platformTable(full[ION], cycle[ION]), [SC]: platformTable(full[SC], cycle[SC]) };
-  const conclusions = evaluateConclusions(full[ION], full[SC], tables);
+  // Full statistics: tables and conclusions from the Stage 2 and 3 results, per decoder.
+  const byDecoder = {};
+  for (const decoder of decoders) {
+    const arms = { [ION]: armFromResults(results[ION], decoder), [SC]: armFromResults(results[SC], decoder) };
+    const tb = { [ION]: platformTable(arms[ION], cycle[ION]), [SC]: platformTable(arms[SC], cycle[SC]) };
+    byDecoder[decoder] = { platforms: tb, conclusions: evaluateConclusions(arms[ION], arms[SC], tb) };
+  }
+  const { platforms: tables, conclusions } = byDecoder[headline];
 
   // Reduced statistics: banks, calibration and the shot subsample, shared by every rerun.
   const r = 3;
-  const repBanks = loadRepBanks();
+  const repBanks = loadRepBanks(basis);
   const byKey = new Map(repBanks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
   const distances = [3, 5, 7].filter((d) => byKey.has(`${d},${r},0`) && byKey.has(`${d},${r},1`));
-  const ctx = { r, distances, banks: new Map(), nonExact: 0 };
+  const rates = new Map(headline === 'learned' ? distances.map((d) => [d, pooledRates(byKey, d, r)]) : []);
+  const ctx = { r, distances, banks: new Map(), nonExact: 0, decoder: headline, rates, basis };
   const usedBanks = [];
   for (const d of distances) {
     for (const logical of [0, 1]) {
@@ -1098,7 +1207,7 @@ function stage4() {
     console.log(`  ${label} (${((Date.now() - t) / 1000).toFixed(1)} s)`);
     return v;
   };
-  console.log(`Sensitivity: reduced statistics, R = 1, ${SENS_SHOTS} shots per bank, no bootstrap, d = ${distances.join(', ')}`);
+  console.log(`Sensitivity: reduced statistics, R = 1, ${SENS_SHOTS} shots per bank, no bootstrap, d = ${distances.join(', ')}, ${headline} decoder, basis ${basis}`);
   const base = {
     [ION]: timed(`${ION} baseline`, () => reducedArm(ION, cards[ION], ctx)),
     [SC]: timed(`${SC} baseline`, () => reducedArm(SC, cards[SC], ctx)),
@@ -1138,8 +1247,11 @@ function stage4() {
   const result = {
     schema: 's2s-results/1',
     stage: 4,
+    basis,
+    decoder: headline,
     platforms,
     conclusions,
+    byDecoder,
     sensitivity,
     sensitivityBaseline: {
       note: 'scale 1 (card values) at the same reduced statistics as the sensitivity rows',
@@ -1158,15 +1270,17 @@ function stage4() {
         C4: 'per mode: |epsBar(ion) - epsBar(sc)| < sum of half-widths; undetermined if a platform has no crossing, or a flip rests on a clamped interval',
         combine: 'a verdict is "flips" if any part flips, "holds" if every part holds, otherwise "undetermined"',
       },
-      sensitivity: { scales: SENS_SCALES, readoutDrawsPerShot: 1, shotsPerBank: SENS_SHOTS, f1Samples: SENS_F1_SAMPLES, bootstrap: false, distances, parameters: SENS_PARAMS, cycleParameters: SENS_CYCLE_PARAMS },
+      sensitivity: { scales: SENS_SCALES, readoutDrawsPerShot: 1, shotsPerBank: SENS_SHOTS, f1Samples: SENS_F1_SAMPLES, bootstrap: false, distances, parameters: SENS_PARAMS, cycleParameters: SENS_CYCLE_PARAMS, decoder: headline },
+      decoders, basis,
+      learnedRates: ratesRecord(rates, r),
     },
     provenance: {
-      tool: 'tools/sweep.mjs --stage 4',
+      tool: `tools/sweep.mjs --stage 4 --decoder ${decoderArg(decoders)} --basis ${basis}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
       params: [CYCLE_PARAMS, ION_PARAMS, SC_PARAMS],
-      inputs: Object.fromEntries([ION, SC].map((p) => [p, { file: join(RESULTS_DIR, p === ION ? STAGE2_FILE : STAGE3_FILE), commit: results[p].provenance.commit, date: results[p].provenance.date, cardMatchesParams: cardsMatch[p] }])),
+      inputs: Object.fromEntries([ION, SC].map((p) => [p, { file: join(RESULTS_DIR, p === ION ? stage2File : stage3File), commit: results[p].provenance.commit, date: results[p].provenance.date, cardMatchesParams: cardsMatch[p] }])),
       banks: usedBanks,
       pGate: Object.fromEntries([...ctx.banks.values()].map((b) => [b.file, round(b.pGate)])),
       seedRule: `reduced decode seed = 4000000 + (superconducting ? 100000 : 0) + 10000*d + 1000*logical + tauIndex (same in every rerun; hard and soft share it); shot subsample seed ${SENS_SUBSAMPLE_SEED} + 10*d + logical; F1 seed ${SENS_F1_SEED}`,
@@ -1175,12 +1289,12 @@ function stage4() {
     },
   };
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, 'stage4_comparison.json');
+  const out = join(RESULTS_DIR, resultFile('stage4_comparison.json', basis));
   writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
 
   // Summary.
   const g = (v) => (v === null || v === undefined ? '—' : v === 0 ? '0' : Number(v).toExponential(3));
-  for (const p of [ION, SC]) if (!cardsMatch[p]) console.log(`WARNING: the card in ${p === ION ? STAGE2_FILE : STAGE3_FILE} differs from ${p === ION ? ION_PARAMS : SC_PARAMS}; the full tables use the stage file, the sensitivity uses params/`);
+  for (const p of [ION, SC]) if (!cardsMatch[p]) console.log(`WARNING: the card in ${p === ION ? stage2File : stage3File} differs from ${p === ION ? ION_PARAMS : SC_PARAMS}; the full tables use the stage file, the sensitivity uses params/`);
   for (const p of [ION, SC]) {
     const P = tables[p];
     const c = cycle[p];
@@ -1201,7 +1315,8 @@ function stage4() {
   }
   const show = (label, cs) => console.log(`${label}: C1 ${cs.C1.verdict}, C2 ${cs.C2.verdict}, C3 ${cs.C3.verdict}, C4 ${cs.C4.verdict}`);
   console.log('');
-  show('Conclusions, full statistics', conclusions);
+  for (const decoder of decoders.filter((x) => x !== headline)) show(`Conclusions, full statistics, ${decoder} decoder`, byDecoder[decoder].conclusions);
+  show(`Conclusions, full statistics, ${headline} decoder (headline)`, conclusions);
   for (const c of ['C1', 'C2', 'C3', 'C4']) {
     console.log(`  ${c}: ${Object.entries(conclusions[c].parts).map(([k, v]) => `${k} ${v.verdict}`).join('; ')}`);
   }
@@ -1212,22 +1327,286 @@ function stage4() {
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
 
-function diag() {
-  console.log(diagnostic(loadBank(DIAG_BANK)));
+// ---- Stage dem: learned detector error model of the Forte-1 banks, naive against learned ----
+
+const DEM_FILE = 'dem_forte1.json';
+const DEM_OOS_EPS = 0.02; // V12b: flat epsilon, hard mode
+const DEM_D = [3, 5, 7];
+const DEM_R = 3;
+const DEM_DRAWS = 2; // R readout draws per quantum shot in decoderComparison
+const DEM_MODES = ['hard', 'soft'];
+const DEM_ARMS = [
+  { arm: 'flat', xName: 'epsilon', xs: [1e-9, 0.02] },
+  { arm: ION, xName: 'tau_us', xs: [3, 20, 100] },
+  { arm: SC, xName: 'tau_us', xs: [0.5, 0.7, 1.0] },
+];
+// Seeds: decoderComparison 5000000 + 100000*armIndex + 10000*xIndex + 100*d + 10*logical + draw
+// (hard and soft, naive and learned share it); out of sample 5900000 + 100*d + 10*r + tested logical.
+const seedForDem = (a, x, d, logical, draw) => 5000000 + 100000 * a + 10000 * x + 100 * d + 10 * logical + draw;
+const seedForOos = (d, r, logical) => 5900000 + 100 * d + 10 * r + logical;
+
+// Pooled L0 + L1 logical error of one (readout, mode, noise) with `draws` readout draws per shot.
+function pooledPoint(pair, { readout, mode, noiseOf, seedOf, draws }) {
+  let k = 0;
+  let n = 0;
+  let nonExact = 0;
+  for (const logical of [0, 1]) {
+    const { file, bank } = pair[logical];
+    for (let draw = 0; draw < draws; draw++) {
+      const res = runPoint({ bank, readout, mode, noise: noiseOf(file), seed: seedOf(logical, draw) });
+      k += res.k;
+      n += res.n;
+      nonExact += res.nonExact;
+    }
+  }
+  const w = wilson(k, n);
+  return { k, n, pL: round(w.p), lo: round(w.lo), hi: round(w.hi), nonExact };
 }
 
-const args = process.argv.slice(2);
-if (args.includes('--diag')) {
-  diag();
-} else if (args[0] === '--stage' && args[1] === '1') {
-  stage1();
-} else if (args[0] === '--stage' && args[1] === '2') {
-  stage2();
-} else if (args[0] === '--stage' && args[1] === '3') {
-  stage3();
-} else if (args[0] === '--stage' && args[1] === '4') {
-  stage4();
-} else {
-  console.error('usage: node tools/sweep.mjs --stage 1 | --stage 2 | --stage 3 | --stage 4 | --diag');
+const roundArr = (a) => Array.from(a, (v) => round(v));
+const roundObj = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, round(v)]));
+
+function stageDem() {
+  const t0 = Date.now();
+  // Every basis whose banks exist; Z is required, X is optional until A48.
+  const groups = []; // { d, r, basis, pair: { 0: { file, bank }, 1: ... } }
+  const bases = [];
+  for (const basis of ['Z', 'X']) {
+    let banks;
+    try {
+      banks = loadRepBanks(basis);
+    } catch (e) {
+      if (basis === 'X' && e instanceof UsageError) continue;
+      throw e;
+    }
+    bases.push(basis);
+    const map = new Map();
+    for (const b of banks) {
+      const key = `${b.bank.d},${b.bank.r}`;
+      if (!map.has(key)) map.set(key, { d: b.bank.d, r: b.bank.r, basis, pair: {} });
+      map.get(key).pair[b.bank.logical] = b;
+    }
+    groups.push(...[...map.values()].sort((a, b) => a.d - b.d || a.r - b.r));
+  }
+  console.log(`Stage dem: bases ${bases.join(', ')}${bases.includes('X') ? '' : ' (no repx_*.json banks yet: X basis and the X/Z ratio (O4) skipped)'}`);
+
+  // Rates, firing and pair rates per (d, r, basis), L0 and L1 pooled; the naive pGate of
+  // the same pooled detectors for comparison.
+  const bankRows = [];
+  const det = new Map(); // file -> detector arrays
+  for (const g of groups) {
+    const parts = [0, 1].filter((l) => g.pair[l]).map((l) => g.pair[l]);
+    for (const { file, bank } of parts) det.set(file, detectorArraysOf(bank));
+    const pooled = parts.flatMap(({ file }) => det.get(file));
+    const est = estimateEdgeRates(pooled, g.d, g.r);
+    const cal = estimatePGate(pooled, g.d, g.r);
+    const nDet = (g.d - 1) * (g.r + 1);
+    const pij = [];
+    for (let i = 0; i < nDet; i++) pij.push(roundArr(est.pij.subarray(i * nDet, (i + 1) * nDet)));
+    g.classes = est.classes;
+    g.cal = cal;
+    bankRows.push({
+      d: g.d, r: g.r, basis: g.basis, files: parts.map((b) => b.file), nShots: est.nShots,
+      firing: roundArr(est.firing), pij, classes: roundObj(est.classes), counts: est.counts,
+      antiDiag: round(est.antiDiag), pGateNaive: round(cal.p),
+      bulkRate: round(cal.rate), bulkDetectors: cal.nDetectors,
+    });
+  }
+
+  // O4: X/Z ratio of the bulk detector firing rate per (d, r). Interval: delta method on
+  // ln ratio with binomial counts over detectors x shots (detectors in a shot are correlated,
+  // so the interval is too narrow; it is a guide, not a test).
+  const ratioXoverZ = [];
+  for (const gz of groups.filter((g) => g.basis === 'Z')) {
+    const gx = groups.find((g) => g.basis === 'X' && g.d === gz.d && g.r === gz.r);
+    if (!gx) continue;
+    const nz = gz.cal.nDetectors * gz.cal.nShots;
+    const nx = gx.cal.nDetectors * gx.cal.nShots;
+    const ratio = gx.cal.rate / gz.cal.rate;
+    const se = Math.sqrt((1 - gx.cal.rate) / (gx.cal.rate * nx) + (1 - gz.cal.rate) / (gz.cal.rate * nz));
+    ratioXoverZ.push({ d: gz.d, r: gz.r, ratio: round(ratio), lo: round(ratio * Math.exp(-1.96 * se)), hi: round(ratio * Math.exp(1.96 * se)), rateZ: round(gz.cal.rate), rateX: round(gx.cal.rate) });
+  }
+
+  // V12b out of sample: rates (learned) and pGate (naive) from one logical state's bank decode
+  // the other's, flat epsilon 0.02, hard mode, the same seed for both decoders.
+  const outOfSample = [];
+  const outOfSamplePooled = [];
+  let nonExact = 0;
+  const flatOos = createFlatReadout({ epsilon: DEM_OOS_EPS });
+  for (const g of groups.filter((x) => x.pair[0] && x.pair[1])) {
+    const sum = { naive: { k: 0, n: 0 }, learned: { k: 0, n: 0 } };
+    for (const [train, test] of [[0, 1], [1, 0]]) {
+      const trainDet = det.get(g.pair[train].file);
+      const noise = {
+        naive: { model: 'naive', pGate: estimatePGate(trainDet, g.d, g.r).p },
+        learned: { model: 'learned', rates: estimateEdgeRates(trainDet, g.d, g.r).classes },
+      };
+      const row = { d: g.d, r: g.r, basis: g.basis, trainedOn: `L${train}`, testedOn: `L${test}` };
+      for (const decoder of ['naive', 'learned']) {
+        const res = runPoint({ bank: g.pair[test].bank, readout: flatOos, mode: 'hard', noise: noise[decoder], seed: seedForOos(g.d, g.r, test) });
+        nonExact += res.nonExact;
+        row[decoder] = { k: res.k, n: res.n, pL: round(res.wilson.p), lo: round(res.wilson.lo), hi: round(res.wilson.hi) };
+        sum[decoder].k += res.k;
+        sum[decoder].n += res.n;
+      }
+      outOfSample.push(row);
+    }
+    const wn = wilson(sum.naive.k, sum.naive.n);
+    const wl = wilson(sum.learned.k, sum.learned.n);
+    outOfSamplePooled.push({
+      d: g.d, r: g.r, basis: g.basis,
+      naive: { ...sum.naive, pL: round(wn.p), lo: round(wn.lo), hi: round(wn.hi) },
+      learned: { ...sum.learned, pL: round(wl.p), lo: round(wl.lo), hi: round(wl.hi) },
+      learnedAtOrBelowNaive: sum.learned.k <= sum.naive.k,
+      learnedBelowBeyondIntervals: wl.hi < wn.lo,
+    });
+  }
+
+  // decoderComparison: naive (pGate per bank) against learned (rates of L0 + L1 pooled), hard
+  // and soft, every arm at its x values, d = 3, 5, 7, r = 3, R = 2 readout draws per shot.
+  const ionCard = JSON.parse(readFileSync(ION_PARAMS, 'utf8'));
+  const scCard = JSON.parse(readFileSync(SC_PARAMS, 'utf8'));
+  const makeReadout = (arm, x) => (arm === 'flat' ? createFlatReadout({ epsilon: x }) : arm === ION ? createIonReadout(ionCard, x) : createScReadout(scCard, x));
+  const decoderComparison = [];
+  const pGateOf = new Map();
+  for (const g of groups.filter((x) => x.r === DEM_R && DEM_D.includes(x.d) && x.pair[0] && x.pair[1])) {
+    for (const l of [0, 1]) pGateOf.set(g.pair[l].file, estimatePGate(det.get(g.pair[l].file), g.d, g.r).p);
+    const noiseOf = {
+      naive: (file) => ({ model: 'naive', pGate: pGateOf.get(file) }),
+      learned: () => ({ model: 'learned', rates: g.classes }),
+    };
+    DEM_ARMS.forEach(({ arm, xs }, a) => {
+      xs.forEach((x, xi) => {
+        const readout = makeReadout(arm, x);
+        for (const mode of DEM_MODES) {
+          const row = { arm, x, d: g.d, r: g.r, basis: g.basis, mode };
+          for (const decoder of ['naive', 'learned']) {
+            const p = pooledPoint(g.pair, { readout, mode, noiseOf: noiseOf[decoder], seedOf: (logical, draw) => seedForDem(a, xi, g.d, logical, draw), draws: DEM_DRAWS });
+            nonExact += p.nonExact;
+            delete p.nonExact;
+            row[decoder] = p;
+          }
+          decoderComparison.push(row);
+        }
+      });
+    });
+  }
+
+  const runtimeS = (Date.now() - t0) / 1000;
+  const result = {
+    schema: 's2s-results/1',
+    stage: 'dem',
+    banks: bankRows,
+    ratioXoverZ,
+    outOfSample,
+    outOfSamplePooled,
+    decoderComparison,
+    params: {
+      bases,
+      method: 'estimateEdgeRates (dem.js, DECISIONS E3); classes clamped to [1e-5, 0.5)',
+      outOfSample: { readout: 'flat', epsilon: DEM_OOS_EPS, mode: 'hard', naive: 'estimatePGate of the training bank', learned: 'estimateEdgeRates of the training bank' },
+      decoderComparison: {
+        arms: DEM_ARMS.map(({ arm, xName, xs }) => ({ arm, xName, xs })), distances: DEM_D, r: DEM_R, modes: DEM_MODES, readoutDrawsPerShot: DEM_DRAWS,
+        logical_states: 'pooled (L0 + L1)', naive: 'estimatePGate per bank, readout off', learned: 'ratesFromBanks(L0, L1) per (d, r, basis)',
+        cards: { [ION]: ionCard, [SC]: scCard },
+      },
+      ratioXoverZ: 'bulk detector firing rate (estimatePGate rate) X over Z; delta-method interval on ln ratio, detectors treated as independent',
+      intervals: 'Wilson 95%',
+    },
+    provenance: {
+      tool: 'tools/sweep.mjs --stage dem',
+      commit: gitCommit(),
+      date: new Date().toISOString(),
+      node: process.version,
+      params: [ION_PARAMS, SC_PARAMS],
+      banks: groups.flatMap((g) => [0, 1].filter((l) => g.pair[l]).map((l) => g.pair[l].file)),
+      bankJobIds: Object.fromEntries(groups.flatMap((g) => [0, 1].filter((l) => g.pair[l]).map((l) => [g.pair[l].file, g.pair[l].bank.job_id ?? 'unknown']))),
+      seedRule: 'decoderComparison seed = 5000000 + 100000*armIndex + 10000*xIndex + 100*d + 10*logical + draw (hard and soft, naive and learned share it); outOfSample seed = 5900000 + 100*d + 10*r + testedLogical (both decoders share it)',
+      nonExact,
+      runtime_s: runtimeS,
+    },
+  };
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  const out = join(RESULTS_DIR, DEM_FILE);
+  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+
+  const g4 = (v) => v.toFixed(4);
+  console.log('\nLearned edge classes (L0 + L1 pooled): space / spaceBoundary / time / diag (antiDiag), naive pGate');
+  for (const b of bankRows) {
+    const c = b.classes;
+    console.log(`  ${b.basis} d = ${b.d} r = ${b.r}: ${g4(c.space)} / ${g4(c.spaceBoundary)} / ${g4(c.time)} / ${g4(c.diag)} (${g4(b.antiDiag)}), pGate ${g4(b.pGateNaive)}, n = ${b.nShots}`);
+  }
+  if (ratioXoverZ.length) {
+    console.log('\nO4: X/Z bulk detector-rate ratio');
+    for (const r of ratioXoverZ) console.log(`  d = ${r.d} r = ${r.r}: ${r.ratio.toFixed(3)} [${r.lo.toFixed(3)}, ${r.hi.toFixed(3)}]`);
+  }
+  const w3 = (o) => `${fmt(o.pL)} [${fmt(o.lo)}, ${fmt(o.hi)}]`;
+  console.log(`\nV12b: out of sample, flat epsilon ${DEM_OOS_EPS}, hard (Wilson 95%)`);
+  for (const o of outOfSample) console.log(`  ${o.basis} d = ${o.d} r = ${o.r} ${o.trainedOn} -> ${o.testedOn}: naive ${w3(o.naive)}  learned ${w3(o.learned)}`);
+  console.log('  pooled over both directions:');
+  for (const o of outOfSamplePooled) {
+    const verdict = o.learnedBelowBeyondIntervals ? 'learned below naive beyond the intervals' : o.learnedAtOrBelowNaive ? 'learned <= naive' : 'learned ABOVE naive';
+    console.log(`  ${o.basis} d = ${o.d} r = ${o.r}: naive ${w3(o.naive)} (k ${o.naive.k})  learned ${w3(o.learned)} (k ${o.learned.k})  ${verdict}`);
+  }
+  console.log(`\nDecoder comparison, r = ${DEM_R}, L0 + L1 pooled, R = ${DEM_DRAWS} (naive -> learned)`);
+  for (const c of decoderComparison) {
+    const beyond = c.learned.hi < c.naive.lo ? '  learned lower beyond intervals' : c.learned.lo > c.naive.hi ? '  learned HIGHER beyond intervals' : '';
+    console.log(`  ${c.basis} ${c.arm.padEnd(15)} x ${String(c.x).padEnd(5)} d = ${c.d} ${c.mode.padEnd(4)}: ${w3(c.naive)} -> ${w3(c.learned)}${beyond}`);
+  }
+  console.log(`\nnon-exact matchings: ${nonExact}`);
+  console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
+}
+
+const USAGE = 'usage: node tools/sweep.mjs --stage 1 | 2 | 3 | 4 [--decoder naive | learned | both] [--basis Z | X]\n'
+  + '       node tools/sweep.mjs --stage dem\n'
+  + '       node tools/sweep.mjs --diag [--decoder naive | learned | both]';
+
+function parseArgs(argv) {
+  const opts = { stage: null, diag: false, decoder: null, basis: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--diag') opts.diag = true;
+    else if (a === '--stage' || a === '--decoder' || a === '--basis') {
+      if (i + 1 >= argv.length) throw new UsageError(`${a} needs a value`);
+      opts[a.slice(2)] = argv[++i];
+    } else throw new UsageError(`unknown argument ${a}`);
+  }
+  if (opts.decoder !== null && !['naive', 'learned', 'both'].includes(opts.decoder)) throw new UsageError(`--decoder must be naive, learned or both, got ${opts.decoder}`);
+  if (opts.basis !== null && !['Z', 'X'].includes(opts.basis)) throw new UsageError(`--basis must be Z or X, got ${opts.basis}`);
+  if (opts.diag === (opts.stage !== null)) throw new UsageError('give exactly one of --stage or --diag');
+  if (opts.stage !== null && !['1', '2', '3', '4', 'dem'].includes(opts.stage)) throw new UsageError(`unknown stage ${opts.stage}`);
+  if (opts.diag && opts.basis !== null) throw new UsageError(`--diag reads ${DIAG_BANK} (Z basis) only; drop --basis`);
+  if (opts.stage === 'dem' && (opts.decoder !== null || opts.basis !== null)) throw new UsageError('--stage dem always runs both decoders on every available basis; drop --decoder and --basis');
+  return opts;
+}
+
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  if (opts.diag) {
+    // --diag alone prints V9 exactly as before; --decoder learned prints V9L.
+    const bank = loadBank(DIAG_BANK);
+    const decoder = opts.decoder ?? 'naive';
+    if (decoder === 'both') {
+      console.log(`V9  ${diagnostic(bank)}`);
+      console.log(`V9L ${diagnostic(bank, { decoder: 'learned' })}`);
+    } else {
+      console.log(diagnostic(bank, { decoder }));
+    }
+    return;
+  }
+  if (opts.stage === 'dem') {
+    stageDem();
+    return;
+  }
+  const decoders = (opts.decoder ?? 'both') === 'both' ? ['naive', 'learned'] : [opts.decoder];
+  const run = { 1: stage1, 2: stage2, 3: stage3, 4: stage4 }[opts.stage];
+  run({ decoders, basis: opts.basis ?? 'Z' });
+}
+
+try {
+  main();
+} catch (e) {
+  if (!(e instanceof UsageError)) throw e;
+  console.error(`sweep.mjs: ${e.message}\n${USAGE}`);
   process.exit(1);
 }

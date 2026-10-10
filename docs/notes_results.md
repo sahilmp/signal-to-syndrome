@@ -299,3 +299,42 @@ Cycle times at τ*_log: ion 2002–2490 µs, SC 0.92–1.13 µs. Hand check of d
 | C5 (new) | The learned detector error model lowers the logical error against the naive one at every (d, arm, mode) at τ*_log, out of sample | Stage dem, Stage 4 | Learned above naive beyond the intervals at any point |
 | C6 (new) | In the phase-flip memory the superconducting τ*_log is shorter than in the bit-flip memory when T2 < T1 | Stage 3 in both bases | τ*_log(X) ≥ τ*_log(Z) beyond the intervals |
 | O4 (measurement, no hypothesis) | Ratio of bulk detector rates, X-basis to Z-basis banks, per (d, r): how biased forte-1 noise looks to the decoder | Stage dem | — |
+
+## v2 results: Stage dem and Stages 1–2 with both decoders (A44/A45, Sat 10 Oct)
+
+Sources: `data/results/dem_forte1.json`, `stage1_flat.json`, `stage2_ion.json` and the console output of `node tools/sweep.mjs --stage dem`, `--stage 1`, `--stage 2` (CC-A12, Sat 10 Oct 2026). Z basis only: the X-basis banks arrive at A48. Naive = one calibrated pGate per bank on space and time edges (as in v1). Learned = per-class rates (space, spaceBoundary, time, diag) from `ratesFromBanks` of the L0 and L1 banks of the same (d, r), on a graph with diagonal edges. Both decoders see the same readout draws (same seeds). The naive numbers are identical to the v1 files above, so every v1 statement about the naive decoder still stands. Results for C1–C6 are interim until Stages 3 and 4 are rerun (A48, A50).
+
+### Learned rates (`dem_forte1.json` → `banks`)
+
+Space / spaceBoundary / time / diag (antiDiag), L0 + L1 pooled, against the naive pGate of the same detectors: d3 r3 0.0082 / 0.0066 / 0.0100 / 0.0099 (0.0003), pGate 0.0124; d5 r3 0.0073 / 0.0083 / 0.0096 / 0.0091 (0.0001), pGate 0.0131; d5 r5 0.0081 / 0.0073 / 0.0096 / 0.0096 (0.0003), pGate 0.0130; d7 r3 0.0073 / 0.0072 / 0.0091 / 0.0097 (0.0002), pGate 0.0135; d3 r1 0.0045 / 0.0038 / 0.0074 / 0.0084 (0.0000), pGate 0.0067. Every class rate is below the naive pGate: the naive model has no diagonal edges, so it explains the diagonal correlations with extra space and time weight.
+
+### V12b: out of sample (`outOfSample`, `outOfSamplePooled`)
+
+Train on one logical state's bank, decode the other's; flat ε = 0.02, hard, pooled over both directions (n = 8000). Naive → learned: d3 r3 0.00700 [0.00539, 0.00908] → 0.00625 [0.00474, 0.00823]; d5 r3 0.00162 [0.00095, 0.00278] → 0.00088 [0.00042, 0.00181]; d5 r5 0.00250 [0.00162, 0.00386] → 0.00112 [0.00059, 0.00214]; d7 r3 0.00025 → 0.00013; d3 r1 0.00250 → 0.00250. **Learned ≤ naive at every (d, r); not beyond the intervals at d = 5** (k = 13 → 7 and 20 → 9 are too few errors). V12b is therefore a partial fail (DECISIONS E4).
+
+### Decoder comparison (`decoderComparison`, in sample, R = 2, n = 16 000 per point)
+
+48 points (flat ε 1e-9 and 0.02; ion τ 3, 20, 100 µs; superconducting τ 0.5, 0.7, 1.0 µs; d = 3, 5, 7; hard and soft). Learned is never above naive beyond the intervals, and below it beyond the intervals at 16 of 48 points. The largest gains are on the superconducting arm (d = 3, τ = 0.7 µs, hard: 0.0231 [0.0209, 0.0256] → 0.0063 [0.0051, 0.0076]) and for ion soft decoding at τ ≥ 20 µs (d = 3, τ = 20 µs: 0.0069 → 0.0036). The learned point estimate is above naive at 4 points, all within the intervals (ion τ = 20 and 100 µs d = 3 hard; ion τ = 3 µs d = 5 and 7 soft). This is in-sample evidence for C5; the pre-registered test is at τ*_log, out of sample, in Stage 4.
+
+### Stage 1 rerun (`stage1_flat.json`)
+
+pL against ε = 0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12 (hard, r = 3, n = 8000):
+
+| d | decoder | pL |
+|---|---|---|
+| 3 | naive | 0.0289, 0.0045, 0.0049, 0.0069, 0.0116, 0.0190, 0.0376, 0.0618 |
+| 3 | learned | 0.0033, 0.0039, 0.0045, 0.0056, 0.0090, 0.0166, 0.0353, 0.0598 |
+| 5 | naive | 0.0035, 0.0013, 0.0015, 0.0021, 0.0020, 0.0059, 0.0124, 0.0270 |
+| 5 | learned | 0.0004, 0.0003, 0.0004, 0.0013, 0.0018, 0.0043, 0.0110, 0.0253 |
+| 7 | naive | 0.0005, 0.0001, 0.0004, 0.0001, 0.0004, 0.0011, 0.0040, 0.0108 |
+| 7 | learned | 0.0000, 0.0003, 0.0003, 0.0001, 0.0004, 0.0009, 0.0038, 0.0110 |
+
+- **V11 PASS** at d = 3, 5, 7: the learned decoder gives the same k at ε = 0 and 1e-9 (26, 3, 0 of 8000); naive gives 231 against 28 at d = 3.
+- **The ε = 0 spike is gone** with the learned decoder: the learned d = 3 curve rises monotonically from ε = 0. The naive spike was a tie-break artefact of equal edge weights; the learned weights are not all equal.
+- V1 PASS and V6 (L0 against L1) as before; the one V6 "DIFFER" is learned d = 5 at ε = 0.03 (L0 13, L1 1 of 4000 errors), one of 48 comparisons (24 per decoder), with no pattern across ε.
+
+### Stage 2 rerun (`stage2_ion.json`)
+
+- **C2 on the ion arm, learned decoder: no point with soft above hard beyond the intervals** (0 of 39; soft at or below hard at 29 of 39 points). Naive: 11 of 39, as in v1. At d = 3, τ = 20 µs: learned soft 0.00356 [0.00297, 0.00428], hard 0.00350 [0.00291, 0.00421]; naive soft 0.00716, hard 0.00347. The v1 C2 loss ("Diagnosis: intrinsic asymmetry plus a gate-model mismatch") came from the gate-model mismatch: with the learned model it disappears. Soft still gains most at short τ (d = 3, τ = 1 µs: hard 0.352, soft 0.147).
+- τ*_log, learned (bootstrap B = 200): d = 3 hard 21.8 µs [20.0, 60.1], soft 31.6 µs [11.9, 500]; d = 5 hard 248 µs [11.0, 500], soft 269 µs [9.9, 500]. Above about 10 µs the learned curves are flat within their intervals, so these minima are not resolved. d = 7 learned has 0 to 2 errors out of 32 000 at every τ from 15 to 200 µs (the minimum is a 100% tie): not resolved.
+- Non-exact matchings: 0 in every run.

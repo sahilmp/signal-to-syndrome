@@ -301,3 +301,165 @@ test('soft beats hard on model-matched synthetic data (ion, tau = 5), paired, > 
   const se = Math.sqrt(b + c - (b - c) ** 2 / n);
   assert.ok(hard - soft > 4 * se, `hard ${hard}, soft ${soft}, paired SE ${se.toFixed(1)}`);
 });
+
+// ---- CC-A12: naive and learned noise models ----
+
+// Pinned output of the pre-CC-A12 decodeShot (pGate only, no noise argument), computed with
+// that version on this shot: d = 5, r = 3, ion card at tau = 7 us, pGate 0.012, seed 4242,
+// bits m[0][1], m[1][1], m[1][3], x[0], x[4] set. Hard and soft choose different matchings.
+const PIN_PRE_A12 = {
+  detectors: [0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1],
+  hardData: [1, 0, 0, 0, 1],
+  llrData: [9.622314262672328, -3.2874774190785274, -3.2874774190785274, -3.2874774190785274, 10.290388751668962],
+  hard: [{ a: 1, b: 9, edges: [21, 25] }, { a: 7, b: 11, edges: [27] }, { a: 12, b: 'B', edges: [15] }, { a: 15, b: 'B', edges: [19] }],
+  soft: [{ a: 1, b: 9, edges: [21, 25] }, { a: 7, b: 'B', edges: [9] }, { a: 11, b: 15, edges: [31] }, { a: 12, b: 'B', edges: [15] }],
+};
+
+// Catches: fails if the naive model changed with CC-A12 (graph gains diagonal edges, weights
+// differ, the idle or readout draw order moves, or basis "Z" changes the idle probability),
+// for either calling form: pGate alone (every pre-CC-A12 caller) and noise { model: "naive" }.
+test('naive decodeShot reproduces the pre-CC-A12 result on a fixed shot, both call forms', () => {
+  const d = 5;
+  const r = 3;
+  const layout = layoutFor(d, r);
+  const shotBits = new Uint8Array((d - 1) * r + d);
+  for (const [k, j] of [[0, 1], [1, 1], [1, 3]]) shotBits[layout.ancilla[k][j]] = 1;
+  shotBits[layout.data[0]] = 1;
+  shotBits[layout.data[4]] = 1;
+  const readout = createIonReadout(ionCard, 7);
+  for (const mode of ['hard', 'soft']) {
+    const forms = [
+      { pGate: 0.012 },
+      { noise: { model: 'naive', pGate: 0.012 } },
+      { noise: { model: 'naive', pGate: 0.012 }, basis: 'Z' },
+    ];
+    for (const form of forms) {
+      const res = decodeShot({ shotBits, layout, d, r, readout, mode, rng: createRng(4242), logical: 0, ...form });
+      const label = `${mode} ${JSON.stringify(form)}`;
+      assert.deepEqual(Array.from(res.detectors), PIN_PRE_A12.detectors, label);
+      assert.deepEqual(Array.from(res.hardData), PIN_PRE_A12.hardData, label);
+      res.llrData.forEach((l, i) => assert.ok(Math.abs(l - PIN_PRE_A12.llrData[i]) < 1e-9, `${label} llr ${i}`));
+      assert.deepEqual(res.paths, PIN_PRE_A12[mode], label);
+      assert.equal(res.flip, 1, label);
+      assert.equal(res.nDefects, 6, label);
+      assert.equal(res.logicalError, 0, label);
+    }
+  }
+});
+
+// Catches: fails if the V9 fingerprint moved (DECISIONS, Person A: 53933f98 for
+// rep_d3_r3_L0), i.e. if diagnostic(bank) without options no longer runs the naive model with
+// the same calibration, readout, seed and shots, or if { decoder: "naive" } differs from it.
+test('diagnostic(rep_d3_r3_L0) still returns the recorded V9 hash', () => {
+  const bank = JSON.parse(readFileSync(new URL('../data/banks/rep_d3_r3_L0.json', import.meta.url), 'utf8'));
+  validateBank(bank);
+  assert.equal(diagnostic(bank), '53933f98');
+  assert.equal(diagnostic(bank, { decoder: 'naive' }), '53933f98');
+  assert.match(diagnostic(bank, { decoder: 'learned' }), /^[0-9a-f]{8}$/);
+  assert.throws(() => diagnostic(bank, { decoder: 'other' }), /decoder/);
+});
+
+// Distinct learned rates, so any class mix-up changes some weight.
+const RATES = { space: 0.011, spaceBoundary: 0.007, time: 0.013, diag: 0.017 };
+
+// Catches: fails if a learned edge takes the wrong class rate (spaceBoundary not used for data
+// qubits 0 and d-1, or used for the bulk), if layer 0 gains the idle term or layers 1..r-1
+// lose it, if the final layer or a time edge loses its readout term, if a diagonal edge gains
+// an idle or readout term, or if the learned graph has no diagonal edges. Pins one edge of
+// each class by id and restates the rule for every edge, hard and soft.
+test('learned weight table: one edge of each class (including diag) pinned to its expected p', () => {
+  const d = 5;
+  const r = 3;
+  const pIdle = 0.003;
+  const pAvg = 0.02;
+  const graph = buildGraph(d, r, { diagonal: true });
+  const llrAnc = Array.from({ length: r }, (_, k) => Float64Array.from({ length: d - 1 }, (_, j) => 1 + 0.5 * (k * (d - 1) + j)));
+  const llrData = Float64Array.from({ length: d }, (_, i) => 1 + 0.5 * (r * (d - 1) + i));
+  const readout = stubReadout({ pIdle, pAvg });
+  const find = (pred) => graph.edges.find(pred);
+  for (const mode of ['hard', 'soft']) {
+    const weights = edgeWeights(graph, { mode, rates: RATES, pIdle, readout, llrAnc, llrData });
+    const pRead = (mag) => (mode === 'soft' ? pOfMag(mag) : pAvg);
+    const pinned = [
+      [find((e) => e.kind === 'space' && e.layer === 0 && e.dataQubit === 2), RATES.space],
+      [find((e) => e.kind === 'space' && e.layer === 0 && e.dataQubit === 0), RATES.spaceBoundary],
+      [find((e) => e.kind === 'space' && e.layer === 1 && e.dataQubit === d - 1), xor(RATES.spaceBoundary, pIdle)],
+      [find((e) => e.kind === 'space' && e.layer === 2 && e.dataQubit === 3), xor(RATES.space, pIdle)],
+      [find((e) => e.kind === 'space' && e.layer === r && e.dataQubit === 1), xor(RATES.space, pRead(1 + 0.5 * (r * (d - 1) + 1)))],
+      [find((e) => e.kind === 'time' && e.round === 1 && e.check === 2), xor(RATES.time, pRead(1 + 0.5 * (1 * (d - 1) + 2)))],
+      [find((e) => e.kind === 'diag' && e.round === 2 && e.dataQubit === 3), RATES.diag],
+    ];
+    for (const [e, p] of pinned) {
+      assert.ok(e, 'edge exists');
+      assert.ok(Math.abs(weights[e.id] - w(p)) < 1e-12, `${mode} ${e.kind} edge ${e.id}: ${weights[e.id]} vs ${w(p)}`);
+    }
+    assert.equal(graph.edges.filter((e) => e.kind === 'diag').length, r * (d - 2));
+    for (const e of graph.edges) {
+      let p;
+      if (e.kind === 'diag') p = RATES.diag;
+      else if (e.kind === 'time') p = xor(RATES.time, pRead(1 + 0.5 * (e.round * (d - 1) + e.check)));
+      else {
+        const base = e.dataQubit === 0 || e.dataQubit === d - 1 ? RATES.spaceBoundary : RATES.space;
+        if (e.layer === 0) p = base;
+        else if (e.layer < r) p = xor(base, pIdle);
+        else p = xor(base, pRead(1 + 0.5 * (r * (d - 1) + e.dataQubit)));
+      }
+      assert.ok(Math.abs(weights[e.id] - w(p)) < 1e-12, `${mode} edge ${e.id} (${e.kind})`);
+    }
+  }
+  // A diagonal edge without learned rates is an error, not a silent pGate edge.
+  assert.throws(() => edgeWeights(graph, { mode: 'hard', pGate: 0.01, pIdle, readout, llrAnc, llrData }), /diagonal/);
+});
+
+// Catches: fails if decodeShot ignores noise { model: "learned" } (naive graph, no diagonal
+// edges), if diagonal edges are marked observable, or if their weight is not w(rates.diag).
+// A fault on data qubit 2 between its CNOTs into checks 1 and 2 in round 1 (d = 5, r = 3)
+// sets m[1][2], m[2][2], m[2][1] and x[2], which lights exactly detectors (1, 2) and (2, 1):
+// one diagonal edge. Learned: one path over that edge, flip 0, cost w(diag). Non-vacuous: the
+// naive graph has no such edge and needs two edges for the same pair.
+test('one fired diagonal edge decodes through that edge with the learned graph, flip 0, cost w(diag)', () => {
+  const d = 5;
+  const r = 3;
+  const layout = layoutFor(d, r);
+  const shotBits = new Uint8Array((d - 1) * r + d);
+  shotBits[layout.ancilla[1][2]] = 1;
+  shotBits[layout.ancilla[2][2]] = 1;
+  shotBits[layout.ancilla[2][1]] = 1;
+  shotBits[layout.data[2]] = 1;
+  const readout = createFlatReadout({ epsilon: 0 });
+  const idx = (k, j) => k * (d - 1) + j;
+
+  const res = decodeShot({ shotBits, layout, d, r, readout, mode: 'hard', noise: { model: 'learned', rates: RATES }, rng: createRng(9), logical: 0 });
+  const lit = Array.from(res.detectors).flatMap((v, i) => (v ? [i] : []));
+  assert.deepEqual(lit, [idx(1, 2), idx(2, 1)]);
+  assert.equal(res.flip, 0);
+  assert.equal(res.logicalError, 0);
+  assert.equal(res.paths.length, 1);
+  assert.equal(res.paths[0].edges.length, 1);
+  const graph = buildGraph(d, r, { diagonal: true });
+  const edge = graph.edges[res.paths[0].edges[0]];
+  assert.equal(edge.kind, 'diag');
+  assert.equal(edge.observable, false);
+  const weights = edgeWeights(graph, { mode: 'hard', rates: RATES, pIdle: 0, readout, llrAnc: res.llrAnc, llrData: res.llrData });
+  const { cost } = decode(graph, weights, res.detectors);
+  assert.ok(Math.abs(cost - w(RATES.diag)) < 1e-12, `cost ${cost} vs w(diag) ${w(RATES.diag)}`);
+
+  const naive = decodeShot({ shotBits, layout, d, r, readout, mode: 'hard', noise: { model: 'naive', pGate: 0.01 }, rng: createRng(9), logical: 0 });
+  assert.equal(naive.paths.length, 1);
+  assert.equal(naive.paths[0].edges.length, 2);
+});
+
+// Catches: fails if runPoint drops bank.basis instead of passing it to the readout's
+// idleFlipProbability, or if a malformed noise object is accepted silently.
+test('runPoint passes bank.basis to idleFlipProbability; malformed noise throws', () => {
+  const bank = cleanBank(3, 3, 0, 50);
+  const seen = [];
+  const readout = { ...stubReadout(), idleFlipProbability: (b) => { seen.push(b); return 0; } };
+  runPoint({ bank, readout, mode: 'hard', noise: { model: 'learned', rates: RATES }, seed: 1 });
+  assert.ok(seen.length > 0 && seen.every((b) => b === 'Z'));
+  seen.length = 0;
+  runPoint({ bank: { ...bank, basis: 'X' }, readout, mode: 'hard', pGate: 0.01, seed: 1 });
+  assert.ok(seen.length > 0 && seen.every((b) => b === 'X'));
+  assert.throws(() => runPoint({ bank, readout, mode: 'hard', noise: { model: 'learned', rates: { ...RATES, diag: undefined } }, seed: 1 }), /rates\.diag/);
+  assert.throws(() => runPoint({ bank, readout, mode: 'hard', noise: { model: 'other' }, seed: 1 }), /noise\.model/);
+});
