@@ -27,6 +27,10 @@ export function validateBank(obj) {
   if (obj.code !== 'repetition') fail(`code is "${obj.code}", expected "repetition"`);
   if (obj.bit_order !== 'qiskit-little-endian') fail(`bit_order is "${obj.bit_order}", expected "qiskit-little-endian"`);
   if (obj.key_encoding !== 'hex') fail(`key_encoding is "${obj.key_encoding}", expected "hex"`);
+  // Optional memory basis (CLAUDE.md conventions): "Z" (bit-flip) or "X" (phase-flip); absent means "Z".
+  if ('basis' in obj && obj.basis !== 'Z' && obj.basis !== 'X') {
+    fail(`basis is ${JSON.stringify(obj.basis)}, expected "Z" or "X" (absent means "Z")`);
+  }
 
   const { d, r, n_clbits: nClbits, shots } = obj;
   if (!Number.isInteger(d) || d < 2) fail(`d must be an integer >= 2, got ${d}`);

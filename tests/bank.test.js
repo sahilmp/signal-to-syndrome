@@ -83,6 +83,20 @@ test('validateBank accepts extra "inject" and "fixture" fields', () => {
   assert.equal(validateBank(makeBank({ fixture: true })), true);
 });
 
+// Catches: fails if the optional "basis" field is not checked: "X" (phase-flip bank) and an
+// absent basis (meaning "Z") must pass, while any other value such as "Y" (or lowercase "x")
+// must be rejected rather than silently decoded as one of the two memories.
+test('validateBank: basis "X" and "Z" accepted, absent accepted, "Y" rejected', () => {
+  assert.equal(validateBank(makeBank({ basis: 'X' })), true);
+  assert.equal(validateBank(makeBank({ basis: 'Z' })), true);
+  const absent = makeBank();
+  assert.equal('basis' in absent, false);
+  assert.equal(validateBank(absent), true);
+  assert.throws(() => validateBank(makeBank({ basis: 'Y' })), /basis is "Y", expected "Z" or "X"/);
+  assert.throws(() => validateBank(makeBank({ basis: 'x' })), /basis is "x"/);
+  assert.throws(() => validateBank(makeBank({ basis: null })), /basis is null/);
+});
+
 // Catches: fails if checksum totals are not compared with the counts.
 test('validateBank rejects a wrong total', () => {
   const bad = makeBank({ checksum: { total_shots: 11, n_keys: 3 } });

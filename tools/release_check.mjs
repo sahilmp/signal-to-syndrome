@@ -21,10 +21,29 @@ const NEEDS = {
   superconducting: ['createScReadout', 'findMinimum', 'stage3', 'paramsSc'],
   level5: ['findMinimum', 'stage2', 'stage3', 'stage4', 'paramsIon', 'paramsSc', 'paramsCycle'],
   liveRun: [],
+  // v2 flags (team checklist Appendix U3 rows 13-28, U7). buildGraph and decode are Person B's
+  // own modules, imported from src/core directly, so they need no bridge line.
+  hero: ['findMinimum', 'stage2v2', 'stage3v2'],
+  uxV2: ['stage1v2', 'stage2v2', 'stage3v2', 'demForte1'],
+  learnNoise: ['demForte1'],
+  phaseFlip: ['stage1x', 'stage2x', 'stage3x'],
+  crosstalk: ['stage2v2', 'paramsIonV2'],
+  level5v2: ['findMinimum', 'stage2v2', 'stage3v2', 'stage4v2', 'paramsIonV2', 'paramsScV2', 'paramsCycleV2'],
+  sandbox: ['demForte1'],
+  tour: ['stage2v2', 'stage3v2', 'demForte1', 'stage4v2'],
+  curated: ['curatedShots'],
 };
+// Visible text (team checklist U7.3): forbidden in the built index.html and in every string
+// literal of src/ui rendered as text, except inside the Diagnostics panel (src/ui/diag.js and
+// the <details class="diagnostics"> block). Enforced (FAIL) once the text cut is on (uxV2);
+// before that each hit is reported as WARN so the check stays green with every v2 flag off.
+const FORBIDDEN_TEXT = ['belief model', 'bank shot', 'layer r', 'CC-', 'Person A', 'Person B', 'stub', 'fixture'];
+// Not rendered: stubs, bridges and flags are code; diag.js is the Diagnostics panel.
+const TEXT_SKIP = new Set(['features.js', 'bridge_core.js', 'bridge_data.js', 'diag.js']);
 
 const rows = [];
-const row = (rule, ok, detail = '') => rows.push({ rule, ok, detail });
+// warn: reported but not failing (only the visible-text rows while uxV2 is off).
+const row = (rule, ok, detail = '', warn = false) => rows.push({ rule, ok, detail, warn });
 const read = (f) => (existsSync(f) ? readFileSync(f, 'utf8') : null);
 
 // 1. The three Qollab files exist; size limit.
@@ -111,6 +130,8 @@ for (const b of ['bridge_core.js', 'bridge_data.js']) {
   for (const [name, path] of bridgeSources(p('src', 'ui', b))) sources.set(name, { bridge: b, path });
 }
 const { FEATURES } = await import(pathToFileURL(p('src', 'ui', 'features.js')).href);
+const unlisted = Object.keys(FEATURES).filter((f) => !(f in NEEDS));
+row('every feature flag lists its bridge needs', unlisted.length === 0, unlisted.length ? `no needs for ${unlisted.join(', ')}` : `${Object.keys(FEATURES).length} flags`);
 for (const [feature, on] of Object.entries(FEATURES)) {
   if (on !== true) continue;
   const needs = NEEDS[feature];
@@ -144,13 +165,160 @@ if (mainJs === null) {
   row(`liveRun off: main.js does not import '${LIVE_MODULE}'`, !mainJs.includes(`from '${LIVE_MODULE}'`) && !mainJs.includes('s2sLive from'));
 }
 
+// 8. Visible text (U7.3). String literals come from a small JavaScript scanner: comments are
+// skipped, template literals contribute their fixed text (with nested literals from ${...}
+// scanned too), and import/export specifiers are left out. A literal counts as rendered text
+// when it reads as prose: it has whitespace or a non-ASCII character, or starts with a capital
+// followed by a lower-case letter. Identifiers, keys, selectors and paths ("fixture",
+// "stub0000", "./stubs/x.js") do not, and are not checked.
+const REGEX_BEFORE = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'new', 'delete', 'void', 'throw', 'yield', 'await', 'instanceof']);
+function stringLiterals(src) {
+  const out = [];
+  let i = 0;
+  let line = 1;
+  let prev = ''; // last significant token: an identifier/keyword, a punctuator, or 'lit'
+  let prevPrev = '';
+  const stack = []; // brace depth of each open template ${ ... }
+  const push = (t) => { prevPrev = prev; prev = t; };
+  const isSpecifier = () => prev === 'from' || (prev === 'import' && prevPrev !== '.') || (prev === '(' && prevPrev === 'import');
+  const readQuoted = (q) => {
+    const start = line;
+    let text = '';
+    i++;
+    while (i < src.length && src[i] !== q) {
+      if (src[i] === '\\') { text += src[i + 1] ?? ''; i += 2; continue; }
+      if (src[i] === '\n') line++;
+      text += src[i++];
+    }
+    i++;
+    return { line: start, text };
+  };
+  // Reads template text from i (just after ` or }) up to ` or ${; returns true at ${.
+  const readTemplateChunk = (lit) => {
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '\\') { lit.text += src[i + 1] ?? ''; i += 2; continue; }
+      if (c === '`') { i++; return false; }
+      if (c === '$' && src[i + 1] === '{') { i += 2; lit.text += ' '; return true; }
+      if (c === '\n') line++;
+      lit.text += c;
+      i++;
+    }
+    return false;
+  };
+  const templates = []; // open template literals, innermost last
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === '\n') { line++; i++; continue; }
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && n === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      for (let k = i; k < stop; k++) if (src[k] === '\n') line++;
+      i = stop;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      const spec = isSpecifier();
+      const lit = readQuoted(c);
+      if (!spec) out.push(lit);
+      push('lit');
+      continue;
+    }
+    if (c === '`') {
+      i++;
+      const lit = { line, text: '' };
+      templates.push(lit);
+      if (readTemplateChunk(lit)) { stack.push(0); push('${'); } else { out.push(templates.pop()); push('lit'); }
+      continue;
+    }
+    if (c === '{') { if (stack.length) stack[stack.length - 1]++; i++; push('{'); continue; }
+    if (c === '}') {
+      if (stack.length && stack[stack.length - 1] === 0) {
+        stack.pop();
+        i++;
+        const lit = templates[templates.length - 1];
+        if (readTemplateChunk(lit)) { stack.push(0); push('${'); } else { out.push(templates.pop()); push('lit'); }
+        continue;
+      }
+      if (stack.length) stack[stack.length - 1]--;
+      i++;
+      push('}');
+      continue;
+    }
+    if (c === '/') {
+      const regex = prev === '' || REGEX_BEFORE.has(prev) || (!/^[\w$]+$/.test(prev) && ![')', ']', '}', 'lit'].includes(prev));
+      if (regex) {
+        i++;
+        let inClass = false;
+        while (i < src.length && (inClass || src[i] !== '/')) {
+          if (src[i] === '\\') i++;
+          else if (src[i] === '[') inClass = true;
+          else if (src[i] === ']') inClass = false;
+          i++;
+        }
+        i++;
+        while (/[a-z]/i.test(src[i] ?? '')) i++;
+        push('lit');
+        continue;
+      }
+    }
+    if (/[\w$]/.test(c)) {
+      let j = i;
+      while (j < src.length && /[\w$]/.test(src[j])) j++;
+      push(src.slice(i, j));
+      i = j;
+      continue;
+    }
+    i++;
+    push(c);
+  }
+  return out;
+}
+const isProse = (s) => /[A-Za-z]/.test(s) && (/\s/.test(s.trim()) || /[^\x00-\x7f]/.test(s) || /^\s*[A-Z][a-z]/.test(s));
+const forbiddenIn = (s) => FORBIDDEN_TEXT.filter((w) => s.toLowerCase().includes(w.toLowerCase()));
+const textHits = [];
+if (html !== null) {
+  const visible = html
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<details[^>]*class="[^"]*\bdiagnostics\b[^"]*"[\s\S]*?<\/details>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ');
+  for (const [k, l] of visible.split('\n').entries()) {
+    const words = forbiddenIn(l);
+    if (words.length) textHits.push({ file: rel(htmlFile), line: k + 1, words, text: l.trim() });
+  }
+}
+const uiFiles = readdirSync(p('src', 'ui')).filter((f) => f.endsWith('.js') && !TEXT_SKIP.has(f)).sort();
+for (const f of uiFiles) {
+  for (const lit of stringLiterals(readFileSync(p('src', 'ui', f), 'utf8'))) {
+    if (!isProse(lit.text)) continue;
+    const words = forbiddenIn(lit.text);
+    if (words.length) textHits.push({ file: `src/ui/${f}`, line: lit.line, words, text: lit.text.replace(/\s+/g, ' ').trim() });
+  }
+}
+const enforceText = FEATURES.uxV2 === true;
+const scanned = `${rel(htmlFile)} and ${uiFiles.length} src/ui files`;
+if (textHits.length === 0) {
+  row('visible text has no forbidden words (U7.3)', true, scanned);
+} else {
+  row(`visible text has no forbidden words (U7.3)${enforceText ? '' : ', enforced when uxV2 is on'}`, !enforceText,
+    `${textHits.length} hit(s) in ${scanned}`, !enforceText);
+  for (const h of textHits) {
+    const shown = h.text.length > 100 ? `${h.text.slice(0, 97)}...` : h.text;
+    row(`  ${h.file}:${h.line} contains ${h.words.map((x) => `"${x}"`).join(', ')}`, !enforceText, `"${shown}"`, !enforceText);
+  }
+}
+
 // Table.
 const w = Math.max(...rows.map((r) => r.rule.length));
 console.log(`${'Rule'.padEnd(w)}  Result  Detail`);
 console.log(`${'-'.repeat(w)}  ------  ------`);
-for (const r of rows) console.log(`${r.rule.padEnd(w)}  ${r.ok ? 'PASS  ' : 'FAIL  '}  ${r.detail}`);
+for (const r of rows) console.log(`${r.rule.padEnd(w)}  ${r.warn ? 'WARN  ' : r.ok ? 'PASS  ' : 'FAIL  '}  ${r.detail}`);
 const failed = rows.filter((r) => !r.ok).length;
-console.log(`\n${rows.length - failed} passed, ${failed} failed.`);
+const warned = rows.filter((r) => r.warn).length;
+console.log(`\n${rows.length - failed - warned} passed, ${warned} warned, ${failed} failed.`);
 if (FEATURES.liveRun === true) {
   const helper = existsSync(p('qollab', 'live.py')) ? 'qollab/live.py' : 'qollab/live.py (NOT FOUND in this repository)';
   console.log(`\nReminder: liveRun is on. Upload ${helper} to the main Qollab project as live.py at the top level (D11: no folders), together with the three files in dist/qollab/.`);

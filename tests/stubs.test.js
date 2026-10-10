@@ -227,3 +227,207 @@ test('fixture bank detector rates show the specified noise level', () => {
     assert.ok(bank.detector_rate > 0.03 && bank.detector_rate < 0.2, `detector_rate ${bank.detector_rate}`);
   }
 });
+
+// ---- v2 fixtures (team checklist Appendix U4, U5), bridges and flags (CC-B12).
+
+const V2_FILES = [
+  'dem_forte1_v2.json', 'stage1_flat_v2.json', 'stage2_ion_v2.json', 'stage3_sc_v2.json',
+  'stage1_flat_x_v2.json', 'stage2_ion_x_v2.json', 'stage3_sc_x_v2.json', 'stage4_comparison_v2.json',
+  'params_ion_v2.json', 'params_sc_v2.json', 'params_cycle_v2.json',
+];
+const VERDICTS_V2 = ['held', 'refuted', 'undetermined'];
+
+// Catches: a v2 stage 1-3 fixture that breaks the U4 format: no top-level basis (or the
+// wrong one for a *_x file), a series without "decoder" or with only one decoder, tauLog
+// entries without "decoder", no tauPhysEmpirical, a budget whose arrays do not line up with
+// the tau grid or whose crosstalk is not all zeros for the superconducting arm, or a stage 2
+// crosstalkScan whose entries do not cover every scan rate or do not line up with the grid.
+test('v2 stage 1-3 fixtures follow the U4 format in both bases', () => {
+  for (const [name, stage, platform, basis] of [
+    ['stage1_flat_v2.json', 1, 'flat', 'Z'], ['stage1_flat_x_v2.json', 1, 'flat', 'X'],
+    ['stage2_ion_v2.json', 2, 'trapped-ion', 'Z'], ['stage2_ion_x_v2.json', 2, 'trapped-ion', 'X'],
+    ['stage3_sc_v2.json', 3, 'superconducting', 'Z'], ['stage3_sc_x_v2.json', 3, 'superconducting', 'X'],
+  ]) {
+    const st = fixture(name);
+    assert.equal(st.fixture, true, name);
+    hasAll(st, [...RESULTS_123, 'basis'], name);
+    assert.equal(st.schema, 's2s-results/1');
+    assert.equal(st.stage, stage);
+    assert.equal(st.platform, platform);
+    assert.equal(st.basis, basis, `${name} basis`);
+    const nx = st.x.values.length;
+    for (const s of st.series) {
+      hasAll(s, [...SERIES, 'decoder'], `${name} series`);
+      assert.ok(['naive', 'learned'].includes(s.decoder));
+      for (const f of ['pL', 'lo', 'hi', 'n']) assert.equal(s[f].length, nx, `${name} ${f}`);
+    }
+    assert.deepEqual([...new Set(st.series.map((s) => s.decoder))].sort(), ['learned', 'naive'], `${name} decoders`);
+    if (stage === 1) continue;
+    hasAll(st.optima, ['tauPhys', 'tauPhysEmpirical', 'tauLog'], `${name} optima`);
+    hasAll(st.optima.tauPhysEmpirical, ['xMin', 'atEdge'], `${name} tauPhysEmpirical`);
+    for (const o of st.optima.tauLog) hasAll(o, ['d', 'mode', 'decoder', 'xMin', 'lo', 'hi', 'atEdge'], `${name} tauLog`);
+    hasAll(st.budget, ['label', 'tau_us', 'readout', 'idle', 'crosstalk', 'gate'], `${name} budget`);
+    assert.equal(st.budget.label, 'error sources per round, per qubit (approximate)');
+    assert.deepEqual(st.budget.tau_us, st.x.values);
+    for (const f of ['readout', 'idle', 'crosstalk']) assert.equal(st.budget[f].length, nx, `${name} budget ${f}`);
+    assert.equal(typeof st.budget.gate, 'number');
+    if (platform === 'superconducting') assert.ok(st.budget.crosstalk.every((v) => v === 0), `${name} crosstalk zeros`);
+    if (stage === 2) {
+      const scan = st.crosstalkScan;
+      hasAll(scan, ['rates_per_us', 'entries'], `${name} crosstalkScan`);
+      assert.deepEqual([...new Set(scan.entries.map((e) => e.rate))], scan.rates_per_us);
+      for (const e of scan.entries) {
+        hasAll(e, ['rate', 'd', 'mode', 'pL', 'lo', 'hi', 'tauLog', 'interiorBelowTauPhys'], `${name} scan entry`);
+        for (const f of ['pL', 'lo', 'hi']) assert.equal(e[f].length, nx);
+        hasAll(e.tauLog, ['xMin', 'lo', 'hi', 'atEdge'], `${name} scan tauLog`);
+        assert.equal(typeof e.interiorBelowTauPhys, 'boolean');
+      }
+    } else {
+      assert.equal('crosstalkScan' in st, false, `${name}: crosstalkScan is stage 2 only`);
+    }
+  }
+});
+
+// Catches: X-basis fixtures that are copies of the Z ones (the phase-flip view would then
+// show nothing new), or a superconducting X-basis idle error that does not use the shorter
+// T2 (it must exceed the Z-basis idle error, which uses T1, at the longest tau).
+test('v2 X-basis fixtures differ from the Z-basis ones as the physics says', () => {
+  const z = fixture('stage3_sc_v2.json');
+  const x = fixture('stage3_sc_x_v2.json');
+  assert.notDeepEqual(x.series[0].pL, z.series[0].pL);
+  const last = z.budget.idle.length - 1;
+  assert.ok(x.budget.idle[last] > z.budget.idle[last], 'X idle (T2) above Z idle (T1)');
+});
+
+// Catches: a dem fixture whose p_ij is not a symmetric (d-1)(r+1) square matrix, whose firing
+// array has the wrong length, whose classes miss one of the four edge classes, or whose
+// ratioXoverZ, outOfSample and decoderComparison rows drop a U4 field.
+test('dem_forte1_v2 fixture follows the U4 stage dem format', () => {
+  const dem = fixture('dem_forte1_v2.json');
+  assert.equal(dem.fixture, true);
+  hasAll(dem, ['schema', 'stage', 'banks', 'ratioXoverZ', 'outOfSample', 'decoderComparison', 'params', 'provenance'], 'dem');
+  assert.equal(dem.schema, 's2s-results/1');
+  assert.equal(dem.stage, 'dem');
+  for (const b of dem.banks) {
+    hasAll(b, ['d', 'r', 'basis', 'files', 'nShots', 'firing', 'pij', 'classes', 'antiDiag', 'pGateNaive'], 'dem bank');
+    const n = (b.d - 1) * (b.r + 1);
+    assert.equal(b.firing.length, n);
+    assert.equal(b.pij.length, n);
+    for (let i = 0; i < n; i++) {
+      assert.equal(b.pij[i].length, n);
+      for (let j = 0; j < n; j++) assert.equal(b.pij[i][j], b.pij[j][i], `pij symmetric d${b.d} r${b.r} ${i},${j}`);
+    }
+    assert.deepEqual(sortedKeys(b.classes), ['diag', 'space', 'spaceBoundary', 'time']);
+    assert.ok(b.basis === 'Z' || b.basis === 'X');
+  }
+  assert.ok(dem.banks.some((b) => b.basis === 'X'));
+  for (const r of dem.ratioXoverZ) hasAll(r, ['d', 'r', 'ratio', 'lo', 'hi'], 'dem ratioXoverZ');
+  for (const o of dem.outOfSample) {
+    hasAll(o, ['d', 'r', 'basis', 'trainedOn', 'testedOn', 'naive', 'learned'], 'dem outOfSample');
+    for (const k of ['naive', 'learned']) hasAll(o[k], ['k', 'n', 'lo', 'hi'], `dem outOfSample ${k}`);
+  }
+  assert.deepEqual([...new Set(dem.decoderComparison.map((c) => c.arm))].sort(), ['flat', 'superconducting', 'trapped-ion']);
+  for (const c of dem.decoderComparison) {
+    hasAll(c, ['arm', 'x', 'd', 'r', 'basis', 'mode', 'naive', 'learned'], 'dem decoderComparison');
+    for (const k of ['naive', 'learned']) hasAll(c[k], ['pL', 'lo', 'hi'], `dem decoderComparison ${k}`);
+  }
+});
+
+// Catches: a v2 stage 4 fixture without the U4 additions (framing, tradeoff per d and mode with
+// aligned arrays, budgetAtOptimum, a sensitivity effect on every row and on the baseline), or
+// conclusions that miss one of C1-C6 and O4, use a v1 verdict word, or whose plain text is
+// not the "fixture" marker.
+test('stage4_comparison_v2 fixture follows the U4 stage 4 v2 format', () => {
+  const st4 = fixture('stage4_comparison_v2.json');
+  assert.equal(st4.fixture, true);
+  hasAll(st4, ['schema', 'stage', 'platforms', 'sensitivity', 'sensitivityBaseline', 'framing', 'conclusions', 'provenance'], 'stage4 v2');
+  assert.equal(st4.stage, 4);
+  assert.equal(typeof st4.framing, 'string');
+  for (const pf of ['trapped-ion', 'superconducting']) {
+    const P = st4.platforms[pf];
+    hasAll(P, ['tauLog', 'perRound', 'perMicrosecond', 'breakEven', 'tradeoff', 'budgetAtOptimum'], `stage4 v2 ${pf}`);
+    hasAll(P.breakEven, ['epsBar', 'tau_us'], `stage4 v2 ${pf} breakEven`);
+    for (const d of ['3', '5', '7']) {
+      for (const mode of ['hard', 'soft']) {
+        const t = P.tradeoff[d][mode];
+        hasAll(t, ['tau', 'roundsPerSecond', 'perRound', 'lo', 'hi'], `stage4 v2 ${pf} tradeoff ${d} ${mode}`);
+        for (const f of ['roundsPerSecond', 'perRound', 'lo', 'hi']) assert.equal(t[f].length, t.tau.length);
+      }
+    }
+    hasAll(P.budgetAtOptimum, ['readout', 'idle', 'crosstalk', 'gate', 'tau_us'], `stage4 v2 ${pf} budgetAtOptimum`);
+  }
+  for (const row of [...st4.sensitivity, st4.sensitivityBaseline]) {
+    hasAll(row.effect, ['perRound_d3_hard', 'tauLog_d3_hard'], 'stage4 v2 effect');
+    for (const k of ['perRound_d3_hard', 'tauLog_d3_hard']) hasAll(row.effect[k], ['trapped-ion', 'superconducting'], `effect ${k}`);
+  }
+  assert.deepEqual(sortedKeys(st4.conclusions), ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'O4']);
+  for (const [id, c] of Object.entries(st4.conclusions)) {
+    hasAll(c, ['statement', 'verdict', 'automated', 'note', 'plain'], `conclusion ${id}`);
+    assert.ok(VERDICTS_V2.includes(c.verdict), `${id} verdict ${c.verdict}`);
+    assert.equal(c.plain, 'fixture');
+  }
+});
+
+// Catches: v2 parameter cards that lack the U5 additions (ion T2, crosstalk rate and scan grid;
+// superconducting T2; the ion's per-round gate layers as the 2*(d-1) expression), or that
+// dropped a v1 card field the existing levels read.
+test('v2 parameter-card fixtures carry the U5 fields', () => {
+  const ion = fixture('params_ion_v2.json');
+  hasAll(ion, [...PARAM_ION, 'T2_idle_us', 'crosstalk_rate_per_us', 'crosstalk_scan_per_us'], 'params_ion_v2');
+  assert.deepEqual(ion.crosstalk_scan_per_us.value, [0, 1e-6, 1e-5, 1e-4, 1e-3]);
+  const sc = fixture('params_sc_v2.json');
+  hasAll(sc, [...PARAM_SC, 'T2_us'], 'params_sc_v2');
+  assert.ok(sc.T2_us.value <= 2 * sc.T1_us.value, 'T2 <= 2 T1');
+  const cyc = fixture('params_cycle_v2.json');
+  for (const pf of ['trapped-ion', 'superconducting']) hasAll(cyc[pf], CYCLE, `params_cycle_v2 ${pf}`);
+  assert.equal(cyc['trapped-ion'].gate_layers_per_round.value, '2*(d-1)');
+  for (const card of [ion, sc, cyc]) {
+    assert.equal(card.fixture, true);
+    assert.equal(card.schema, 's2s-params/1');
+  }
+});
+
+// Catches: a v2 fixture file that is missing on disk or lacks "fixture": true, so the
+// release check could not tell it from Person A's real data.
+test('every v2 fixture file exists and has "fixture": true', () => {
+  for (const name of V2_FILES) assert.equal(fixture(name).fixture, true, name);
+});
+
+// Catches: a bridge_data edit that drops a v1 export the current levels import, or a new v2
+// export that is missing or wired to the wrong stage or basis (for example stage2x pointing at
+// the Z-basis file). Written to stay true when the exports switch to the real results files
+// (U3 rows 13-22): an absent basis means "Z".
+test('bridge_data keeps every v1 export and adds the v2 exports', async () => {
+  const data = await import('../src/ui/bridge_data.js');
+  for (const name of ['stage1', 'stage2', 'stage3', 'stage4', 'bankD3R1', 'bankD3R3', 'paramsIon', 'paramsSc', 'paramsCycle']) {
+    assert.ok(data[name] && typeof data[name] === 'object', `v1 export ${name}`);
+  }
+  for (const [name, stage, basis] of [
+    ['demForte1', 'dem', null], ['stage1v2', 1, 'Z'], ['stage2v2', 2, 'Z'], ['stage3v2', 3, 'Z'], ['stage4v2', 4, 'Z'],
+    ['stage1x', 1, 'X'], ['stage2x', 2, 'X'], ['stage3x', 3, 'X'],
+  ]) {
+    assert.equal(data[name]?.stage, stage, `${name} stage`);
+    if (basis) assert.equal(data[name].basis ?? 'Z', basis, `${name} basis`);
+  }
+  assert.equal(data.paramsIonV2.platform, 'trapped-ion');
+  assert.equal(data.paramsScV2.platform, 'superconducting');
+  for (const pf of ['trapped-ion', 'superconducting']) hasAll(data.paramsCycleV2[pf], CYCLE, `paramsCycleV2 ${pf}`);
+});
+
+// Catches: a bridge_core edit that drops an existing export, or an estimateEdgeRates that
+// silently returns something in the browser instead of failing loudly.
+test('bridge_core keeps its exports; estimateEdgeRates throws in the browser', async () => {
+  const core = await import('../src/ui/bridge_core.js');
+  const names = ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'createIonReadout', 'createScReadout', 'findMinimum', 'estimateEdgeRates'];
+  for (const name of names) assert.equal(typeof core[name], 'function', name);
+  assert.throws(() => core.estimateEdgeRates([], 3, 3), /not available in the browser/);
+});
+
+// Catches: a v2 feature flag missing from features.js (the release check would then never
+// test its bridge needs) or set to something other than a boolean.
+test('features.js lists every v2 flag as a boolean', async () => {
+  const { FEATURES } = await import('../src/ui/features.js');
+  for (const flag of ['hero', 'uxV2', 'learnNoise', 'phaseFlip', 'crosstalk', 'level5v2', 'sandbox', 'tour', 'curated']) {
+    assert.equal(typeof FEATURES[flag], 'boolean', flag);
+  }
+});

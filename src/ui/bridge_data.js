@@ -8,3 +8,20 @@ import paramsIon from '../../params/ion.json' with { type: 'json' };
 import paramsSc from '../../params/sc.json' with { type: 'json' };
 import paramsCycle from '../../params/cycle.json' with { type: 'json' };
 export { stage1, stage2, stage3, stage4, bankD3R1, bankD3R3, paramsIon, paramsSc, paramsCycle };
+
+// v2 (team checklist Appendix U3): fixtures until the switch rows 13, 17, 18 and 22.
+import demForte1 from '../../data/fixtures/dem_forte1_v2.json' with { type: 'json' };
+import stage1v2 from '../../data/fixtures/stage1_flat_v2.json' with { type: 'json' };
+import stage2v2 from '../../data/fixtures/stage2_ion_v2.json' with { type: 'json' };
+import stage3v2 from '../../data/fixtures/stage3_sc_v2.json' with { type: 'json' };
+import stage4v2 from '../../data/fixtures/stage4_comparison_v2.json' with { type: 'json' };
+import stage1x from '../../data/fixtures/stage1_flat_x_v2.json' with { type: 'json' };
+import stage2x from '../../data/fixtures/stage2_ion_x_v2.json' with { type: 'json' };
+import stage3x from '../../data/fixtures/stage3_sc_x_v2.json' with { type: 'json' };
+import paramsIonV2 from '../../data/fixtures/params_ion_v2.json' with { type: 'json' };
+import paramsScV2 from '../../data/fixtures/params_sc_v2.json' with { type: 'json' };
+import paramsCycleV2 from '../../data/fixtures/params_cycle_v2.json' with { type: 'json' };
+export {
+  demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x,
+  paramsIonV2, paramsScV2, paramsCycleV2,
+};
