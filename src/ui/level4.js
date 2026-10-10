@@ -7,11 +7,14 @@
 // createScReadout and stage3. With FEATURES.liveRun the shots can come from a fresh run.
 // With the basis toggle (U7.9) the chart shows the chosen memory (stage2x, stage3x in the
 // phase-flip memory); the shots stay those of the bit-flip memory, and a note says so.
+// With FEATURES.curated (U7.11): two buttons replay curated shots from curatedShots
+// (tools/curate.mjs) where soft decoding saves the bit (from the stored-1 bank) or fails (from
+// the stored-0 bank), on the trapped ion at the curated tau with the learned decoder.
 
 import { decodeShot } from './bridge_core.js';
-import { bankD3R3 } from './bridge_data.js';
+import { bankD3R3, curatedShots, stage2v2 } from './bridge_data.js';
 import { createRng } from '../core/rng.js';
-import { expandShots } from '../core/bank.js';
+import { expandShots, bitsFromKey } from '../core/bank.js';
 import { buildGraph, pFromLlr, xorP } from '../core/graph.js';
 import {
   createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard,
@@ -20,7 +23,7 @@ import { FEATURES } from './features.js';
 import { describeCorrections, P_GATE } from './level1.js';
 import {
   tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
-  currentBasis, onBasisChange, resultsFor, memoryTag,
+  currentBasis, onBasisChange, resultsFor, memoryTag, setPlatform,
 } from './level3.js';
 import { mountLiveRun } from './liverun.js';
 
@@ -53,6 +56,56 @@ export function detectorConfidence(llrAnc, llrData, d, r) {
     }
   }
   return conf;
+}
+
+// Curated examples (U7.11). KINDS: the two buttons, in page order.
+export const CURATED_KINDS = [
+  { kind: 'softSaves', button: 'Show me a shot where soft decoding saves the bit', what: 'soft decoding saves the bit' },
+  { kind: 'softFails', button: 'Show me a shot where soft decoding fails', what: 'soft decoding loses the bit' },
+];
+
+// The stored shot of a curated record, replayed from the file alone: the bank's layout, d, r and
+// logical value from curated.banks, the shot from its hex key.
+export function curatedShot(curated, rec) {
+  const info = curated.banks[rec.bank];
+  if (!info) throw new Error(`curated shot from unknown bank ${rec.bank}`);
+  return { info, shotBits: bitsFromKey(rec.key, info.n_clbits) };
+}
+
+// Hard and soft decoding of a curated record under the curated settings (learned decoder, the
+// rates stored in the file, the same readout seed for both modes).
+export function decodeCurated(curated, rec, readout) {
+  const { info, shotBits } = curatedShot(curated, rec);
+  const args = {
+    shotBits, layout: info.layout, d: info.d, r: info.r, readout, basis: info.basis ?? 'Z', logical: info.logical,
+    noise: { model: 'learned', rates: curated.settings.rates },
+  };
+  return {
+    hard: decodeShot({ ...args, mode: 'hard', rng: createRng(rec.seed) }),
+    soft: decodeShot({ ...args, mode: 'soft', rng: createRng(rec.seed) }),
+  };
+}
+
+const pct = (p) => `${(100 * p).toFixed(1)}%`;
+const count = (n) => n.toLocaleString('en-US');
+
+// The sentence beside the curated buttons: both banks' counts (curatedShots.banks[*].counts)
+// and the stored averages over both logical values at the curated tau (stage2v2, learned
+// decoder, d = 3, r = 3, hard and soft), so one curated shot is not read as the average.
+export function curatedSentence(curated, stage) {
+  const tau = curated.settings.tau_us;
+  const by = Object.values(curated.banks).sort((a, b) => b.logical - a.logical);
+  const parts = by.map((b) => `when the stored value was ${b.logical}, soft decoding saved the bit ${count(b.counts.softSaves)} times and lost it ${count(b.counts.softFails)} times`);
+  const n = Math.min(...by.map((b) => b.shotsScanned));
+  let text = `In the first ${count(n)} stored shots at τ = ${formatTau(tau)} (learned decoder): ${parts.join('; ')}.`;
+  const i = stage?.x?.values?.indexOf(tau) ?? -1;
+  const ser = (mode) => (stage?.series || []).find((s) => s.d === 3 && s.r === 3 && s.mode === mode && s.decoder === 'learned');
+  const hard = ser('hard');
+  const soft = ser('soft');
+  if (i >= 0 && hard && soft) {
+    text += ` Averaged over both stored values (d = 3), soft decoding loses the bit ${pct(soft.pL[i])} of the time against ${pct(hard.pL[i])} for hard decoding.`;
+  }
+  return text;
 }
 
 function el(tag, attrs = {}, text = null) {
@@ -145,7 +198,8 @@ export function mountLevel4(container) {
   let shots = expandShots(source.bank);
   let graph = buildGraph(source.bank.d, source.bank.r);
   let drawRng = createRng(SEED);
-  let current = null; // { index, seed }
+  let current = null; // { index, seed } or, for a curated example, { curated: { rec, kind, pos } }
+  const curatedGraph = buildGraph(3, 3, { diagonal: true });
   let tally = null;
 
   const ux = FEATURES.uxV2 === true;
@@ -200,6 +254,23 @@ export function mountLevel4(container) {
   container.appendChild(nav);
   const tallyText = el('p', { class: 'score', 'aria-live': 'polite' });
   container.appendChild(tallyText);
+
+  // Curated examples (U7.11), trapped ion only.
+  const curatedOn = FEATURES.curated === true && FEATURES.ion === true && curatedShots
+    && CURATED_KINDS.some((k) => (curatedShots[k.kind] || []).length > 0);
+  const curatedPos = { softSaves: -1, softFails: -1 };
+  const curatedNote = el('p', { class: 'hint' });
+  if (curatedOn) {
+    const cRow = el('div', { class: 'control-row curated-row' });
+    for (const k of CURATED_KINDS) {
+      const b = el('button', { type: 'button', class: 'secondary' }, k.button);
+      if ((curatedShots[k.kind] || []).length === 0) b.setAttribute('aria-disabled', 'true');
+      b.addEventListener('click', () => showCurated(k.kind));
+      cRow.appendChild(b);
+    }
+    curatedNote.hidden = true;
+    container.append(cRow, curatedNote);
+  }
   // Shown after a full set of shots, or when the reader scrolls past the two grids.
   const takeaway = ux ? takeawayCard('weighing each reading’s confidence helps where many readings are doubtful; '
     + 'where readings are clear, both decoders usually agree.') : null;
@@ -265,6 +336,7 @@ export function mountLevel4(container) {
   function decodeBoth() {
     const tau = grid[idx];
     const readout = plat.create(plat.params, tau);
+    if (current.curated) return decodeCurated(curatedShots, current.curated.rec, readout);
     const { bank } = source;
     const args = { shotBits: shots[current.index], layout: bank.layout, d: bank.d, r: bank.r, readout, pGate: P_GATE };
     // The same seed for both modes, so both decoders see identical readings.
@@ -285,17 +357,27 @@ export function mountLevel4(container) {
       shotText.textContent = `This shot could not be decoded: ${err.message}`;
       return null;
     }
-    const { bank } = source;
+    const cur = current.curated;
+    const bank = cur ? curatedShots.banks[cur.rec.bank] : source.bank;
+    const g = cur ? curatedGraph : graph;
     const conf = detectorConfidence(both.hard.llrAnc, both.hard.llrData, bank.d, bank.r);
     for (const pnl of panels) {
       const res = both[pnl.mode];
-      const { svg, corr } = drawGrid(graph, res, conf, `${pnl.mode === 'hard' ? 'Hard' : 'Soft'} decoding: space-time detector grid`);
+      const { svg, corr } = drawGrid(g, res, conf, `${pnl.mode === 'hard' ? 'Hard' : 'Soft'} decoding: space-time detector grid`);
       pnl.box.replaceChildren(svg);
       const kept = res.corrected === bank.logical;
       pnl.verdict.className = `verdict ${kept ? 'kept' : 'lost'}`;
       pnl.verdict.textContent = `${kept ? '✓ Logical value kept' : '✗ Logical value lost'}: decoded ${res.corrected}, prepared ${bank.logical}. Correction: ${corr.length ? corr.map((c) => c.text).join('; ') : 'none'}.${res.exact ? '' : ' (Matching not exact.)'}`;
     }
     const same = pathKey(both.hard) === pathKey(both.soft);
+    const lit = `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}.`;
+    if (cur) {
+      const list = curatedShots[cur.kind];
+      const what = CURATED_KINDS.find((k) => k.kind === cur.kind).what;
+      shotText.textContent = `Example ${cur.pos + 1} of ${list.length} where ${what}: ${plat.label.toLowerCase()}, stored value ${bank.logical}, `
+        + `stored shot ${cur.rec.index + 1} of ${count(bank.shots)}, readout seed ${cur.rec.seed}, τ = ${formatTau(tau)}, learned decoder: ${lit}`;
+      return { ...both, same };
+    }
     shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (stored shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
       + `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}. ${same ? 'Both decoders chose the same matching.' : 'The decoders chose different matchings.'}`;
     return { ...both, same };
@@ -305,6 +387,7 @@ export function mountLevel4(container) {
     if (tally.n >= SHOTS_PER_SET) resetTally();
     current = { index: drawRng.int(shots.length), seed: 1 + drawRng.int(2 ** 31 - 1) };
     tally.n++;
+    if (curatedOn) curatedNote.hidden = true;
     const res = renderShot();
     if (res) {
       if (res.hard.corrected === source.bank.logical) tally.hard++;
@@ -328,6 +411,11 @@ export function mountLevel4(container) {
 
   // Redraws the same shot with the new readout; the tally restarts because the readout changed.
   function redrawShot() {
+    // A curated example holds only at its own settings: a new readout returns to the stored shots.
+    if (current?.curated) {
+      current = { index: drawRng.int(shots.length), seed: 1 + drawRng.int(2 ** 31 - 1) };
+      curatedNote.hidden = true;
+    }
     resetTally();
     tally.n = 1;
     const res = renderShot();
@@ -372,7 +460,36 @@ export function mountLevel4(container) {
   });
   nextBtn.addEventListener('click', nextShot);
 
+  // Shows the next curated example of `kind` (cycling): trapped ion at the curated tau.
+  function showCurated(kind) {
+    const list = curatedShots[kind] || [];
+    if (list.length === 0) return;
+    const tau = curatedShots.settings.tau_us;
+    if (plat.id !== curatedShots.settings.platform) setPlatform(curatedShots.settings.platform);
+    if (plat.id !== curatedShots.settings.platform) return;
+    const ti = grid.indexOf(tau);
+    if (ti < 0) {
+      shotText.textContent = `τ = ${formatTau(tau)} is not on this platform's grid.`;
+      return;
+    }
+    if (ti !== idx) {
+      idx = ti;
+      positions.set(plat.id, idx);
+      input.value = String(idx);
+      setTau();
+      renderChart();
+    }
+    curatedPos[kind] = (curatedPos[kind] + 1) % list.length;
+    current = { curated: { rec: list[curatedPos[kind]], kind, pos: curatedPos[kind] } };
+    renderShot();
+    curatedNote.textContent = curatedSentence(curatedShots, stage2v2);
+    curatedNote.hidden = false;
+    nextBtn.textContent = 'Next shot';
+  }
+
   mountLiveRun(liveBox, {
+    storedBank: bankD3R3,
+    pGate: P_GATE,
     onBank(bank, labelText) {
       source = { bank, label: labelText };
       shots = expandShots(bank);

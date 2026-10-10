@@ -30,3 +30,6 @@ export {
   demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x, stage4x,
   paramsIonV2, paramsScV2, paramsCycleV2,
 };
+// B50 (U7.11): curated Level 4 examples, written by tools/curate.mjs (Person B's data).
+import curatedShots from '../../data/curated/curated_shots.json' with { type: 'json' };
+export { curatedShots };

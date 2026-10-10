@@ -1,0 +1,249 @@
+{
+  "schema": "s2s-curated/1",
+  "note": "index: position in expandShots(bank) (keys in ascending order); key: the shot as a hex key of that bank; seed: the readout seed, createRng(seed) for both hard and soft decoding.",
+  "settings": {
+    "banks": {
+      "softSaves": "rep_d3_r3_L1",
+      "softFails": "rep_d3_r3_L0"
+    },
+    "platform": "trapped-ion",
+    "params": "params/ion.json",
+    "tau_us": 3,
+    "decoder": "learned",
+    "rates": {
+      "space": 0.00816547,
+      "spaceBoundary": 0.00656471,
+      "time": 0.0100458,
+      "diag": 0.00993978
+    },
+    "seed": 20261011,
+    "maxShots": 4000,
+    "readoutDrawsPerShot": 1,
+    "perKind": 10
+  },
+  "banks": {
+    "rep_d3_r3_L0": {
+      "d": 3,
+      "r": 3,
+      "logical": 0,
+      "basis": "Z",
+      "n_clbits": 9,
+      "layout": {
+        "ancilla": [
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ]
+        ],
+        "data": [
+          6,
+          7,
+          8
+        ]
+      },
+      "samplerSeed": 1938670837,
+      "shots": 4000,
+      "shotsScanned": 4000,
+      "counts": {
+        "softSaves": 0,
+        "softFails": 72,
+        "hardErrors": 6,
+        "softErrors": 78,
+        "nonExact": 0
+      }
+    },
+    "rep_d3_r3_L1": {
+      "d": 3,
+      "r": 3,
+      "logical": 1,
+      "basis": "Z",
+      "n_clbits": 9,
+      "layout": {
+        "ancilla": [
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ]
+        ],
+        "data": [
+          6,
+          7,
+          8
+        ]
+      },
+      "samplerSeed": 706416029,
+      "shots": 4000,
+      "shotsScanned": 4000,
+      "counts": {
+        "softSaves": 575,
+        "softFails": 0,
+        "hardErrors": 682,
+        "softErrors": 107,
+        "nonExact": 0
+      }
+    }
+  },
+  "softSaves": [
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 3,
+      "key": "5a",
+      "seed": 611092454,
+      "nDefects": 3
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 4,
+      "key": "70",
+      "seed": 104149552,
+      "nDefects": 3
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 5,
+      "key": "80",
+      "seed": 1913158899,
+      "nDefects": 2
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 9,
+      "key": "c0",
+      "seed": 936577004,
+      "nDefects": 2
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 15,
+      "key": "c0",
+      "seed": 1490873368,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 16,
+      "key": "c0",
+      "seed": 1509018271,
+      "nDefects": 2
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 23,
+      "key": "e0",
+      "seed": 1793547239,
+      "nDefects": 3
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 26,
+      "key": "e0",
+      "seed": 1946341111,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 29,
+      "key": "e0",
+      "seed": 740004129,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L1",
+      "index": 32,
+      "key": "e0",
+      "seed": 106500890,
+      "nDefects": 1
+    }
+  ],
+  "softFails": [
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3167,
+      "key": "0",
+      "seed": 743656689,
+      "nDefects": 2
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3559,
+      "key": "40",
+      "seed": 488155321,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3560,
+      "key": "40",
+      "seed": 1753705244,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3561,
+      "key": "40",
+      "seed": 385706933,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3562,
+      "key": "40",
+      "seed": 2047704245,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3563,
+      "key": "40",
+      "seed": 1164832094,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3564,
+      "key": "40",
+      "seed": 1843133829,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3565,
+      "key": "40",
+      "seed": 354989927,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3566,
+      "key": "40",
+      "seed": 987576203,
+      "nDefects": 1
+    },
+    {
+      "bank": "rep_d3_r3_L0",
+      "index": 3567,
+      "key": "40",
+      "seed": 1517225374,
+      "nDefects": 1
+    }
+  ],
+  "provenance": {
+    "tool": "tools/curate.mjs"
+  }
+}

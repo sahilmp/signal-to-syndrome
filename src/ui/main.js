@@ -1,7 +1,8 @@
 // Entry point: builds the level selector from FEATURES, mounts the enabled levels,
 // fills in the version and the diagnostics; with FEATURES.hero, the hero panel above the tabs;
 // with FEATURES.phaseFlip, the header switch "Bit-flip memory / Phase-flip memory" (U7.9), which
-// sets the basis of the hero and Levels 3-5 (level3.js setBasis). Bundled by tools/build.mjs into one IIFE.
+// sets the basis of the hero and Levels 3-5 (level3.js setBasis); with FEATURES.tour, the
+// "3-minute tour" button in the header (U7.10, tour.js). Bundled by tools/build.mjs into one IIFE.
 
 import pkg from '../../package.json' with { type: 'json' };
 import { FEATURES } from './features.js';
@@ -13,6 +14,7 @@ import { mountLevel5 } from './level5.js';
 import { mountLearnNoise } from './learnnoise.js';
 import { mountDiagnostics } from './diag.js';
 import { mountHero } from './hero.js';
+import { createTour, TOUR_STOPS, TOUR_LABEL } from './tour.js';
 import { setPlatform, setBasis, currentBasis, onBasisChange, BASES } from './level3.js';
 
 const LEVELS = [
@@ -33,6 +35,19 @@ const LEVELS = [
     mount: mountLevel5,
   },
 ];
+
+// "Learn the noise" opens on step 1; the tour's stop is step 3 (U7.10). learnnoise.js keeps its
+// step private, so the section's own Next button is pressed until the third pane shows.
+export function openLearnNoiseStep3(section) {
+  const panes = [...section.querySelectorAll('.learn-step')];
+  if (panes.length < 3) return null;
+  for (let guard = 0; panes[2].hidden && guard < 3; guard++) {
+    const next = [...section.querySelectorAll('button')].find((b) => b.textContent === 'Next');
+    if (!next) break;
+    next.click();
+  }
+  return panes[2].hidden ? null : panes[2];
+}
 
 const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
 
@@ -165,6 +180,47 @@ function start() {
       mountHero(hero, { goDeeper });
     } catch (err) {
       hero.textContent = `The hero panel could not start: ${err.message}`;
+    }
+  }
+
+  // Guided tour (U7.10): each stop opens its level and returns its target; a stop whose part of
+  // the page is switched off is left out.
+  if (FEATURES.tour === true && enabled.length > 0) {
+    const has = (id) => enabled.some((l) => l.id === id);
+    const section = (id) => {
+      show(id, false);
+      return mounted.get(id) || null;
+    };
+    const prepare = {
+      hero: () => (hero && !hero.hidden ? hero : null),
+      budget: () => section('level3')?.querySelector('.budget') || null,
+      learnnoise: () => {
+        const s = section('learnnoise');
+        return s ? openLearnNoiseStep3(s) || s : null;
+      },
+      scoreboard: () => {
+        const s = section('level5');
+        const t = s?.querySelector('.l5-scoreboard');
+        for (let p = t?.parentNode; p && p !== s; p = p.parentNode) if (p.localName === 'details') p.open = true;
+        return t || s;
+      },
+    };
+    const available = {
+      hero: FEATURES.hero === true,
+      budget: has('level3') && FEATURES.uxV2 === true,
+      learnnoise: has('learnnoise'),
+      scoreboard: has('level5') && FEATURES.level5v2 === true,
+    };
+    const stops = TOUR_STOPS.filter((st) => available[st.id]).map((st) => ({ ...st, prepare: prepare[st.id] }));
+    if (stops.length > 0) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'secondary tour-button';
+      btn.textContent = TOUR_LABEL;
+      const title = root.querySelector('h1');
+      if (title) title.after(btn);
+      else selector.before(btn);
+      createTour({ stops, startButton: btn, doc: document });
     }
   }
 
