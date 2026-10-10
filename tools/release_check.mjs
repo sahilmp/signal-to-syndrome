@@ -38,6 +38,8 @@ const NEEDS = {
   sandbox: ['demForte1'],
   tour: ['stage2v2', 'stage3v2', 'demForte1', 'stage4v2'],
   curated: ['curatedShots'],
+  // hero3_text.js reads stage4v2 (budgetAtOptimum, F1); stage4x is covered by phaseFlip.
+  heroV3: ['findMinimum', 'stage2v2', 'stage3v2', 'stage4v2'],
 };
 // Results files the bridges may point at (data/results, Person A's data; CC-B21 item 7). Each
 // bridge export under data/results/ must be one of these, exist, and carry schema s2s-results/1.
@@ -164,6 +166,14 @@ for (const [feature, on] of Object.entries(FEATURES)) {
     const ok = src !== undefined && !src.path.includes('stubs/') && !src.path.includes('fixtures/');
     row(`feature ${feature}: ${name} not from stubs/ or fixtures/`, ok, src ? `${src.bridge} -> ${src.path}` : 'not exported by either bridge');
   }
+}
+// The v3 hero's text comes through bridge_hero3.js ("export * from", which bridgeSources does not
+// parse): with heroV3 on, every module it names must be real, not a stub or fixture.
+if (FEATURES.heroV3 === true) {
+  const text = readFileSync(p('src', 'ui', 'bridge_hero3.js'), 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const paths = [...text.matchAll(/\b(?:export|import)\b[^;]*?\bfrom\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  const ok = paths.length > 0 && paths.every((x) => !x.includes('stubs/') && !x.includes('fixtures/'));
+  row('feature heroV3: hero text bridge not from stubs/ or fixtures/', ok, paths.length ? paths.join(', ') : 'no module path found');
 }
 
 // Results files behind the bridges: known, present and in the results format.

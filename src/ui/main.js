@@ -14,6 +14,7 @@ import { mountLevel5 } from './level5.js';
 import { mountLearnNoise } from './learnnoise.js';
 import { mountDiagnostics } from './diag.js';
 import { mountHero } from './hero.js';
+import { mountHero3 } from './hero3.js';
 import { createTour, TOUR_STOPS, TOUR_LABEL } from './tour.js';
 import { setPlatform, setBasis, currentBasis, onBasisChange, BASES } from './level3.js';
 
@@ -50,6 +51,9 @@ export function openLearnNoiseStep3(section) {
 }
 
 const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
+
+// The hero panel's mount function: the guess, reveal, twist hero (UX1) with FEATURES.heroV3.
+export const heroMount = () => (FEATURES.heroV3 === true ? mountHero3 : mountHero);
 
 // Levels that stay in the bit-flip memory whatever the toggle says (U7.9).
 const BIT_FLIP_ONLY = new Set(['level1', 'level2']);
@@ -176,8 +180,15 @@ function start() {
       show('level3', true);
       mounted.get('level3')?.scrollIntoView({ block: 'start' });
     } : null;
+    // "See it step by step" (hero v3) opens "Learn the noise" as the level selector does, at step 3.
+    const openLearnNoise = enabled.some((l) => l.id === 'learnnoise') ? () => {
+      show('learnnoise', true);
+      const s = mounted.get('learnnoise');
+      if (s) openLearnNoiseStep3(s);
+    } : null;
     try {
-      mountHero(hero, { goDeeper });
+      if (heroMount() === mountHero3) mountHero3(hero, { goDeeper, openLearnNoise });
+      else mountHero(hero, { goDeeper });
     } catch (err) {
       hero.textContent = `The hero panel could not start: ${err.message}`;
     }
