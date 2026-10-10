@@ -2,7 +2,7 @@
 // should you listen to a qubit?" One readout-time slider that snaps to the platform's grid
 // points, a trapped ion / superconducting toggle, and one chart on a shared log tau axis with
 // the readout error (simulated assignment error) and the logical error (d = 3, hard decoding;
-// learned decoder when the results contain it, otherwise naive), each with a dot at the chosen
+// the decoder HERO_DECODER on both arms, naive while the SP5 cut holds), each with a dot at the chosen
 // tau. The interval between tau*_log and tau*_phys (empirical) is shaded, and a live sentence
 // says where the chosen tau sits relative to the two optima. "Go deeper" opens Level 3.
 //
@@ -32,13 +32,21 @@ export const REVERSE_LABEL = 'the code still gains from listening past the best 
 // A series without a decoder field predates the learned decoder, so it is the naive one.
 const isNaive = (o) => o.decoder === undefined || o.decoder === 'naive';
 
+// The one decoder the hero shows, on both arms (team checklist U3 row 14a). "naive" while the
+// SP5 cut rule is in force: V12(b) failed (DECISIONS E4). Set to null (learned when the
+// results contain it) only after a decision recorded in DECISIONS lifts the cut.
+export const HERO_DECODER = 'naive';
+
 // The two curves: { tau, decoder, readout: { y, lo, hi }, logical: { y, lo, hi, n } }.
-// Logical: the d = 3 hard series with decoder "learned", else the naive one.
-export function heroCurves(results) {
+// Logical: the d = 3 hard series of `decoder` ("naive" or "learned"); with decoder null, the
+// learned series when the results contain it, else the naive one. A requested learned
+// series that is missing falls back to naive (the returned decoder says which was used).
+export function heroCurves(results, decoder = null) {
   const tau = results?.x?.values;
   if (!Array.isArray(tau) || tau.length === 0) throw new Error('the results have no readout-time grid');
+  if (decoder !== null && decoder !== 'naive' && decoder !== 'learned') throw new Error(`unknown decoder ${decoder}`);
   const hard3 = (results.series || []).filter((s) => s.d === 3 && s.mode === 'hard');
-  const learned = hard3.find((s) => s.decoder === 'learned');
+  const learned = decoder === 'naive' ? undefined : hard3.find((s) => s.decoder === 'learned');
   const s = learned ?? hard3.find((u) => u.decoder === undefined) ?? hard3.find(isNaive);
   if (!s) throw new Error('the results have no d = 3 hard series');
   const a = results.assignment;
@@ -137,7 +145,7 @@ function el(tag, attrs = {}, text = null) {
 export function mountHero(container, { goDeeper = null } = {}) {
   // Each platform keeps its own slider position; it starts at the grid point nearest tau*_log.
   const views = new Map(HERO_PLATFORMS.map((p) => {
-    const curves = heroCurves(p.results);
+    const curves = heroCurves(p.results, HERO_DECODER);
     const optima = heroOptima(p.results, curves.decoder);
     const band = bandInfo(optima);
     const start = optima.tauLog && Number.isFinite(optima.tauLog.xMin) ? snapIndex(curves.tau, optima.tauLog.xMin) : 0;

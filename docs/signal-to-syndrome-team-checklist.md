@@ -79,7 +79,7 @@ Write these into `docs/notes_results.md` at K1 and commit them before CC-A12 run
 | V9 (kept) | Naive decoder, flat ε = 0.02, rep_d3_r3_L0 | Still `53933f98` | A |
 | V9L | Learned decoder, same setting | Hash recorded in DECISIONS; equal in Node and on the page | A, B |
 | V11 | ε fragility: learned decoder at ε = 0 and ε = 1e-9 | Wilson intervals overlap at every d (the naive decoder gives 108 against 13 errors of 4,000 at d = 3, L0) | A |
-| V12 | (a) Rate recovery on synthetic detectors with known per-class rates including diagonals; (b) out of sample: rates learned on L0 decode L1 and vice versa | (a) every class within 4 SE; (b) learned ≤ naive pooled, beyond intervals at d = 5 | A |
+| V12 | (a) Rate recovery on synthetic detectors with known per-class rates including diagonals; (b) out of sample: rates learned on L0 decode L1 and vice versa | (a) every class within 4 SE; (b) both clauses: learned ≤ naive pooled at every (d, r), **and** learned below naive beyond the intervals at every d = 5 row (`dem_forte1.json` → `outOfSamplePooled`: `learnedAtOrBelowNaive` true everywhere, `learnedBelowBeyondIntervals` true at d = 5). The first clause alone is not a pass | A |
 | V13 | Phase-flip circuits: ideal simulator, every check 0; one injected Z gives exactly the predicted bits (same pattern as X in the bit-flip memory); three sites also on IonQ's ideal simulator | All equal | A |
 | V14 | Idle physics per basis: formulas; T2 ≤ 2T1 enforced (boundary test); crosstalk 0 reproduces the old ion idle; default basis Z reproduces V9 | All pass | A |
 | V15 | Trade-off values: hand check of one point per arm (rounds per second = 10⁶ / T_cyc in µs; error per round as in Stage 4) | Agrees with the file to 3 significant figures | A |
@@ -194,7 +194,7 @@ Ship points                         ◆SP5    ◆SP6                       ◆SP
 | Milestone | Integration (IST) | Tag | Cut deadline | Gate | Cut rule |
 |---|---|---|---|---|---|
 | M10 Eligibility | K0, Sat 08:00 | `window-start` | — | Email sent; README fixed; tag pushed | — |
-| SP5 | K2, Sat 14:00 | `sp5` | Sat 13:30 | V2b, V9, V9L, V11, V12 pass; hero and text cut on real data; levels 1–4 use the learned decoder | If V12(b) fails: keep the naive decoder as default and report it; if V2b fails: revert the graph change and ship hero and text cut only |
+| SP5 | K2, Sat 14:00 | `sp5` | Sat 13:30 | V2b, V9, V9L, V11, V12 pass; hero and text cut on real data; levels 1–4 use the learned decoder | If V12(b) fails: keep the naive decoder as default in levels 1–4 **and the hero** (both arms on the same decoder) until a decision recorded in DECISIONS lifts the cut, and report it; if V2b fails: revert the graph change and ship hero and text cut only |
 | SP6 | K3, Sat 20:30 | `sp6` | Sat 20:00 | V13, V14, V16 pass; X-basis and crosstalk data real; Level 1 game, Level 3 budget, "Learn the noise" on real data | Crosstalk scan cut to 3 rates; X-basis cut to d = 3, 5; Level 5 v2 moves to SP7 |
 | SP7 | K4, Sun 13:00 | `sp7` | Sun 12:30 | V15 passes; Level 5 v2, basis toggle, accessibility pass | Drop the sandbox, then the tour, then the polish items, in that order |
 | M11 Video | K6, Sun 16:30 | — | Sun 17:30 | Two-minute video recorded | Annotated GIF of the hero and "Learn the noise" |
@@ -295,7 +295,7 @@ node tools/sweep.mjs --diag --decoder learned
 ```
 
    The first must print `53933f98` (V9); the second is V9L (record it in E9).
-2. **Person B:** `git pull --rebase`; apply the SP5 switches (Appendix U3 rows 13–16); then:
+2. **Person B:** `git pull --rebase`; apply the SP5 switches (Appendix U3 rows 13–16; if V12(b) failed, row 14a instead of row 14); then:
 
 ```bat
 npm test
@@ -311,6 +311,8 @@ start "" "dist\local\preview.html"
 ```bat
 git add -A
 git commit -m "SP5: integration (learned decoder, hero, text cut)"
+rem if the SP5 cut rule applied, use instead:
+rem git commit -m "SP5: integration (naive decoder by cut rule, hero, text cut)"
 git tag sp5
 git push
 git push --tags
@@ -504,7 +506,7 @@ Run `npm test`, then `node tools/sweep.mjs --stage dem`, `--stage 1`, `--stage 2
 
 ### A45 · TERMINAL · VERIFY · GIT · Sat 13:00 — Check SP5 numbers and hand over
 
-**Do:** check and record in your DECISIONS section and `notes_results.md`: V9 = `53933f98`; V9L (E9); V11 PASS at d = 3, 5, 7; V12(b) learned ≤ naive pooled; O4 not yet (X banks arrive later); the learned Stage 1 curve no longer has the ε = 0 spike; the learned Stage 2 soft against hard at τ = 20 µs (expected: the C2 loss shrinks or disappears). Then:
+**Do:** check and record in your DECISIONS section and `notes_results.md`: V9 = `53933f98`; V9L (E9); V11 PASS at d = 3, 5, 7; V12(b), both clauses as defined in Section 1.3 (learned ≤ naive pooled at every (d, r), and beyond the intervals at every d = 5 row); O4 not yet (X banks arrive later); the learned Stage 1 curve no longer has the ε = 0 spike; the learned Stage 2 soft against hard at τ = 20 µs (expected: the C2 loss shrinks or disappears). Then:
 
 ```bat
 git pull --rebase
@@ -763,7 +765,7 @@ Run `npm test`, `npm run build`, `npm run check`. Open dist/local/preview.html w
 
 ### B44 · EDITOR · VERIFY · Sat 13:30 — Switch to SP5 data
 
-**Do:** after `ACK N3` and `ACK N4`, apply Appendix U3 rows 13–16; levels 1–4 now pass `noise: { model: "learned", rates }` (rates from `demForte1` for the bank's (d, r, basis)) into `decodeShot` and `runPoint`; Diagnostics shows V9 and V9L (from `diagnostic(bank)` and `diagnostic(bank, { decoder: "learned" })`). Build, check, preview; join K2.
+**Do:** after `ACK N3` and `ACK N4`, read V12(b) in Person A's handoff. **If V12(b) passed:** apply Appendix U3 rows 13–16; levels 1–4 now pass `noise: { model: "learned", rates }` (rates from `demForte1` for the bank's (d, r, basis)) into `decodeShot` and `runPoint`. **If V12(b) failed (SP5 cut rule):** apply rows 13, 14a, 15 and 16, skip row 14; levels 1–4 keep the naive path and the hero is pinned to naive; record the cut in your DECISIONS section. In both cases Diagnostics shows V9 and V9L (from `diagnostic(bank)` and `diagnostic(bank, { decoder: "learned" })`). Build, check, preview; join K2.
 **Pass:** release check passes with hero and uxV2 on.
 - [ ] Done
 
@@ -1012,11 +1014,12 @@ After any switch: `npm run build`, then `npm run check`.
 | # | Ship point | Handoff | File | Change |
 |---|---|---|---|---|
 | 13 | SP5 | N4 | `bridge_data.js` | `demForte1`, `stage1v2`, `stage2v2` → `data/results/dem_forte1.json`, `stage1_flat.json`, `stage2_ion.json`; `stage3v2` → `data/results/stage3_sc.json` (the v1 file; replaced by the rerun at row 18) |
-| 14 | SP5 | N3 | levels 1–4 | pass the learned `noise` (B44) |
+| 14 | SP5 | N3 | levels 1–4 | pass the learned `noise` (B44); **only if V12(b) passed** |
+| 14a | SP5 | — | `hero.js` | **only if V12(b) failed (SP5 cut rule):** pass the decoder into the hero's curve selection and `heroOptima` from one default, set to `naive`, instead of picking `learned` when the series exists; the legend reads "naive decoder" on both arms. Stays until a recorded decision lifts the cut |
 | 15 | SP5 | — | `features.js` | `hero: true`, `uxV2: true` (the superconducting hero curve uses the naive series until row 18, through the U7.2 fallbacks) |
 | 16 | SP5 | — | `features.js` | nothing else; check that Level 1 game and budget stay off |
 | 17 | SP6 | N5 | `bridge_data.js` | `paramsIonV2`, `paramsScV2` → `params/ion.json`, `params/sc.json` |
-| 18 | SP6 | N6 | `bridge_data.js` | `stage3v2` stays on `stage3_sc.json`, now the rerun with both decoders; `stage1x`, `stage2x`, `stage3x` → `data/results/*_x.json` |
+| 18 | SP6 | N6 | `bridge_data.js` | `stage3v2` stays on `stage3_sc.json`, now the rerun with both decoders (while the SP5 cut holds, row 14a keeps the hero on naive for both arms); `stage1x`, `stage2x`, `stage3x` → `data/results/*_x.json` |
 | 19 | SP6 | — | `features.js` | `crosstalk: true` |
 | 20 | SP6 | — | `features.js` | `learnNoise: true` (needs row 13) |
 | 21 | SP6 | — | `features.js` | `phaseFlip: true` only if B49 is done; otherwise at SP7 |
@@ -1117,7 +1120,7 @@ The fix prompt is v1's, unchanged.
 
 - Above the level tabs. Large question: "How long should you listen to a qubit?"
 - Controls: one τ slider (snaps to the platform's grid points), a trapped ion / superconducting toggle.
-- One chart, shared log τ axis: readout error (empirical assignment error) and logical error (d = 3, hard; learned decoder when the results contain it, otherwise naive), each with a dot at the current τ.
+- One chart, shared log τ axis: readout error (empirical assignment error) and logical error (d = 3, hard; learned decoder when the results contain it and the SP5 cut rule is not in force, otherwise naive; always the same decoder on both arms), each with a dot at the current τ.
 - Shaded band between τ*_log and τ*_phys(empirical), labelled "listening longer costs more than it gains here" when τ*_log < τ*_phys; when the two coincide within intervals, no band and the label "here the best readout is also the best for the code".
 - Live sentence, three templates: below both optima ("Too short: the readout itself is still unreliable."), between them ("At {τ} you read better, but your data qubits lose more than you gain."), above both ("Too long: the waiting costs more than the clearer signal is worth.").
 - A "Go deeper" link scrolls to Level 3.

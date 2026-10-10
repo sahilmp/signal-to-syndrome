@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   heroCurves, heroOptima, bandInfo, liveSentence, sliderTau, snapIndex,
-  BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL,
+  BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL, HERO_DECODER, HERO_PLATFORMS,
 } from '../src/ui/hero.js';
 import stage3v1 from '../data/results/stage3_sc.json' with { type: 'json' };
 
@@ -136,4 +136,28 @@ test('v2 file without a learned series: explicit naive series', () => {
   const c = heroCurves(naiveOnly);
   assert.equal(c.decoder, 'naive');
   assert.equal(heroOptima(naiveOnly, c.decoder).tauLog.xMin, 3);
+});
+
+// SP5 cut rule (U3 row 14a; DECISIONS E4: V12(b) failed). Catches: fails if the hero still
+// picks the learned curve when the results contain one while the cut holds, if an explicit
+// "naive" request returns the learned series or the learned tau_log, or if an unknown decoder
+// name is accepted silently. Non-vacuous: the same results with decoder null give "learned".
+test('SP5 cut: HERO_DECODER is naive and heroCurves(results, "naive") ignores the learned series', () => {
+  assert.equal(HERO_DECODER, 'naive');
+  const c = heroCurves(results, HERO_DECODER);
+  assert.equal(c.decoder, 'naive');
+  assert.deepEqual(c.logical.y, results.series[0].pL);
+  assert.equal(heroOptima(results, c.decoder).tauLog.xMin, 3);
+  assert.equal(heroCurves(results, null).decoder, 'learned');
+  assert.equal(heroCurves(results, 'learned').decoder, 'learned');
+  assert.throws(() => heroCurves(results, 'other'), /unknown decoder/);
+});
+
+// Catches: fails if the two arms of the real hero data end up on different decoders (the
+// trapped-ion results contain a learned series, the v1 superconducting file does not), which
+// the K2 gate forbids ("the hero uses the same decoder on both arms").
+test('SP5 cut: both hero arms use the same decoder on the real results', () => {
+  const decoders = HERO_PLATFORMS.map((p) => heroCurves(p.results, HERO_DECODER).decoder);
+  assert.deepEqual(decoders, ['naive', 'naive']);
+  assert.ok(HERO_PLATFORMS[0].results.series.some((s) => s.decoder === 'learned'), 'ion results contain a learned series');
 });

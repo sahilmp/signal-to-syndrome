@@ -310,7 +310,7 @@ Space / spaceBoundary / time / diag (antiDiag), L0 + L1 pooled, against the naiv
 
 ### V12b: out of sample (`outOfSample`, `outOfSamplePooled`)
 
-Train on one logical state's bank, decode the other's; flat ε = 0.02, hard, pooled over both directions (n = 8000). Naive → learned: d3 r3 0.00700 [0.00539, 0.00908] → 0.00625 [0.00474, 0.00823]; d5 r3 0.00162 [0.00095, 0.00278] → 0.00088 [0.00042, 0.00181]; d5 r5 0.00250 [0.00162, 0.00386] → 0.00112 [0.00059, 0.00214]; d7 r3 0.00025 → 0.00013; d3 r1 0.00250 → 0.00250. **Learned ≤ naive at every (d, r); not beyond the intervals at d = 5** (k = 13 → 7 and 20 → 9 are too few errors). V12b is therefore a partial fail (DECISIONS E4).
+Train on one logical state's bank, decode the other's; flat ε = 0.02, hard, pooled over both directions (n = 8000). Naive → learned: d3 r3 0.00700 [0.00539, 0.00908] → 0.00625 [0.00474, 0.00823]; d5 r3 0.00162 [0.00095, 0.00278] → 0.00088 [0.00042, 0.00181]; d5 r5 0.00250 [0.00162, 0.00386] → 0.00112 [0.00059, 0.00214]; d7 r3 0.00025 → 0.00013; d3 r1 0.00250 → 0.00250. **Learned ≤ naive at every (d, r); not beyond the intervals at d = 5** (k = 13 → 7 and 20 → 9 are too few errors). V12b requires both, and the first clause alone is not a pass (team checklist Section 1.3, clarified Sat 10 Oct), so **V12b fails and the SP5 cut rule applies**: levels 1–4 and the hero show the naive decoder on both arms until a decision recorded in DECISIONS lifts the cut (DECISIONS E4). The learned results below are reported as results, not as the page's default decoder.
 
 ### Decoder comparison (`decoderComparison`, in sample, R = 2, n = 16 000 per point)
 

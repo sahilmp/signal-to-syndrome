@@ -248,7 +248,7 @@ node tools/sweep.mjs --diag --decoder learned
 | V9 | `--diag` | `53933f98` |
 | V9L | `--diag --decoder learned` | Recorded in E9 |
 | V11 | Stage 1 console | PASS at d = 3, 5, 7 |
-| V12(b) | `dem_forte1.json` → `outOfSample` | Learned ≤ naive pooled; beyond intervals at d = 5 |
+| V12(b) | `dem_forte1.json` → `outOfSamplePooled` | Both clauses: `learnedAtOrBelowNaive` true at every (d, r), **and** `learnedBelowBeyondIntervals` true at every d = 5 row. The first clause alone is not a pass; if either fails, name it in the handoff |
 | ε = 0 spike gone | `stage1_flat.json`, learned series, d = 3 | ε = 0 within the interval of ε = 0.005 |
 | C2 (ion, learned) | `stage2_ion.json`, d = 3, τ = 20 µs | Recorded, whatever it shows |
 
@@ -258,8 +258,8 @@ Then push (team checklist A45) and send `HANDOFF N3 and N4`.
 
 ### B44 · B · Sat 13:30 — SP5 switches
 
-**Do:** team checklist B44 and Appendix U3 rows 13–16.
-**Pass:** `npm run check` passes with `hero` and `uxV2` on; Diagnostics shows V9 and V9L equal to Person A's.
+**Do:** team checklist B44. If V12(b) passed: Appendix U3 rows 13–16. If V12(b) failed: rows 13, 14a, 15, 16 (skip row 14; levels 1–4 stay naive, the hero is pinned to naive); record the cut in your DECISIONS section.
+**Pass:** `npm run check` passes with `hero` and `uxV2` on; Diagnostics shows V9 and V9L equal to Person A's; the hero legend names the same decoder on both arms.
 - [ ] Done
 
 ### K2 · Both · Sat 14:00 — GATE SP5
@@ -267,11 +267,12 @@ Then push (team checklist A45) and send `HANDOFF N3 and N4`.
 **Gate (all must hold):**
 - [ ] V2b, V9, V9L, V11, V12(a), V12(b) pass (or the cut rule applied)
 - [ ] Hero and text cut work on real data
-- [ ] Levels 1–4 decode with the learned decoder
+- [ ] Levels 1–4 decode with the learned decoder (or, by the cut rule, with the naive decoder, recorded in E4)
+- [ ] The hero uses the same decoder on both arms as levels 1–4
 - [ ] `npm test`, `npm run build`, `npm run check` pass
 - [ ] Main project updated on Qollab (private); both hashes match on Qollab
 
-**Cut deadline:** Sat 13:30. **Cut rule:** if V12(b) fails, keep the naive decoder as the default in levels 1–4 and record the failure (the page then reports it honestly); if V2b fails, revert `graph.js` to the `window-start` version and ship hero and text cut only.
+**Cut deadline:** Sat 13:30. **Cut rule:** if V12(b) fails, keep the naive decoder as the default in levels 1–4 and the hero (U3 row 14a) until a decision recorded in DECISIONS lifts the cut, and record the failure (the page then reports it honestly); if V2b fails, revert `graph.js` to the `window-start` version and ship hero and text cut only.
 
 **Do:** team checklist K2 steps 1–5; tag `sp5`.
 - [ ] Done
@@ -586,7 +587,7 @@ git push --tags
 | V9L | `node tools/sweep.mjs --diag --decoder learned` | Equals E9 and the page |
 | V11 | `node tools/sweep.mjs --stage 1` | PASS at d = 3, 5, 7 |
 | V12(a) | `npm test` (`tests/dem.test.js`) | Pass |
-| V12(b) | `dem_forte1.json` → `outOfSample` | Learned ≤ naive pooled |
+| V12(b) | `dem_forte1.json` → `outOfSamplePooled` | Learned ≤ naive at every (d, r), and beyond the intervals at every d = 5 row |
 | V13 | `python -m pytest validation -q`; `npm test` (`tests/v4.test.js`) | Pass |
 | V14 | `npm test` (`tests/ion.test.js`, `tests/sc.test.js`) | Pass |
 | V15 | Hand check against `stage4_comparison.json` | 3 significant figures |

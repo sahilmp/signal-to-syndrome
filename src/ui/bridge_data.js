@@ -10,10 +10,12 @@ import paramsCycle from '../../params/cycle.json' with { type: 'json' };
 export { stage1, stage2, stage3, stage4, bankD3R1, bankD3R3, paramsIon, paramsSc, paramsCycle };
 
 // v2 (team checklist Appendix U3): fixtures until the switch rows 13, 17, 18 and 22.
-import demForte1 from '../../data/fixtures/dem_forte1_v2.json' with { type: 'json' };
-import stage1v2 from '../../data/fixtures/stage1_flat_v2.json' with { type: 'json' };
-import stage2v2 from '../../data/fixtures/stage2_ion_v2.json' with { type: 'json' };
-import stage3v2 from '../../data/fixtures/stage3_sc_v2.json' with { type: 'json' };
+// Row 13 (SP5): demForte1 and stage1v2-stage3v2 are real results; stage3v2 is the v1 file
+// (no decoder field) until the Stage 3 rerun at row 18.
+import demForte1 from '../../data/results/dem_forte1.json' with { type: 'json' };
+import stage1v2 from '../../data/results/stage1_flat.json' with { type: 'json' };
+import stage2v2 from '../../data/results/stage2_ion.json' with { type: 'json' };
+import stage3v2 from '../../data/results/stage3_sc.json' with { type: 'json' };
 import stage4v2 from '../../data/fixtures/stage4_comparison_v2.json' with { type: 'json' };
 import stage1x from '../../data/fixtures/stage1_flat_x_v2.json' with { type: 'json' };
 import stage2x from '../../data/fixtures/stage2_ion_x_v2.json' with { type: 'json' };
