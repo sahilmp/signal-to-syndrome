@@ -98,6 +98,29 @@ Fingerprint (V9), checks, deviations and handoff notes:
   - **Crosstalk:** shown as a scan with τ*_log intervals against τ*_phys, never the raw boolean (N6 b).
   - **Framing:** both captions are right and should stay: "Two readout physics models at fixed gate noise …" and "a controlled comparison of readout physics, not a hardware benchmark".
   - **Learn the noise:** the step 1 fault slots ("between" only on the middle qubit; "after" only in the last round) are right. The step 3 heatmap rates and the decoder comparison (52 of 16 000 → 11 of 16 000) match `dem_forte1.json`.
+- **CC-A22 (A53c, Sun 11 Oct 03:15 IST): final Stage 4.** Code in 022a042; files `stage4_comparison.json` and `stage4_comparison_x.json`, both `provisional: false`. The final file replaces the provisional A50 one.
+  - **Inputs:** `stage2_ion_v2b.json`, `stage2_ion_x_v2b.json`, `stage3_sc_dense.json`, `stage3_sc_x_dense.json`, `stage3_sc_x_T2_25.json` (C6) and `holdout.json` (C5, F1). Each is recorded in `provenance.inputs` with its commit. Stage 4 refuses any input whose card differs from `params/*.json` other than through a recorded `provenance.overrides`; all cards matched.
+  - **Intervals:** per-round, per-µs, pL-at-τ*_log and trade-off values carry `loCluster`/`hiCluster` (cluster bounds through the same transform). `lo`/`hi` stay Wilson.
+  - **Verdicts:** C1 refuted; C2 held; C3 held with `informative: false`; C4 undetermined; C5 held; C6 not applicable; O4 a measurement with no verdict (ratio ≈ 1). F1 is in `findings`, out of sample. Every conclusion has `informative`, `deviations` and a draft `plain` (at most 20 words, for edits at A55), and `framingPlain` drafts the framing.
+  - **Details behind the verdicts:**
+    - C1: on the dense grid only X d = 3 soft has its interval below τ*_phys = 0.910 µs. Under the point flag the ion parts split; under the resolved flag the card-rate part is refuted.
+    - C2: 0 points with soft above hard by Wilson, cluster and paired counts, on both arms and in both bases.
+    - C4: the superconducting d = 5 curve is below d = 3 at every dense grid point, so there is no crossing.
+    - C5: out of sample for ion Z d = 3 and 5; 0 of 15 resolved rows with learned above naive, 13 with learned below.
+    - C6: with the T2 = 25 µs variant (UNSOURCED, illustrative), X is shorter in every point estimate but the intervals overlap.
+  - **Sensitivity:** 6 full-statistics rows (R = 2, every shot, learned): γ dark→bright (ion), η and T1 (superconducting), each × 0.5 and × 2. The estimate was 40.5 min; the run took 20.3 min.
+    - Superconducting T1 × 0.5 is not run, because it would break T2 ≤ 2 T1 (77 > 50).
+    - Paired pL against the baseline (d = 3, hard, at its τ*_log): ion γ × 0.5 −6e-5 [−1.9e-4, 0] and × 2 +6e-5 [−1.3e-4, +2.5e-4], neither resolved. η × 0.5 +5.7e-3 [+4.2e-3, +7.2e-3]; η × 2 −6.3e-4 [−1.1e-3, −3.1e-4]; T1 × 2 −2.4e-3 [−3.8e-3, −1.1e-3].
+    - The rows carry `effect`, `effectCluster`, `pairedVsBaseline` and `tauLog`, but no v1 verdicts.
+  - **V15:** agrees to 3 significant figures. Ion: τ*_log 23.0 µs, T_cyc 3953 µs, 253 rounds/s, pL 0.00336 → 0.00112 per round. Superconducting: τ*_log 0.710 µs, T_cyc 1.04 µs, 9.58e5 rounds/s, pL 0.00660 → 0.00221 per round.
+  - **Tests:** `npm test` 318/320. **The two failures are Person B's `tests/level5.test.js` on the real file:**
+    - "sensitivityCounts on the real sweep" counts C1/C3 verdicts on the sensitivity rows, which no longer carry them.
+    - "scoreboard … right badge" has no badge for the verdict "not applicable" (U4 revision 2.1; A53 item 2 (a)).
+    - Both are requests to Person B in N7b (CC-B21); no Person B test was changed.
+  - **Deviations:**
+    - C6 uses an unpaired cluster difference, because pairedClusterDiff is impossible across different banks.
+    - C5 is out of sample only where held-out banks exist.
+    - The sensitivity rows carry no C1–C4 verdicts.
 
 ## Person B
 
