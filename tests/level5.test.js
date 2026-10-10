@@ -22,10 +22,17 @@ test('superconducting tau_phys marker is the empirical minimum in every chart', 
   }
 });
 
-// Catches: fails if the empirical rule leaks into the trapped-ion chart, whose tau_phys
-// stays the stored optima.tauPhys.
-test('trapped-ion tau_phys marker stays optima.tauPhys', () => {
-  assert.equal(physLine(chartOptions(plat('trapped-ion'), 'hard', 'perRound')).x, stage2.optima.tauPhys.xMin);
+// A53 review item 9 (replaces "trapped-ion tau_phys marker stays optima.tauPhys", which the
+// review asked to change). Catches: fails if the trapped-ion chart's dashed tau_phys line sits
+// at the model's 23.5 µs (optima.tauPhys) instead of the simulated 23.0 µs
+// (optima.tauPhysEmpirical) that the hero and C1 quote, in either metric or mode.
+test('trapped-ion tau_phys marker is the stored simulated optimum', () => {
+  assert.notEqual(stage2.optima.tauPhysEmpirical.xMin, stage2.optima.tauPhys.xMin);
+  for (const mode of ['hard', 'soft']) {
+    for (const metric of ['perRound', 'perMicrosecond']) {
+      assert.equal(physLine(chartOptions(plat('trapped-ion'), mode, metric)).x, stage2.optima.tauPhysEmpirical.xMin);
+    }
+  }
 });
 
 // Catches: fails if the comparison table loses the belief value it quotes beside the
@@ -128,7 +135,7 @@ test('sensitivityCounts on the real sweep', () => {
 // (imports are hoisted, so they may sit here)
 import {
   tradeoffOptions, scoreboardRows, tornadoRows, tornadoOptions, budgetOptions, gateLayers, roundsPerSecondAt, mountLevel5,
-  SRC_V2, PLATFORMS_V2, CONCLUSION_ORDER,
+  SRC_V2, PLATFORMS_V2, CONCLUSION_ORDER, notRunRows, PROVISIONAL_TEXT, BASIS_NOTES,
 } from '../src/ui/level5.js';
 import { FEATURES } from '../src/ui/features.js';
 import { stage4v2 } from '../src/ui/bridge_data.js';
@@ -300,20 +307,86 @@ test('scoreboard: unknown verdicts and missing conclusions are said in words', (
 
 // Catches: fails if the tornado keeps the input order (A, B, C) instead of sorting by the
 // largest absolute change (B: |−0.5|, A: 0.3, C: 0.1), ignores a negative change's size, or
-// forgets to subtract the baseline (A's ion change is 0.25 − 0.25 = 0).
+// forgets to subtract the baseline (A's ion change at × 0.5 is 0.25 − 0.25 = 0). A's 0.3 is
+// its ion change at × 2 (0.55 − 0.25); before A53 review item 7 it came from the
+// superconducting bar of this ion parameter, which is no longer drawn (its values, up to 0.3,
+// would reorder the rows if they leaked in).
 test('tornado: parameters sorted by largest absolute change from the baseline', () => {
   const row = (parameter, scale, ion, sc) => ({ platform: 'trapped-ion', parameter, scale, effect: { perRound_d3_hard: { 'trapped-ion': ion, superconducting: sc } } });
   const src = synthSrc({
     sensitivityBaseline: { effect: { perRound_d3_hard: { 'trapped-ion': 0.25, superconducting: 0 } } },
-    sensitivity: [row('A', 0.5, 0.25, 0.3), row('A', 2, 0.25, 0.1), row('B', 0.5, -0.25, 0), row('C', 2, 0.35, 0.05)],
+    sensitivity: [row('A', 0.5, 0.25, 0.3), row('A', 2, 0.55, 0.1), row('B', 0.5, -0.25, 0.9), row('C', 2, 0.35, 0.05)],
   });
   const rows = tornadoRows(src);
   assert.deepEqual(rows.map((r) => r.parameter), ['B', 'A', 'C']);
   assert.ok(Math.abs(rows[0].maxAbs - 0.5) < 1e-12);
   assert.equal(rows[1].bars.find((b) => b.arm === 'trapped-ion' && b.scale === 0.5).change, 0);
-  assert.deepEqual(rows[1].bars.map((b) => `${b.arm} ${b.scale}`), ['trapped-ion 0.5', 'trapped-ion 2', 'superconducting 0.5', 'superconducting 2']);
+  // A53 review item 7 (changed from four bars per parameter, both arms): only the arm that owns
+  // the parameter is drawn; the superconducting values above (0.3, 0.1, 0, 0.05) must not appear.
+  assert.deepEqual(rows[1].bars.map((b) => `${b.arm} ${b.scale}`), ['trapped-ion 0.5', 'trapped-ion 2']);
   const opts = tornadoOptions(src);
   assert.deepEqual(opts.groups.map((g) => g.label), rows.map((r) => r.label));
+});
+
+// A53 review item 7. Catches: fails if a bar of the arm that does not own the parameter is
+// drawn on the real data (those bars are zero by construction, e.g. "Superconducting: χ ->
+// Trapped ion, change 0"), or if the raw card key is the visible name.
+test('tornado on the real data: only the owning arm, readable names', () => {
+  const rows = tornadoRows();
+  for (const r of rows) {
+    assert.ok(r.bars.length > 0 && r.bars.every((b) => b.arm === r.platform), `${r.label}: ${r.bars.map((b) => b.arm)}`);
+  }
+  assert.ok(rows.some((r) => r.label === 'Superconducting: dispersive shift χ/2π'));
+  assert.ok(!rows.some((r) => /_per_us|_MHz|_us$/.test(r.label)), 'raw parameter key shown');
+});
+
+// A53 review item 7. Catches: fails if the two superconducting rows without an effect (T1 × 0.5,
+// T2 × 2) disappear silently or get the wrong reason: T1 = 25 µs gives 2·T1 = 50 < T2 = 77, and
+// T2 = 154 > 2·T1 = 100. Non-vacuous: T2 × 0.5 (38.5 ≤ 100) has an effect and is not listed.
+test('notRunRows: the rows that would break T2 ≤ 2·T1 are listed with the reason', () => {
+  const rows = notRunRows();
+  assert.deepEqual(rows.map((r) => r.text), [
+    'Superconducting: T1 × 0.5: not run: would break T2 ≤ 2·T1 (T2 = 77 µs, 2·T1 = 50 µs).',
+    'Superconducting: T2 × 2: not run: would break T2 ≤ 2·T1 (T2 = 154 µs, 2·T1 = 100 µs).',
+  ]);
+  assert.ok(stage4v2.sensitivity.some((r) => r.parameter === 'T2_us' && r.scale === 0.5 && r.effect));
+});
+
+// A53 review item 13. Catches: fails if the budget legend names "Crosstalk" plainly although
+// the superconducting arm has none by design (its value is 0).
+test('budget bars: the crosstalk segment says it is trapped ion only', () => {
+  const o = budgetOptions();
+  const sc = o.categories.find((c) => c.label.startsWith('Superconducting'));
+  const xt = sc.segments.find((s) => s.name.startsWith('Crosstalk'));
+  assert.equal(xt.name, 'Crosstalk (trapped ion only)');
+  assert.equal(xt.value, 0);
+});
+
+// A53 review item 1 (blocking). Catches: fails if Level 5 v2 shows the provisional Stage 4
+// verdicts without a visible banner at the top, above the scoreboard and above the tornado chart
+// (and inside "Data"), or if the banner stays once the file is final. Non-vacuous: the same
+// mount with provisional false has no banner.
+test('Level 5 v2: provisional banner while stage4.provisional is true, none when final', () => {
+  assert.equal(stage4v2.provisional, true);
+  const banners = (root) => [...walk(root)].filter((n) => hasClass(n, 'l5-provisional'));
+  const on = banners(mountWith(true));
+  assert.equal(on.length, 4);
+  for (const b of on) assert.equal(b.textContent, `⚠ ${PROVISIONAL_TEXT}`);
+  const saved = stage4v2.provisional;
+  stage4v2.provisional = false;
+  try {
+    assert.equal(banners(mountWith(true)).length, 0);
+  } finally {
+    stage4v2.provisional = saved;
+  }
+});
+
+// A53 review item 8. Catches: fails if the phase-flip notes say again that the verdicts come
+// from the bit-flip memory only (C1 and C2 pool both bases; C6 and O4 compare them).
+test('phase-flip notes: the scoreboard covers both memories', () => {
+  assert.equal(BASIS_NOTES.scoreboard, 'The scoreboard covers both memories.');
+  assert.equal(BASIS_NOTES.sensitivity, 'The sensitivity rows were run in the bit-flip memory only.');
+  for (const t of Object.values(BASIS_NOTES)) assert.ok(!t.includes('no counterpart'));
 });
 
 // Catches: fails if the tornado on the results is not sorted by its largest change.

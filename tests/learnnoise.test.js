@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   faultDetectors, detectorName, edgeProbabilities, edgeWeights, diagonalCells, topPairs, pairKind,
   comparisonFor, outOfSampleFor, comparisonSentence, HEATMAP_BANKS,
+  cheapestExplanations, tieSentences, heldOutText, IN_SAMPLE,
 } from '../src/ui/learnnoise.js';
+import holdout from '../data/results/holdout.json' with { type: 'json' };
 import { computeDetectors } from '../src/core/detectors.js';
 import { buildGraph, weightFromP } from '../src/core/graph.js';
 import { decode } from '../src/core/matching.js';
@@ -93,6 +95,54 @@ test('step 2: naive graph needs two edges, learned graph one diagonal edge', () 
   assert.ok(Math.abs(learned.cost - weightFromP(bank.classes.diag)) < 1e-9);
   // The diagonal edge is never observable, so the learned correction keeps the stored bit.
   assert.equal(learned.flip, 0);
+});
+
+// A53 review item 5. Catches: fails if step 2 presents the naive decoder's choice as what always
+// happens: for the diagonal pair of a fault on data 2 in every round there are exactly three
+// cheapest explanations, each of two errors costing 2 ln[(1 − p)/p] (8.75 at p = 0.0124), and
+// only one of them (data 3 and data 1 flips, through both boundaries) flips data 1. Also fails
+// if the sentence drops the tie-break or misreports the decoder's own outcome. Non-vacuous:
+// a "before" fault on data 1 (one space edge to the boundary) has a single explanation, no tie.
+test('step 2: the naive choice is a three-way tie, one of which flips data 1', () => {
+  const bank = dem.banks.find((b) => b.d === 3 && b.r === 3 && b.basis === 'Z');
+  const g = buildGraph(3, 3);
+  const w = edgeWeights(g, { naiveP: bank.pGateNaive });
+  for (let k = 0; k < 3; k++) {
+    const lit = faultDetectors(3, 3, { qubit: 1, round: k, slot: 'mid' });
+    const ex = cheapestExplanations(g, w, lit);
+    assert.equal(ex.nErrors, 2);
+    assert.equal(ex.sets.length, 3, `round ${k + 1}`);
+    assert.ok(Math.abs(ex.cost - 2 * weightFromP(bank.pGateNaive)) < 1e-9);
+    const flipping = ex.sets.filter((s) => s.flip === 1);
+    assert.equal(flipping.length, 1);
+    assert.deepEqual(flipping[0].edges.map((id) => [g.edges[id].kind, g.edges[id].dataQubit]).sort(), [['space', 0], ['space', 2]]);
+    const naive = decode(g, w, lit);
+    const t = tieSentences(ex, naive.flip);
+    assert.equal(t.tie, true);
+    assert.match(t.text, /^Three explanations with two errors each cost the same, and one of them flips data 1\. Which one the decoder picks is a tie-break/);
+    assert.match(t.text, naive.flip === 1 ? /\. This time its correction flips data 1, which holds the stored bit, so the logical value is lost\.$/
+      : /\. This time its correction leaves data 1, which holds the stored bit, alone, so the logical value survives\.$/);
+    assert.equal(t.text.match(/this time/gi).length, 1);
+  }
+  assert.equal(Math.abs(2 * weightFromP(bank.pGateNaive) - 8.75) < 0.01, true);
+  const single = cheapestExplanations(g, w, faultDetectors(3, 3, { qubit: 0, round: 1, slot: 'before' }));
+  assert.equal(single.sets.length, 1);
+  assert.equal(tieSentences(single, single.sets[0].flip).tie, false);
+});
+
+// A53 review item 6. Catches: fails if step 3 does not lead with the held-out test (V18,
+// holdout.json setting1) or misquotes it: at d = 5 the learned decoder made 37 logical errors of
+// 40 000 against the naive 70, beyond the intervals; at d = 3, 65 against 79 of 8 000, not
+// beyond them. Also fails if the in-sample label is lost.
+test('step 3: the held-out text quotes the pooled V18 rows', () => {
+  assert.equal(holdout.setting1.V18.verdict, 'pass');
+  const t = heldOutText(holdout);
+  assert.match(t, /^Held-out test: the rates were learned from the original stored shots/);
+  assert.match(t, /flat readout ε = 0\.02, hard decoding/);
+  assert.match(t, /d = 3: naive 79 of 8 000, learned 65 of 8 000;/);
+  assert.match(t, /d = 5: naive 70 of 40 000, learned 37 of 40 000 \(learned lower beyond the 95% intervals\)\.$/);
+  assert.equal(heldOutText({}), null);
+  assert.equal(IN_SAMPLE, 'In sample (rates learned from the same stored shots): ');
 });
 
 // Catches: fails if the learned rates are assigned to the wrong edges: boundary data qubits

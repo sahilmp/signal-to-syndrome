@@ -30,6 +30,11 @@ export {
   demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x, stage4x,
   paramsIonV2, paramsScV2, paramsCycleV2,
 };
+// A53 review: the stored phase-flip d = 3, r = 3 shots for Level 3's batch in the X basis
+// (item 14), and the held-out test (V18) for "Learn the noise", step 3 (item 6).
+import bankXD3R3 from '../../data/banks/repx_d3_r3_L0.json' with { type: 'json' };
+import holdout from '../../data/results/holdout.json' with { type: 'json' };
+export { bankXD3R3, holdout };
 // B50 (U7.11): curated Level 4 examples, written by tools/curate.mjs (Person B's data).
 import curatedShots from '../../data/curated/curated_shots.json' with { type: 'json' };
 export { curatedShots };

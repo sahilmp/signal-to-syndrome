@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   optimaInfo, PLATFORMS, assignmentText, formatTau, naiveResults, distanceMarkers, scoreBand, challengeResult,
-  crosstalkRows, crosstalkShift,
+  crosstalkRows, crosstalkShift, crosstalkNote,
 } from '../src/ui/level3.js';
+import { bankD3R3, bankXD3R3 } from '../src/ui/bridge_data.js';
 import stage2v2 from '../data/results/stage2_ion.json' with { type: 'json' };
 import { budgetAt } from '../src/ui/budget.js';
 import { spreadLabels } from '../src/ui/charts.js';
@@ -59,10 +60,47 @@ test('assignmentText: superconducting quotes the simulated value, model labelled
   assert.match(t, /readout model, which ignores ring-up .* predicts 0\.0853, signal-to-noise ratio 2\.75\./);
 });
 
-// Catches: fails if the trapped-ion sentence is relabelled as a model value or loses its number.
-test('assignmentText: trapped ion unchanged apart from three significant figures', () => {
+// A53 review item 10 (replaces the earlier exact-text check of the model's 0.0475, which the
+// review asked to change). Catches: fails if the trapped-ion sentence quotes the model's
+// 0.0475 at 5 µs instead of the simulated 0.048 that the budget bar quotes at the same tau, or
+// loses its interval. Non-vacuous: at 4 µs, off the results grid, the model value is quoted.
+test('assignmentText: trapped ion quotes the simulated value on the grid, the model off it', () => {
   assert.equal(assignmentText(ION, ION.create(ION.params, 5), 5),
-    'At τ = 5 µs the assignment error (average chance of reading the wrong state) is 0.0475.');
+    'At τ = 5 µs the simulated assignment error (average chance of reading the wrong state) is 0.048 (95% interval 0.0471 to 0.0489).');
+  assert.equal(ION.budgetResults.budget.readout[ION.budgetResults.budget.tau_us.indexOf(5)].toPrecision(2), '0.048');
+  assert.match(assignmentText(ION, ION.create(ION.params, 4), 4), /^At τ = 4 µs the assignment error .* is 0\.0\d+\.$/);
+});
+
+// A53 review item 9. Catches: fails if Level 3 (and so Level 5, which shares physicalOptimum)
+// shows the ion's model tau_phys 23.5 µs (optima.tauPhys) instead of the simulated 23.0 µs
+// (optima.tauPhysEmpirical) used by the hero and C1, or quotes a ring-up caveat for the ion.
+test('optimaInfo: ion tau_phys is the simulated optimum, no model line', () => {
+  const info = optimaInfo(ION.results, 'hard', [3]);
+  assert.equal(physLine(info).x, ION.results.optima.tauPhysEmpirical.xMin);
+  assert.notEqual(ION.results.optima.tauPhysEmpirical.xMin, ION.results.optima.tauPhys.xMin);
+  assert.equal(info.lines[0], 'Physical optimum τ_phys (lowest simulated assignment error): 23 µs.');
+  assert.ok(!info.lines.some((l) => l.includes('ring-up')));
+  // The superconducting arm: the simulated value, 0.906 µs to 3 significant figures (located on
+  // assignment.empirical, as stored in tauPhysEmpirical), with the model's beside it.
+  const sc = optimaInfo(SC.results, 'hard', [3], { physFromEmpirical: true });
+  assert.equal(formatTau(physLine(sc).x), formatTau(SC.results.optima.tauPhysEmpirical.xMin));
+  assert.equal(formatTau(physLine(sc).x), '0.906 µs');
+  assert.match(sc.lines[1], /ignores resonator ring-up, is 0\.587 µs/);
+});
+
+// A53 review item 11. Catches: fails if the crosstalk scan loses its reduced-statistics caveat
+// or misstates its readout draws (R = 2 in the real scan).
+test('crosstalkNote: reduced statistics with the scan\'s own R', () => {
+  assert.equal(crosstalkNote(stage2v2.crosstalkScan),
+    'Scan at reduced statistics (R = 2, its own seeds); compare its rows with each other, not with the main curve.');
+  assert.equal(crosstalkNote({}), 'Scan at reduced statistics (its own seeds); compare its rows with each other, not with the main curve.');
+});
+
+// A53 review item 14. Catches: fails if the phase-flip batch would decode the bit-flip bank
+// (runPoint takes the basis from the bank), or a bank of another size.
+test('batch banks: the X bank is the phase-flip d = 3, r = 3 bank', () => {
+  assert.deepEqual([bankXD3R3.basis, bankXD3R3.d, bankXD3R3.r], ['X', 3, 3]);
+  assert.equal(bankD3R3.basis ?? 'Z', 'Z');
 });
 
 // Catches: fails if the ion d = 7 hard optimum (3 errors of 32 000 at its lowest point)

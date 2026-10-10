@@ -5,7 +5,7 @@
 // logical error from decoderComparison. Graphs and matching come from graph.js and
 // matching.js; edge rates from demForte1 (dem.js classes, bridge_data.js).
 
-import { demForte1 } from './bridge_data.js';
+import { demForte1, holdout } from './bridge_data.js';
 import { buildGraph, weightFromP } from '../core/graph.js';
 import { decode } from '../core/matching.js';
 import {
@@ -113,6 +113,21 @@ export function outOfSampleFor(dem, { d, r, basis = 'Z' }) {
   return (dem.outOfSample || []).filter((o) => o.d === d && o.r === r && (o.basis ?? 'Z') === basis);
 }
 
+// The held-out test (V18, data/results/holdout.json setting1), which step 3 leads with (A53
+// review item 6): rates learned from the original stored shots only, tested on circuits run
+// afterwards. One clause per pooled distance; null without the file.
+const thin = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+export function heldOutText(h) {
+  const s = h?.setting1;
+  if (!s || !Array.isArray(s.pooled) || !s.pooled.length) return null;
+  const setup = s.readout === 'flat' ? `flat readout ε = ${s.epsilon}, ${s.mode} decoding` : `${s.readout} readout, ${s.mode} decoding`;
+  const parts = s.pooled.map((p) => `d = ${p.d}: naive ${p.naive.k} of ${thin(p.naive.n)}, learned ${p.learned.k} of ${thin(p.learned.n)}`
+    + (p.learnedBelowBeyondIntervals ? ' (learned lower beyond the 95% intervals)' : ''));
+  return `Held-out test: the rates were learned from the original stored shots and tested on new circuits run afterwards (${setup}). `
+    + `Logical errors, ${parts.join('; ')}.`;
+}
+export const IN_SAMPLE = 'In sample (rates learned from the same stored shots): ';
+
 // "naive → learned" sentence with the factor; no factor when the learned decoder made no error.
 export function comparisonSentence(row) {
   const { naive, learned } = row;
@@ -121,6 +136,65 @@ export function comparisonSentence(row) {
   const f = naive.pL / learned.pL;
   if (f >= 1) return `${base}: ${formatNumber(f)} times fewer logical errors.`;
   return `${base}: ${formatNumber(1 / f)} times more logical errors.`;
+}
+
+// Every cheapest explanation of the lit detectors with at most maxErrors edges (A53 review
+// item 5: with one rate on every naive edge, a diagonal pair has three two-error explanations
+// of equal cost, and only one of them flips data 1, so the naive decoder's choice is a
+// tie-break). Returns { nErrors, cost, sets: [{ edges, flip }] } (flip: the parity of the
+// observable edges), or null when no set of at most maxErrors edges explains them.
+export function cheapestExplanations(graph, weights, lit, maxErrors = 2) {
+  const target = [];
+  lit.forEach((v, i) => { if (v) target.push(i); });
+  const key = (edges) => {
+    const odd = new Set();
+    for (const id of edges) {
+      for (const n of [graph.edges[id].u, graph.edges[id].v]) {
+        if (n === graph.boundary) continue;
+        if (odd.has(n)) odd.delete(n);
+        else odd.add(n);
+      }
+    }
+    return [...odd].sort((a, b) => a - b).join(',');
+  };
+  const want = target.join(',');
+  const found = [];
+  const m = graph.edges.length;
+  const visit = (start, chosen) => {
+    if (chosen.length && key(chosen) === want) found.push([...chosen]);
+    if (chosen.length === maxErrors) return;
+    for (let id = start; id < m; id++) visit(id + 1, [...chosen, id]);
+  };
+  visit(0, []);
+  if (!found.length) return null;
+  const cost = (edges) => edges.reduce((s, id) => s + weights[id], 0);
+  const best = Math.min(...found.map(cost));
+  const sets = found.filter((s) => Math.abs(cost(s) - best) <= 1e-9 * Math.max(1, best))
+    .map((edges) => ({ edges, flip: edges.filter((id) => graph.edges[id].observable).length % 2 }));
+  return { nErrors: Math.min(...sets.map((s) => s.edges.length)), cost: best, sets };
+}
+
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const numberWord = (n) => NUMBER_WORDS[n] ?? String(n);
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// The step 2 sentences about the naive decoder's choice. With a tie whose explanations differ in
+// what they do to data 1, the choice is a tie-break and is said to be one; otherwise the old
+// wording (the fault itself never flips data 1, so a correction that does loses the bit).
+export function tieSentences(expl, naiveFlip) {
+  const outcome = naiveFlip === 1
+    ? 'its correction flips data 1, which holds the stored bit, so the logical value is lost'
+    : 'its correction leaves data 1, which holds the stored bit, alone, so the logical value survives';
+  const nFlip = expl ? expl.sets.filter((s) => s.flip === 1).length : 0;
+  if (!expl || expl.sets.length < 2 || nFlip === 0 || nFlip === expl.sets.length) {
+    return { tie: false, text: `${capital(outcome)}.` };
+  }
+  return {
+    tie: true,
+    text: `${capital(numberWord(expl.sets.length))} explanations with ${numberWord(expl.nErrors)} errors each cost the same, `
+      + `and ${numberWord(nFlip)} of them flip${nFlip === 1 ? 's' : ''} data 1. Which one the decoder picks is a tie-break, `
+      + `so the naive decoder loses the bit on this fault some of the time. This time ${outcome}.`,
+  };
 }
 
 // Words for one decoding-graph edge (1-based, as on the other levels).
@@ -421,13 +495,14 @@ export function mountLearnNoise(container) {
     const used = naive.paths.flatMap((p) => p.edges);
     const learned = decode(learnedSmall, edgeWeights(learnedSmall, { classes: smallBank.classes }), lit);
     const lEdges = learned.paths.flatMap((p) => p.edges).map((id) => learnedSmall.edges[id]);
+    // A53 review item 5: the naive choice among equal-cost explanations is a tie-break.
+    const tie = tieSentences(cheapestExplanations(naiveSmall, edgeWeights(naiveSmall, { naiveP: pNaive }), lit), naive.flip);
     s2Status.replaceChildren(
       el('p', { class: 'status' }, `The naive decoder pairs them with ${used.length} errors: ${used.map((id) => edgeText(naiveSmall, naiveSmall.edges[id])).join(', and ')}. `
         + `Cost ${formatNumber(naive.cost)}, against ${formatNumber(wNaive)} for one error (every error costs ln[(1 − p)/p] with p = ${formatNumber(pNaive)}). `
-        // The fault itself never flips data 1 (the stored bit), so a correction that does loses it.
-        + (naive.flip === 1 ? 'Its correction flips data 1, which holds the stored bit: the logical value is lost.' : 'Its correction leaves data 1, which holds the stored bit, alone, so this time the logical value survives.')),
+        + tie.text),
       el('p', { class: 'takeaway' }, 'The naive decoder has no single error that explains this pattern, so it invents two.'),
-      el('p', { class: 'intro' }, `The learned graph has that error as one edge: ${lEdges.map((e) => edgeText(learnedSmall, e)).join(', and ')}, `
+      el('p', { class: 'intro' }, `The learned graph has that error as one edge${tie.tie ? ', which removes the tie' : ''}: ${lEdges.map((e) => edgeText(learnedSmall, e)).join(', and ')}, `
         + `with p = ${formatNumber(smallBank.classes.diag)} learned from the stored d = 3, r = 3 shots, cost ${formatNumber(learned.cost)}.`),
     );
   }
@@ -492,6 +567,9 @@ export function mountLearnNoise(container) {
   });
   xSel.addEventListener('change', () => { xIx = Number(xSel.value); renderStep3(); });
 
+  // The held-out test comes first; the in-sample comparison below it is labelled as such.
+  const heldOut = el('p', { class: 'status' });
+  s3.appendChild(heldOut);
   const result = el('div', { 'aria-live': 'polite' });
   s3.appendChild(result);
   const smallPrint = el('p', { class: 'intro', style: 'font-size: var(--fs-s)' });
@@ -565,13 +643,15 @@ export function mountLearnNoise(container) {
         big,
         el('p', { class: 'intro' }, `logical error (chance the stored bit is lost), ${learnedOn ? 'learned' : 'naive'} graph, ${ARM_NAME[arm.arm] || arm.arm}, ${xText(arm, arm.xs[xIx])}, d = ${d}, r = ${rUsed}, hard decoding: ${cur.k} of ${cur.n} shots (95% interval ${formatNumber(cur.lo)} to ${formatNumber(cur.hi)}).`
           + (rUsed !== r ? ` The comparison was run at r = ${rUsed} only.` : '')),
-        el('p', { class: 'status' }, comparisonSentence(row)),
+        el('p', { class: 'status' }, `${IN_SAMPLE}${comparisonSentence(row)}`),
       );
     }
+    const held = heldOutText(holdout);
+    heldOut.textContent = !held ? '' : basis === 'X' ? `${held} (Run in the bit-flip memory.)` : held;
     const oos = outOfSampleFor(dem, { d, r, basis });
     const po = dem.params?.outOfSample || {};
     smallPrint.textContent = oos.length
-      ? `Out-of-sample check (rates learned on the shots that stored one logical value, tested on the shots that stored the other; flat readout ε = ${po.epsilon}, ${po.mode} decoding): `
+      ? `A second, weaker check within the stored shots (rates learned on the shots that stored one logical value, tested on the shots that stored the other; flat readout ε = ${po.epsilon}, ${po.mode} decoding): `
         + oos.map((o) => `learned on stored ${o.trainedOn.replace('L', '')}, tested on stored ${o.testedOn.replace('L', '')}: naive ${formatNumber(o.naive.pL)} (${o.naive.k} of ${o.naive.n}), learned ${formatNumber(o.learned.pL)} (${o.learned.k} of ${o.learned.n})`).join('; ') + '.'
       : '';
   }

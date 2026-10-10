@@ -4,14 +4,14 @@
 // histograms for bright and dark with the threshold. Superconducting: the IQ plane
 // (iqview.js) and the stage-3 assignment-error curve. Both: the assignment error, the
 // curves of logical error against tau (hard mode) with the optima, and a "Batch" button
-// that runs runPoint on 200 shots of bankD3R3.
+// that runs runPoint on 200 shots of bankD3R3 (bankXD3R3 in the phase-flip memory).
 // With FEATURES.uxV2 (team checklist U7.5): a distance selector (only the chosen d's tau_log
 // marker, with tau_phys and the current tau), the error-budget bar at the current tau, and the
 // challenge "Set τ to minimise logical error" with a "Lock in" button.
 
 import { createIonReadout, createScReadout, runPoint, findMinimum } from './bridge_core.js';
 import {
-  bankD3R3, stage2, stage3, stage2v2, stage3v2, stage2x, stage3x, paramsIon, paramsSc,
+  bankD3R3, bankXD3R3, stage2, stage3, stage2v2, stage3v2, stage2x, stage3x, paramsIon, paramsSc,
 } from './bridge_data.js';
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
@@ -187,8 +187,12 @@ export function defaultTauIndex(grid, target = 0.1, platform = ION) {
 }
 
 // tau_phys of a stage-2 or stage-3 results file: { xMin, atEdge, empirical, belief }, or null.
-// With physFromEmpirical (see PLATFORMS) it is the minimum of assignment.empirical (log x),
-// and belief carries optima.tauPhys for comparison; otherwise it is optima.tauPhys.
+// Always the simulated value where the file allows it, as the hero and C1 use (A53 review
+// item 9: the ion's model value 23.5 µs was shown beside the simulated 23.0 µs). With
+// physFromEmpirical (see PLATFORMS) it is the minimum of assignment.empirical (log x), and
+// belief carries optima.tauPhys for comparison (the superconducting model ignores ring-up);
+// otherwise optima.tauPhysEmpirical (the same rule, stored by Person A's sweep), else
+// optima.tauPhys.
 export function physicalOptimum(results, { physFromEmpirical = false } = {}) {
   const belief = results.optima?.tauPhys || null;
   const emp = results.assignment?.empirical;
@@ -196,6 +200,8 @@ export function physicalOptimum(results, { physFromEmpirical = false } = {}) {
     const m = findMinimum(results.x.values, emp, { logX: true });
     return { xMin: m.xMin, atEdge: m.atEdge, empirical: true, belief };
   }
+  const stored = results.optima?.tauPhysEmpirical;
+  if (stored && Number.isFinite(stored.xMin)) return { xMin: stored.xMin, atEdge: stored.atEdge === true, empirical: true, belief: null };
   return belief ? { xMin: belief.xMin, atEdge: belief.atEdge, empirical: false, belief: null } : null;
 }
 
@@ -220,6 +226,12 @@ export function assignmentText(plat, readout, tau) {
   if (plat.physFromEmpirical) {
     return `At τ = ${formatTau(tau)} the readout model (no ring-up) predicts an assignment error of ${sig3(eps)}${snrText}; `
       + 'the simulated value is only available at the grid points of the results.';
+  }
+  // Trapped ion: the simulated value too, as the budget bar at the same tau quotes it (A53
+  // review item 10: the model's 0.0475 beside the budget's 0.048); the model only off the grid.
+  if (a && i >= 0 && Number.isFinite(a.empirical?.[i])) {
+    const ci = Number.isFinite(a.lo?.[i]) && Number.isFinite(a.hi?.[i]) ? ` (95% interval ${sig3(a.lo[i])} to ${sig3(a.hi[i])})` : '';
+    return `At τ = ${formatTau(tau)} the simulated assignment error (average chance of reading the wrong state) is ${sig3(a.empirical[i])}${ci}${snrText}.`;
   }
   return `At τ = ${formatTau(tau)} the assignment error (average chance of reading the wrong state) is ${sig3(eps)}${snrText}.`;
 }
@@ -281,10 +293,19 @@ export function distanceMarkers(results, d, tau, { physFromEmpirical = false } =
 // interiorBelowTauPhys flips with noise (DECISIONS E12) and is never shown.
 export const CROSSTALK_TITLE = 'Measurement crosstalk scan (d = 3 and 5, learned decoder)';
 export const CROSSTALK_SENTENCE = 'Crosstalk only moves the best readout time when it is far above the measured value.';
+// The tau*_phys column is the scan's own crosstalkScan.tauPhys (the readout model's 23.5 µs,
+// not the simulated 23.0 µs shown elsewhere), because the shift column was decided against it;
+// the header says so (A53 review item 9).
 export const CROSSTALK_COLUMNS = [
   'Crosstalk rate', 'd', 'Decoding', 'Best readout time for the code (τ*_log, 95% interval)',
-  'Best readout time for one qubit (τ*_phys)', 'Shift below the single-qubit optimum',
+  'Best readout time for one qubit (τ*_phys, readout model, used for the shift test)', 'Shift below the single-qubit optimum',
 ];
+// A53 review item 11: the scan runs at reduced statistics with its own seeds, so its row at the
+// measured rate differs from the main learned curve at the same rate.
+export function crosstalkNote(scan) {
+  const R = Number.isFinite(scan?.readoutDrawsPerShot) ? `R = ${scan.readoutDrawsPerShot}, ` : '';
+  return `Scan at reduced statistics (${R}its own seeds); compare its rows with each other, not with the main curve.`;
+}
 const CARD_RATE = 1.67e-5;
 const sameRate = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b));
 const formatRate = (r) => (r === 0 ? '0' : r.toExponential());
@@ -333,6 +354,7 @@ function crosstalkTable(results) {
     for (const v of [r.rate, r.d, r.mode, r.tauLog, r.tauPhys, r.shift]) tr.insertCell().textContent = v;
   }
   box.appendChild(scrollBox(table, CROSSTALK_TITLE));
+  box.appendChild(el('p', { class: 'hint' }, crosstalkNote(results?.crosstalkScan)));
   return box;
 }
 
@@ -508,8 +530,11 @@ const SHORT_INTRO = {
 };
 
 export function mountLevel3(container) {
-  const shots = expandShots(bankD3R3);
-  const batchBank = sampleBank(bankD3R3, shots, BATCH_SHOTS, SEED + 1);
+  // The batch decodes the stored d = 3, r = 3 shots of the current memory (the X-basis bank in
+  // the phase-flip memory, A53 review item 14); runPoint reads the basis from the bank.
+  const batchBanks = Object.fromEntries([['Z', bankD3R3], ['X', bankXD3R3]]
+    .filter(([, b]) => b)
+    .map(([basis, b]) => [basis, sampleBank(b, expandShots(b), BATCH_SHOTS, SEED + 1)]));
   // Each platform keeps its own slider position (and its last batch result).
   const state = new Map();
   let plat = currentPlatform();
@@ -731,7 +756,7 @@ export function mountLevel3(container) {
       chart.update({ ...chartBase, vlines: marks, points: [] });
       return;
     }
-    batchBtn.disabled = currentBasis() === 'X';
+    batchBtn.disabled = !batchBanks[currentBasis()];
     const rng = createRng(SEED + idx);
     assign.textContent = assignmentText(plat, readout, tau);
     try {
@@ -740,11 +765,10 @@ export function mountLevel3(container) {
       visualBox.replaceChildren(el('p', { class: 'status error' }, `The readout picture could not be drawn: ${err.message}`));
     }
 
-    // The batch decodes stored bit-flip shots, so it is off in the phase-flip memory and says so.
-    const batch = st.batch && st.batch.tau === tau && currentBasis() === 'Z' ? st.batch : null;
+    // A batch result belongs to the memory it was decoded in.
+    const batch = st.batch && st.batch.tau === tau && st.batch.basis === currentBasis() ? st.batch : null;
     batchOut.textContent = batch ? batch.text : '';
-    batchOut.className = currentBasis() === 'X' ? 'status basis-note' : 'status';
-    if (currentBasis() === 'X') batchOut.textContent = 'The batch decodes stored shots of the bit-flip memory; switch the memory to bit-flip to run it.';
+    batchOut.className = 'status';
     chart.update({
       ...chartBase,
       vlines: marks,
@@ -792,11 +816,15 @@ export function mountLevel3(container) {
 
   batchBtn.addEventListener('click', () => {
     const tau = grid[idx];
-    const pt = runPoint({ bank: batchBank, readout: plat.create(plat.params, tau), mode: 'hard', pGate: P_GATE, seed: SEED + 2, maxShots: BATCH_SHOTS });
+    const basis = currentBasis();
+    const bank = batchBanks[basis];
+    if (!bank) return;
+    const pt = runPoint({ bank, readout: plat.create(plat.params, tau), mode: 'hard', pGate: P_GATE, seed: SEED + 2, maxShots: BATCH_SHOTS });
     const w = pt.wilson;
-    const text = `Batch at τ = ${formatTau(tau)} (${plat.label.toLowerCase()}, d = 3, r = 3, ${pt.n} shots, hard decoding): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
+    const mem = basisOn() ? `${BASES[basis].memory}, ` : '';
+    const text = `Batch at τ = ${formatTau(tau)} (${plat.label.toLowerCase()}, ${mem}d = 3, r = 3, ${pt.n} shots, hard decoding): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
       + `p = ${formatNumber(w.p)} (95% interval ${formatNumber(w.lo)} to ${formatNumber(w.hi)}).${pt.nonExact ? ` ${pt.nonExact} matchings were not exact.` : ''}`;
-    platState(plat).batch = { tau, pt, text };
+    platState(plat).batch = { tau, basis, pt, text };
     render();
   });
 

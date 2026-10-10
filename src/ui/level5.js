@@ -15,8 +15,9 @@
 // scoreboard, a tornado chart of the sensitivity effects, and every table above inside a
 // "Data" expander. It reads stage2v2, stage3v2, stage4v2 and the v2 parameter cards.
 // With the basis toggle (U7.9), the phase-flip memory reads stage2x, stage3x and stage4x for the
-// charts and the budget; the scoreboard, the tornado chart and the "Data" tables have no
-// phase-flip counterpart, so they stay on the bit-flip results and say so.
+// charts and the budget; the scoreboard, the tornado chart and the "Data" tables stay on the
+// bit-flip Stage 4 file (whose conclusions already cover both memories; the sensitivity rows
+// are bit-flip only), with notes that say which.
 
 import {
   stage2, stage3, stage4, paramsIon, paramsSc, paramsCycle,
@@ -647,7 +648,8 @@ export function tradeoffOptions(mode, src = SRC_V2) {
 export const BUDGET_SEGMENTS = [
   { key: 'readout', name: 'Readout', color: 'var(--b-readout)' },
   { key: 'idle', name: 'Idle', color: 'var(--b-idle)' },
-  { key: 'crosstalk', name: 'Crosstalk', color: 'var(--b-xt)' },
+  // The superconducting arm has no crosstalk by design (always 0); the name says so (A53 review item 13).
+  { key: 'crosstalk', name: 'Crosstalk (trapped ion only)', color: 'var(--b-xt)' },
   { key: 'gate', name: 'Gate', color: 'var(--b-gate)' },
 ];
 export function budgetOptions(src = SRC_V2) {
@@ -728,6 +730,21 @@ function scoreboard(src) {
 // arm when the parameter is scaled by 0.5 and by 2. The change is the row's effect minus the
 // baseline's (sensitivityBaseline.effect, the same reduced statistics); parameters are sorted
 // by their largest absolute change.
+// Readable names of the sensitivity parameters (A53 review item 7: the raw card keys were shown);
+// an unknown key is shown as it is.
+export const PARAM_NAMES = {
+  R_bright_per_us: 'bright count rate', R_dark_per_us: 'dark count rate',
+  gamma_bright_to_dark_per_us: 'bright-to-dark leak rate', gamma_dark_to_bright_per_us: 'dark-to-bright leak rate',
+  T1_idle_us: 'idle T1', T2_idle_us: 'idle T2', crosstalk_rate_per_us: 'measurement crosstalk rate',
+  chi_over_2pi_MHz: 'dispersive shift χ/2π', kappa_over_2pi_MHz: 'resonator linewidth κ/2π', nbar: 'readout photon number n̄',
+  eta: 'measurement efficiency η', T1_us: 'T1', T2_us: 'T2',
+  'cycle.two_qubit_gate_us': 'two-qubit gate time', 'cycle.reset_us': 'reset time',
+};
+const paramName = (k) => PARAM_NAMES[k] ?? k;
+const ownerLabel = (src, id) => src.platforms.find((p) => p.id === id)?.label ?? id;
+
+// Tornado rows: each parameter belongs to one arm, and the other arm's bars are zero by
+// construction, so only the owning arm's bars are drawn (A53 review item 7).
 export function tornadoRows(src = SRC_V2) {
   const base = src.stage4.sensitivityBaseline?.effect?.perRound_d3_hard || {};
   const armIndex = (id) => src.platforms.findIndex((p) => p.id === id);
@@ -737,10 +754,10 @@ export function tornadoRows(src = SRC_V2) {
     if (!eff) continue;
     const key = `${row.platform}|${row.parameter}`;
     if (!groups.has(key)) {
-      const owner = src.platforms.find((p) => p.id === row.platform);
-      groups.set(key, { key, platform: row.platform, parameter: row.parameter, label: `${owner ? owner.label : row.platform}: ${row.parameter}`, bars: [] });
+      groups.set(key, { key, platform: row.platform, parameter: row.parameter, label: `${ownerLabel(src, row.platform)}: ${paramName(row.parameter)}`, bars: [] });
     }
     for (const p of src.platforms) {
+      if (p.id !== row.platform) continue;
       const value = Number(eff[p.id]);
       if (!Number.isFinite(value)) continue;
       const b = Number(base[p.id]);
@@ -754,6 +771,34 @@ export function tornadoRows(src = SRC_V2) {
     g.maxAbs = Math.max(...g.bars.map((b) => Math.abs(b.change)));
   }
   return rows.sort((a, b) => b.maxAbs - a.maxAbs || a.label.localeCompare(b.label));
+}
+// Sensitivity rows without an effect (A53 review item 7: two superconducting rows were dropped
+// silently). The reason is the row's own note, else the T2 <= 2 T1 rule (CLAUDE.md, Idle errors)
+// checked on the arm's card with the scaled value, else "not run".
+const T_PAIRS = { T1_us: ['T1_us', 'T2_us'], T2_us: ['T1_us', 'T2_us'], T1_idle_us: ['T1_idle_us', 'T2_idle_us'], T2_idle_us: ['T1_idle_us', 'T2_idle_us'] };
+export function notRunRows(src = SRC_V2) {
+  const cards = { 'trapped-ion': src.paramsIon, superconducting: src.paramsSc };
+  const out = [];
+  for (const row of src.stage4.sensitivity || []) {
+    if (row.effect?.perRound_d3_hard) continue;
+    let reason = typeof row.note === 'string' && row.note.trim() !== '' ? row.note.trim() : null;
+    const pair = T_PAIRS[row.parameter];
+    const card = cards[row.platform];
+    if (!reason && pair && card) {
+      let t1 = Number(cardValue(card[pair[0]]));
+      let t2 = Number(cardValue(card[pair[1]]));
+      if (row.parameter === pair[0]) t1 *= row.scale;
+      else t2 *= row.scale;
+      if (Number.isFinite(t1) && Number.isFinite(t2) && t2 > 2 * t1) {
+        reason = `would break T2 ≤ 2·T1 (T2 = ${Number(t2.toPrecision(3))} µs, 2·T1 = ${Number((2 * t1).toPrecision(3))} µs)`;
+      }
+    }
+    out.push({
+      platform: row.platform, parameter: row.parameter, scale: row.scale,
+      text: `${ownerLabel(src, row.platform)}: ${paramName(row.parameter)} × ${row.scale}: not run${reason ? `: ${reason}` : ''}.`,
+    });
+  }
+  return out;
 }
 const ARM_COLOR = { 'trapped-ion': 'var(--ion)', superconducting: 'var(--sc)' };
 export function tornadoOptions(src = SRC_V2) {
@@ -827,12 +872,36 @@ function safeUpdate(chart, opts, what) {
   }
 }
 
+// A53 review item 1 (blocking): while a Stage 4 file is marked provisional, every place that
+// shows its verdicts or sensitivity rows carries a visible banner (icon and words, not colour
+// alone). It disappears by itself when the final file (provisional false or absent) lands.
+export const PROVISIONAL_TEXT = 'Provisional: these verdicts and sensitivity rows come from a preliminary run and may still change. '
+  + 'The final verdicts replace them before publication.';
+export const isProvisional = (...stage4s) => stage4s.some((s) => s?.provisional === true);
+function provisionalBanner(...stage4s) {
+  if (!isProvisional(...stage4s)) return null;
+  const p = el('p', {
+    class: 'l5-provisional', role: 'note',
+    style: 'margin:8px 0;padding:6px 10px;border:2px solid #8a5a00;border-radius:6px;background:#fff4d6;color:#4a3000;font-weight:600',
+  });
+  p.append(el('span', { 'aria-hidden': 'true' }, '⚠ '), PROVISIONAL_TEXT);
+  return p;
+}
+
+// Notes in the phase-flip memory (A53 review item 8): the scoreboard already covers both
+// memories (C1 and C2 pool both bases; C6 and O4 compare them); only the sensitivity rows and
+// the comparison table below are bit-flip only.
+export const BASIS_NOTES = {
+  scoreboard: 'The scoreboard covers both memories.',
+  sensitivity: 'The sensitivity rows were run in the bit-flip memory only.',
+  data: 'The comparison and sensitivity tables below are from the bit-flip memory; the verdicts cover both memories.',
+};
+
 function mountLevel5v2(container) {
   const src = level5Source(currentBasis());
-  // No phase-flip counterpart: the scoreboard, the tornado chart and the tables (see the top).
+  // The scoreboard, the tornado chart and the tables always read the bit-flip file (see the top).
   const zSrc = SRC_V2;
-  const zOnly = (what) => (src.basis === 'X'
-    ? el('p', { class: 'hint basis-note' }, `${what} come from the bit-flip memory; the phase-flip results have no counterpart.`) : null);
+  const xNote = (key) => (src.basis === 'X' ? el('p', { class: 'hint basis-note' }, BASIS_NOTES[key]) : null);
   let mode = 'hard';
   const ux = FEATURES.uxV2 === true;
   const hint = (text) => explainMore([el('p', { class: 'hint' }, text)]);
@@ -840,6 +909,8 @@ function mountLevel5v2(container) {
   container.appendChild(el('h2', {}, 'Level 5: Two readout models, same gates'));
   if (ux) container.appendChild(goalLine('compare two readout models at the same gate noise.'));
   container.appendChild(el('p', { class: 'l5-caption' }, src.stage4.framing || CAPTION));
+  const topBanner = provisionalBanner(src.stage4, zSrc.stage4);
+  if (topBanner) container.appendChild(topBanner);
   container.appendChild(explainMore([
     'Both arms decode the same IonQ-simulated circuits; only the readout model, the idle physics and the cycle time differ. '
     + 'A trapped ion reads out slowly; a superconducting qubit reads out fast but can decay while it is read.',
@@ -879,21 +950,27 @@ function mountLevel5v2(container) {
   container.appendChild(safeChart(createStackedBars, () => budgetOptions(src), 'error-budget chart').root);
 
   container.appendChild(el('h3', {}, 'Scoreboard'));
-  const sbNote = zOnly('The scoreboard verdicts');
-  if (sbNote) container.appendChild(sbNote);
+  for (const n of [provisionalBanner(zSrc.stage4), xNote('scoreboard')]) if (n) container.appendChild(n);
   container.appendChild(scoreboard(zSrc));
 
   container.appendChild(el('h3', {}, 'Which parameters matter'));
-  const tnNote = zOnly('The sensitivity effects');
-  if (tnNote) container.appendChild(tnNote);
+  for (const n of [provisionalBanner(zSrc.stage4), xNote('sensitivity')]) if (n) container.appendChild(n);
   container.appendChild(safeChart(createTornado, () => tornadoOptions(zSrc), 'sensitivity chart').root);
-  container.appendChild(hint(`${SENSITIVITY_NOTE_V2} Each bar is the change from the baseline row; parameters are sorted by their largest change.`));
+  const notRun = notRunRows(zSrc);
+  if (notRun.length) {
+    const ul = el('ul', { class: 'l5-not-run hint' });
+    for (const r of notRun) ul.appendChild(el('li', {}, r.text));
+    container.append(el('p', { class: 'hint' }, 'Rows not in the chart:'), ul);
+  }
+  container.appendChild(hint(`${SENSITIVITY_NOTE_V2} Each bar is the change from the baseline row, on the arm the parameter belongs to; `
+    + 'parameters are sorted by their largest change.'));
 
   if (ux) {
     container.appendChild(takeawayCard('at the same gate noise, the readout model sets both how fast the code can run '
       + 'and how much error each round adds.').node);
   }
 
-  const dataNote = zOnly('The tables below');
-  container.appendChild(explainMore([...(dataNote ? [dataNote] : []), ...dataSections(zSrc, hint)], 'Data'));
+  const dataNote = xNote('data');
+  const dataBanner = provisionalBanner(zSrc.stage4);
+  container.appendChild(explainMore([...(dataBanner ? [dataBanner] : []), ...(dataNote ? [dataNote] : []), ...dataSections(zSrc, hint)], 'Data'));
 }

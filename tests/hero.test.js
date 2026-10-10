@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  heroCurves, heroOptima, bandInfo, liveSentence, sliderTau, snapIndex,
-  BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL, HERO_DECODER, HERO_PLATFORMS,
+  heroCurves, heroOptima, bandInfo, liveSentence, sliderTau, snapIndex, startIndex, heroResults,
+  BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL, TOO_SHORT, HERO_DECODER, HERO_PLATFORMS,
 } from '../src/ui/hero.js';
 import { findMinimum } from '../src/core/optimum.js';
 // A v1-format superconducting Stage 3 file (no decoder field, no tauPhysEmpirical). The real
@@ -31,20 +31,66 @@ const results = {
 const optima = heroOptima(results, 'learned');
 const band = bandInfo(optima);
 
-// Catches: fails if the three regions share a template, or if the boundaries are
-// misplaced: tau = 1 (one grid step below tau*_log = 2) is "too short", tau = 2 (exactly on
-// tau*_log) and 3 are "between", tau = 5 (exactly on tau*_phys) is "between" and tau = 10
-// (one grid step above) is "too long".
-test('live sentence below, between and above the two optima', () => {
+// Catches: fails if the regions share a template, or if the boundaries are misplaced.
+// tau*_log = 2 with interval [1.5, 2.5], tau*_phys = 5. tau = 1 (below the interval) is "too
+// short"; tau = 2 (inside the interval) is the code's best range; tau = 3 (past the interval,
+// inside the band) and tau = 5 (exactly on tau*_phys) are "between"; tau = 10 (one grid step
+// above) is "too long". A53 review item 4 moved the "too short" boundary from min(optima) to
+// the interval's lower end and reworded it (it used to blame the readout's reliability), and
+// gave the interval itself its own sentence; the "between" and "too long" sentences are as before.
+test('live sentence below, inside and above the tau*_log interval, and in the band', () => {
   const below = liveSentence(1, band);
+  const inside = liveSentence(2, band);
   const between = liveSentence(3, band);
   const above = liveSentence(10, band);
-  assert.equal(below, 'Too short: the readout itself is still unreliable.');
+  assert.equal(below, 'Too short: listening longer still lowers the logical error.');
+  assert.equal(below, TOO_SHORT);
+  assert.equal(inside, 'At 2 µs you are at or near the code\'s best readout time (τ*_log = 2 µs, 95% interval 1.5 µs to 2.5 µs).');
   assert.equal(between, 'At 3 µs you read better, but your data qubits lose more than you gain.');
   assert.equal(above, 'Too long: the waiting costs more than the clearer signal is worth.');
-  assert.equal(new Set([below, between, above]).size, 3);
-  assert.equal(liveSentence(2, band), 'At 2 µs you read better, but your data qubits lose more than you gain.');
+  assert.equal(new Set([below, inside, between, above]).size, 4);
   assert.equal(liveSentence(5, band), 'At 5 µs you read better, but your data qubits lose more than you gain.');
+  // Exactly on the interval's lower end is inside; a grid step below is too short.
+  assert.equal(liveSentence(1.5, band), 'At 1.5 µs you are at or near the code\'s best readout time (τ*_log = 2 µs, 95% interval 1.5 µs to 2.5 µs).');
+});
+
+// A53 review item 4. Catches: fails if the phase-flip hero calls a readout time inside
+// tau*_log's interval "too short" (the trapped-ion X case: tau*_log = 31.6 µs, interval 15.9
+// to 52.0 µs, tau*_phys = 23 µs, so 20 µs lies inside it), or if the slider does not start at
+// the case's own tau*_log on the real results. Non-vacuous: 10 µs, one grid step below 15.9 µs
+// on the ion grid, is "too short".
+test('phase-flip hero on the real results: start at its own tau*_log, no "too short" inside the interval', () => {
+  for (const p of HERO_PLATFORMS) {
+    for (const basis of ['Z', 'X']) {
+      const res = heroResults(p, basis);
+      const c = heroCurves(res, HERO_DECODER);
+      const o = heroOptima(res, c.decoder);
+      const i = startIndex(c, o);
+      assert.equal(i, snapIndex(c.tau, o.tauLog.xMin), `${p.id} ${basis}`);
+      assert.notEqual(liveSentence(c.tau[i], bandInfo(o, { grid: c.tau })), TOO_SHORT, `${p.id} ${basis} at its own tau*_log`);
+    }
+  }
+  const res = heroResults(HERO_PLATFORMS[0], 'X');
+  const b = bandInfo(heroOptima(res, heroCurves(res, HERO_DECODER).decoder), { grid: res.x.values });
+  assert.equal(b.kind, 'coincide');
+  assert.ok(b.logLo < 20 && b.logHi > 20, `interval ${b.logLo} to ${b.logHi}`);
+  assert.equal(liveSentence(20, b), `At 20 µs: ${COINCIDE_LABEL}.`);
+  assert.ok(res.x.values.includes(10) && b.logLo > 10);
+  assert.equal(liveSentence(10, b), TOO_SHORT);
+});
+
+// Catches: fails if the grid point nearest tau*_log is called "too short" because tau*_log's
+// interval is narrower than the grid step (superconducting X, naive: tau*_log 0.526 µs,
+// interval 0.519 to 0.533 µs; 0.5 µs is the lowest measured point). Non-vacuous: without the
+// grid 0.5 µs is "too short"; with it 0.5 µs is inside and 0.4 µs, one grid step lower, is not.
+test('grid point nearest tau*_log counts as inside a narrow interval', () => {
+  const o = { tauLog: { xMin: 0.526, lo: 0.519, hi: 0.533, atEdge: false }, tauPhys: { xMin: 0.906, atEdge: false } };
+  const grid = [0.3, 0.4, 0.5, 0.7, 1];
+  assert.equal(liveSentence(0.5, bandInfo(o)), TOO_SHORT);
+  const b = bandInfo(o, { grid });
+  assert.deepEqual([b.logLo, b.logHi], [0.5, 0.533]);
+  assert.match(liveSentence(0.5, b), /^At 0\.5 µs you are at or near the code's best readout time \(τ\*_log = 0\.526 µs/);
+  assert.equal(liveSentence(0.4, b), TOO_SHORT);
 });
 
 // Catches: fails if the band is drawn between the wrong optima (the naive tau_log 3, or

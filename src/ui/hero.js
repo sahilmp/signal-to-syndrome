@@ -91,31 +91,61 @@ const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs
 // has none): no band, COINCIDE_LABEL. kind "reverse": tau*_log > tau*_phys beyond the
 // interval, shaded [tau*_phys, tau*_log] with REVERSE_LABEL. kind "none": an optimum is
 // missing or on the grid edge. x0 <= x1 are the two optima whenever both exist.
-export function bandInfo({ tauLog, tauPhys }) {
+// With `grid` (the slider's grid), the live sentence's range [logLo, logHi] also takes in the
+// grid point nearest tau*_log: an interpolated tau*_log can have an interval narrower than the
+// grid step (superconducting X, d = 3 naive: 0.526 µs, interval 0.519 to 0.533 µs), and the
+// lowest measured point, 0.5 µs, must not then be called "too short".
+export function bandInfo({ tauLog, tauPhys }, { grid = null } = {}) {
   if (!tauLog || !tauPhys || tauLog.atEdge || tauPhys.atEdge || !Number.isFinite(tauLog.xMin) || !Number.isFinite(tauPhys.xMin)) {
     return { kind: 'none', shaded: false, label: null };
   }
   const x0 = Math.min(tauLog.xMin, tauPhys.xMin);
   const x1 = Math.max(tauLog.xMin, tauPhys.xMin);
   const hasCi = Number.isFinite(tauLog.lo) && Number.isFinite(tauLog.hi);
+  // tau*_log's 95% interval (tau*_log itself without one) and its nearest grid point.
+  const near = Array.isArray(grid) && grid.length ? grid[snapIndex(grid, tauLog.xMin)] : tauLog.xMin;
+  const log = {
+    tauLog: tauLog.xMin, ciLo: hasCi ? tauLog.lo : null, ciHi: hasCi ? tauLog.hi : null,
+    logLo: Math.min(hasCi ? tauLog.lo : tauLog.xMin, near), logHi: Math.max(hasCi ? tauLog.hi : tauLog.xMin, near),
+  };
   const inside = hasCi ? tauPhys.xMin >= tauLog.lo && tauPhys.xMin <= tauLog.hi : close(tauPhys.xMin, tauLog.xMin);
-  if (inside) return { kind: 'coincide', shaded: false, x0, x1, label: COINCIDE_LABEL };
-  if (tauLog.xMin < tauPhys.xMin) return { kind: 'band', shaded: true, x0, x1, label: BAND_LABEL };
-  return { kind: 'reverse', shaded: true, x0, x1, label: REVERSE_LABEL };
+  if (inside) return { kind: 'coincide', shaded: false, x0, x1, ...log, label: COINCIDE_LABEL };
+  if (tauLog.xMin < tauPhys.xMin) return { kind: 'band', shaded: true, x0, x1, ...log, label: BAND_LABEL };
+  return { kind: 'reverse', shaded: true, x0, x1, ...log, label: REVERSE_LABEL };
 }
 
-// The live sentence for the chosen tau. Below both optima, between them, above both (U7.2).
-// An optimum exactly at tau counts as "between". When the optima coincide, a tau between
-// them gets the coincide label instead of the "between" template, which assumes tau*_log <
-// tau*_phys (likewise REVERSE_LABEL's case).
+// The live sentence for the chosen tau, worded by where tau sits against tau*_log's 95%
+// interval [logLo, logHi] (see bandInfo), not against the readout's reliability (A53 review
+// item 4: in the phase-flip memory 20 µs was called "too short" although the readout there is
+// within 4% of its best). Below the range: too short; above it: too long; inside it: at or near
+// the code's best. The shaded band between the range and tau*_phys keeps its own sentence
+// (U7.2). A tau exactly on an end of the range or of the band counts as inside.
+export const TOO_SHORT = 'Too short: listening longer still lowers the logical error.';
+export const TOO_LONG = 'Too long: the waiting costs more than the clearer signal is worth.';
 export function liveSentence(tau, band) {
   const t = formatTau(tau);
   if (band.kind === 'none') return `At ${t} these results show no interior optimum to compare with.`;
-  if (tau < band.x0 && !close(tau, band.x0)) return 'Too short: the readout itself is still unreliable.';
-  if (tau > band.x1 && !close(tau, band.x1)) return 'Too long: the waiting costs more than the clearer signal is worth.';
+  if (tau < band.logLo && !close(tau, band.logLo)) {
+    if (band.kind === 'reverse' && (tau > band.x0 || close(tau, band.x0))) {
+      return `At ${t} the readout is already past its best, but the code still gains from the longer wait.`;
+    }
+    return TOO_SHORT;
+  }
+  if (tau > band.logHi && !close(tau, band.logHi)) {
+    if (band.kind === 'band' && (tau < band.x1 || close(tau, band.x1))) {
+      return `At ${t} you read better, but your data qubits lose more than you gain.`;
+    }
+    return TOO_LONG;
+  }
   if (band.kind === 'coincide') return `At ${t}: ${COINCIDE_LABEL}.`;
-  if (band.kind === 'reverse') return `At ${t} the readout is already past its best, but the code still gains from the longer wait.`;
-  return `At ${t} you read better, but your data qubits lose more than you gain.`;
+  const ci = Number.isFinite(band.ciLo) && Number.isFinite(band.ciHi) ? `, 95% interval ${formatTau(band.ciLo)} to ${formatTau(band.ciHi)}` : '';
+  return `At ${t} you are at or near the code's best readout time (τ*_log = ${formatTau(band.tauLog)}${ci}).`;
+}
+
+// The slider's starting index for one case: the grid point nearest tau*_log, else 0. The hero
+// returns to it whenever the platform or the basis changes (A53 review item 4).
+export function startIndex(curves, optima) {
+  return optima.tauLog && Number.isFinite(optima.tauLog.xMin) ? snapIndex(curves.tau, optima.tauLog.xMin) : 0;
 }
 
 // The slider runs over grid indices (step 1), so every position is a grid point; a value
@@ -146,20 +176,17 @@ function el(tag, attrs = {}, text = null) {
 
 // goDeeper(platformId): opens Level 3 on that platform; null when Level 3 is off.
 export function mountHero(container, { goDeeper = null } = {}) {
-  // Each platform keeps its own slider position; it starts at the grid point nearest tau*_log.
-  // A basis change rebuilds the views and keeps each platform's readout time when it is on the
-  // new grid.
+  // The slider starts at the grid point nearest the current case's tau*_log and returns there
+  // whenever the platform or the basis changes, so the status never describes another case's
+  // readout time (A53 review item 4: the bit-flip 20 µs was kept in the phase-flip memory).
   let basis = currentBasis();
-  const buildViews = (old = null) => new Map(HERO_PLATFORMS.map((p) => {
+  const buildViews = () => new Map(HERO_PLATFORMS.map((p) => {
     const results = heroResults(p, basis);
     const curves = heroCurves(results, HERO_DECODER);
     const optima = heroOptima(results, curves.decoder);
-    const band = bandInfo(optima);
-    const prev = old?.get(p.id);
-    const kept = prev ? curves.tau.indexOf(prev.curves.tau[prev.idx]) : -1;
-    const start = kept >= 0 ? kept
-      : optima.tauLog && Number.isFinite(optima.tauLog.xMin) ? snapIndex(curves.tau, optima.tauLog.xMin) : 0;
-    return [p.id, { p, results, curves, optima, band, idx: start }];
+    const band = bandInfo(optima, { grid: curves.tau });
+    const start = startIndex(curves, optima);
+    return [p.id, { p, results, curves, optima, band, start, idx: start }];
   }));
   let views = buildViews();
   let view = views.get(HERO_PLATFORMS[0].id);
@@ -248,6 +275,7 @@ export function mountHero(container, { goDeeper = null } = {}) {
 
   function setView(id) {
     view = views.get(id);
+    view.idx = view.start;
     input.max = String(view.curves.tau.length - 1);
     input.value = String(view.idx);
     render();
@@ -260,7 +288,7 @@ export function mountHero(container, { goDeeper = null } = {}) {
   });
   onBasisChange((b) => {
     basis = b;
-    views = buildViews(views);
+    views = buildViews();
     setView(view.p.id);
   });
   setView(view.p.id);
