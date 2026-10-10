@@ -469,7 +469,7 @@ node -e "for (const f of ['stage3_sc_dense','stage3_sc_x_T2_25']) { const j = JS
 
 If a run failed, restart it for d = 3 and 5 only and go on while it runs. Restart any held-out Qollab runs still missing.
 **Pass:** the dense Z file (grid "dense") and the variant file (override T2_us = 25) exist.
-- [ ] Done
+- [x] Done
 
 ### B49 · B · Sun 05:30 — CC-B17: sandbox and basis toggle
 

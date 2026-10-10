@@ -771,7 +771,7 @@ Then commit `src\core tools tests data\results DECISIONS.md` ("CC-A19: cluster a
 
 **Do:** check that `stage3_sc_dense.json`, `stage3_sc_x_T2_25.json` and (if it finished) `stage3_sc_x_dense.json` exist and parse, each with `provenance.grid` "dense" and, for the variant, `provenance.overrides` T2_us = 25. If a run failed, restart it for d = 3 and 5 only and continue with the next step while it runs. Restart any held-out Qollab runs that are still missing.
 **Pass:** the dense Z file and the C6 variant file exist.
-- [ ] Done
+- [x] Done
 
 ### A53 · REVIEW · Sun 05:45 — Review Person B's SP6 interface
 
