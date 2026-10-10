@@ -159,7 +159,9 @@ test('lock reveals step 2 with guessVerdict and overlapSentence for the same inp
   const mid = middleIndex(grid);
   assert.equal(mid, grid.reduce((b, t, i) => (Math.abs(Math.log(t / Math.sqrt(grid[0] * grid.at(-1)))) < Math.abs(Math.log(grid[b] / Math.sqrt(grid[0] * grid.at(-1)))) ? i : b), 0));
   withHero((root) => {
-    assert.equal(slider(root).value, String(mid));
+    // Replaces "the guess starts at middleIndex(grid)" because the spec changed (UX1-H follow-up:
+    // guess starts at the shortest readout time; one guess per platform).
+    assert.equal(slider(root).value, '0');
     const moved = mid === 0 ? 1 : 0;
     slider(root).value = String(moved);
     slider(root).fire('input');
@@ -202,16 +204,17 @@ test('decoder toggle swaps the caption; the y-axis maximum stays fixed', () => {
 // chosen decoder) in place.
 test('restart returns to step 1 and resets the guess', () => {
   withHero((root) => {
-    const mid = slider(root).value;
-    slider(root).value = '0';
+    // Replaces "move the slider to index 0, then expect the middle index back" because the spec
+    // changed (UX1-H follow-up: guess starts at the shortest readout time; one guess per platform).
+    slider(root).value = slider(root).max;
     slider(root).fire('input');
-    assert.notEqual(slider(root).value, mid);
+    assert.notEqual(slider(root).value, '0');
     buttonIn(root, LOCK_LABEL).click();
     buttonIn(root, NEXT_LABEL).click();
     choose(radio(root, 'hero3-decoder', 'learned'));
     buttonIn(root, RESTART_LABEL).click();
     assert.equal(visibleSteps(root)[0], steps(root)[0]);
-    assert.equal(slider(root).value, mid);
+    assert.equal(slider(root).value, '0');
     assert.equal(focused?.textContent, STEP_LABELS[0]);
     assert.equal(radio(root, 'hero3-decoder', 'naive').checked, true);
   });
@@ -225,8 +228,11 @@ test('platform switch keeps the current step and recomputes', () => {
     buttonIn(root, LOCK_LABEL).click();
     choose(radio(root, 'hero3-platform', 'trapped-ion'));
     assert.equal(visibleSteps(root)[0], steps(root)[1]);
-    const { curves, band } = caseOf('trapped-ion');
-    assert.equal(byClass(root, 'hero3-verdict').textContent, guessVerdict(curves.tau[middleIndex(curves.tau)], band).text);
+    // Replaces "the trapped-ion verdict for the middle guess" because the spec changed (UX1-H
+    // follow-up: guess starts at the shortest readout time; one guess per platform): no guess is
+    // placed on Trapped ion, so no verdict, and the "make your own guess" button instead.
+    assert.equal(byClass(root, 'hero3-verdict').textContent, '');
+    assert.equal(byClass(root, 'hero3-guess-again').hidden, false);
     buttonIn(root, NEXT_LABEL).click();
     choose(radio(root, 'hero3-platform', 'superconducting'));
     assert.equal(visibleSteps(root)[0], steps(root)[2]);

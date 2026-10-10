@@ -18,7 +18,13 @@ import {
 } from './charts.js';
 import { formatTau, currentBasis, onBasisChange, memoryTag } from './level3.js';
 
-// The guess starts at the grid point nearest the geometric middle of the grid.
+// Interface text (not a result, so not in the hero3_text contract): in step 2 or 3, on a platform
+// where the reader has not placed a guess, this button takes them to step 1 there.
+export const GUESS_AGAIN_LABEL = 'Make your own guess for this platform';
+
+// The grid point nearest the geometric middle of the grid. The guess no longer starts here: on
+// the trapped-ion grid that point (20 µs) lies inside the code's-best range, so locking in
+// without dragging gave "inside". It starts at the shortest readout time, index 0.
 export function middleIndex(grid) {
   return snapIndex(grid, Math.sqrt(grid[0] * grid[grid.length - 1]));
 }
@@ -202,7 +208,15 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   let step = 0;
   let decoder = 'naive';
   let view = null;
-  let guessIdx = 0;
+  // One guess per platform and basis: { idx, placed }. placed turns true when the reader moves
+  // the slider or presses Lock in there; until then the guess sits at index 0 and step 2 shows
+  // no guess line and no verdict for it.
+  const guesses = new Map();
+  const guess = () => {
+    const key = `${platformId}|${basis}`;
+    if (!guesses.has(key)) guesses.set(key, { idx: 0, placed: false });
+    return guesses.get(key);
+  };
 
   const buildView = () => {
     const p = HERO_PLATFORMS.find((q) => q.id === platformId);
@@ -249,7 +263,10 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   const slider = el('input', { id: 'hero3-guess', type: 'range', min: '0', step: '1' });
   sliderRow.append(sliderLabel, slider);
   s1.appendChild(sliderRow);
-  s1.appendChild(el('p', {})).appendChild(button(LOCK_LABEL, () => goTo(1)));
+  s1.appendChild(el('p', {})).appendChild(button(LOCK_LABEL, () => {
+    guess().placed = true;
+    goTo(1);
+  }));
 
   // Step 2: reveal.
   const s2 = steps[1].section;
@@ -258,12 +275,14 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   s2.appendChild(chart2.root);
   const reveal = el('div', { 'aria-live': 'polite' });
   const verdictP = el('p', { class: 'hero-live hero3-verdict' });
+  const guessAgainP = el('p', { class: 'hero3-guess-again' });
+  guessAgainP.appendChild(button(GUESS_AGAIN_LABEL, () => goTo(0)));
   const overlapP = el('p', { class: 'hero3-overlap' });
   const why = el('details', { class: 'explain hero3-why' });
   why.appendChild(el('summary', {}, WHY_SUMMARY));
   const whyP = el('p', {});
   why.appendChild(whyP);
-  reveal.append(verdictP, overlapP, why);
+  reveal.append(verdictP, guessAgainP, overlapP, why);
   s2.appendChild(reveal);
   const s2Buttons = el('p', { class: 'control-row' });
   s2Buttons.appendChild(button(NEXT_LABEL, () => goTo(2)));
@@ -322,7 +341,7 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
     name: CHART_LABELS.readout, x: view.curves.tau, ...view.curves.readout,
     color: TOKENS.readout.color, dash: TOKENS.readout.dash, shape: TOKENS.shape[view.p.id], endLabel: CHART_LABELS.readout,
   });
-  const guessTau = () => view.curves.tau[guessIdx];
+  const guessTau = () => view.curves.tau[guess().idx];
 
   function renderStep1() {
     const tau = guessTau();
@@ -341,9 +360,10 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
   function renderStep2() {
     const { curves, optima, band, p } = view;
     const tau = guessTau();
+    const { placed } = guess();
     const { interval, ...logical } = curves.logical;
-    const vlines = [{ x: tau, label: CHART_LABELS.guess }];
-    const kinds = ['guess'];
+    const vlines = placed ? [{ x: tau, label: CHART_LABELS.guess }] : [];
+    const kinds = placed ? ['guess'] : [];
     const tauLog = band.kind !== 'none' ? band.tauLog : (optima.tauLog && !optima.tauLog.atEdge ? optima.tauLog.xMin : null);
     if (Number.isFinite(tauLog)) {
       vlines.push({ x: tauLog, label: CHART_LABELS.codeBest });
@@ -366,7 +386,9 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
       vlines,
     });
     styleVlines(chart2, kinds);
-    verdictP.textContent = guessVerdict(tau, band).text;
+    verdictP.textContent = placed ? guessVerdict(tau, band).text : '';
+    verdictP.hidden = !placed;
+    guessAgainP.hidden = placed;
     overlapP.textContent = overlapSentence(band);
     const w = whySentence({ platformId: p.id, basis, curves, band });
     if (typeof w === 'string' && w) {
@@ -390,28 +412,32 @@ export function mountHero3(container, { goDeeper = null, openLearnNoise = null }
     steps[i].heading.focus();
   }
 
-  function resetGuess() {
-    guessIdx = middleIndex(view.curves.tau);
+  // The slider shows the current platform's guess on its own grid.
+  function syncSlider() {
     slider.max = String(view.curves.tau.length - 1);
-    slider.value = String(guessIdx);
+    slider.value = String(guess().idx);
   }
 
-  // A new platform or memory has its own grid, so the guess returns to its middle; the step stays.
+  // A new platform or memory has its own grid and its own guess; the step stays.
   function recompute() {
     view = buildView();
-    resetGuess();
+    syncSlider();
     render();
   }
 
+  // Start over: every guess back to index 0, not placed.
   function restart() {
-    resetGuess();
+    guesses.clear();
+    syncSlider();
     if (resetDecoder) resetDecoder();
     goTo(0);
   }
 
   slider.addEventListener('input', () => {
-    guessIdx = sliderTau(view.curves.tau, slider.value).index;
-    slider.value = String(guessIdx);
+    const g = guess();
+    g.idx = sliderTau(view.curves.tau, slider.value).index;
+    g.placed = true;
+    slider.value = String(g.idx);
     renderStep1();
   });
   onBasisChange((b) => {
