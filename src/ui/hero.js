@@ -30,7 +30,7 @@ export const heroResults = (p, basis = 'Z') => (basis === 'X' ? p.resultsX : p.r
 
 export const QUESTION = 'How long should you listen to a qubit?';
 export const BAND_LABEL = 'listening longer costs more than it gains here';
-export const COINCIDE_LABEL = 'here the best readout is also the best for the code';
+export const COINCIDE_LABEL = 'the code’s best and the readout’s best overlap within our uncertainty, so treat them as the same';
 // tau*_log above tau*_phys beyond the intervals: not covered by U7.2 (no current results
 // show it); the band is drawn with this label so that the page never claims the opposite.
 export const REVERSE_LABEL = 'the code still gains from listening past the best readout here';
