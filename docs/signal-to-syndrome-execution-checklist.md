@@ -501,7 +501,7 @@ git commit -m "Held-out banks and SPAM-check output"
 
 Fill E13 from the two SPAM outputs (forte-1 against ideal, per qubit, with intervals). Then the team checklist A53b prompt (CC-A21). If V18 passed, record "SP5 cut lifted (V18 passed)" in your DECISIONS section. Commit, push, send `HANDOFF N11`.
 **Pass:** V18 verdict recorded in E4 and E11 (pass or fail, as is); E13 filled; `holdout.json` committed.
-- [ ] Done
+- [x] Done
 
 ### A53c · A · Sun 08:00 — CC-A22: final Stage 4; V15; hand over N7b
 

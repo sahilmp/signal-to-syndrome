@@ -829,7 +829,7 @@ Run `npm test` and `node tools/sweep.mjs --stage holdout`. End with the report f
 
 If V18 passed, record in your DECISIONS section "SP5 cut lifted (V18 passed)", with the time. Commit, push, send `HANDOFF N11`.
 **Pass:** V18 verdict and E13 recorded; `holdout.json` committed.
-- [ ] Done
+- [x] Done
 
 ### A53c · CLAUDE CODE · VERIFY · Sun 08:00 — CC-A22: final Stage 4
 
