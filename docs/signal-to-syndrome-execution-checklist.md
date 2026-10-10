@@ -551,7 +551,7 @@ npm run check
 
 **Do:** team checklist A55.
 **Pass:** C1–C6, O4, F1 and the framing each have a one-line `plain` text of at most 20 words; N9 sent by 11:00.
-- [ ] Done
+- [x] Done
 
 ### B51 · B · Sun 10:30 — CC-B19: accessibility, consistency, motion
 

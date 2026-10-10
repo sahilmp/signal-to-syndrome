@@ -896,7 +896,7 @@ Keep Person A's sections under 2500 words in total. In the report, list every nu
 ### A55 · EDITOR · Sun 10:15 — Edit the page; plain-language verdicts
 
 **Do:** edit your sections by hand until they read well aloud. Edit the draft plain sentences (at most 20 words each) that CC-A22 wrote for C1–C6, O4, the findings and the framing, in `conclusions[*].plain` and `findings[*].plain` of `stage4_comparison.json` (edit the JSON directly; record it in E-notes), and copy them into `notes_results.md`. Commit, push, send `HANDOFF N9` by 11:00.
-- [ ] Done
+- [x] Done
 
 ### A56 · SELF · CLAUDE CODE · Sun 11:00 — Buffer, or CC-A23 (optional)
 
