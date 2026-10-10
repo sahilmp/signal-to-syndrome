@@ -29,13 +29,13 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateBank, expandShots, split } from '../src/core/bank.js';
 import { computeDetectors } from '../src/core/detectors.js';
 import { estimatePGate } from '../src/core/calibrate.js';
 import { estimateEdgeRates, ratesFromBanks } from '../src/core/dem.js';
-import { wilson } from '../src/core/stats.js';
+import { wilson, clusterBootstrapRate, pairedClusterDiff } from '../src/core/stats.js';
 import { createRng } from '../src/core/rng.js';
 import { createFlatReadout } from '../src/core/readout/flat.js';
 import { createIonReadout } from '../src/core/readout/ion.js';
@@ -116,9 +116,11 @@ const keyOf = (decoder, d, mode) => `${decoder},${d},${mode}`;
 // draws, and so do the two decoders (the same seeds: common random numbers). Returns the
 // pooled series (one per decoder, d, mode, in that nesting order), per-logical rows, per-shot
 // mean errors (key decoder,d,mode -> per grid point Float64Array over pooled quantum shots),
+// the same as integer failure counts in 0..draws (failCounts, for the cluster statistics),
 // seeds, the banks used and the number of non-exact matchings.
 function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf, cal, rates, basis, draws = READOUT_DRAWS }) {
   const perShot = new Map();
+  const failCounts = new Map();
   const series = [];
   const perLogical = [];
   const seeds = {};
@@ -128,7 +130,10 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
     for (const d of distances) {
       const nShots = [0, 1].map((logical) => expandShots(byKey.get(`${d},${r},${logical}`).bank).length);
       const nPooled = nShots[0] + nShots[1];
-      for (const mode of modes) perShot.set(keyOf(decoder, d, mode), taus.map(() => new Float64Array(nPooled)));
+      for (const mode of modes) {
+        perShot.set(keyOf(decoder, d, mode), taus.map(() => new Float64Array(nPooled)));
+        failCounts.set(keyOf(decoder, d, mode), taus.map(() => new Uint8Array(nPooled)));
+      }
       for (const logical of [0, 1]) {
         const { file, bank } = byKey.get(`${d},${r},${logical}`);
         const first = decoder === decoders[0];
@@ -149,6 +154,7 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
           const tauSeeds = [];
           for (const mode of modes) {
             const target = perShot.get(keyOf(decoder, d, mode))[t];
+            const fails = failCounts.get(keyOf(decoder, d, mode))[t];
             let k = 0;
             for (let draw = 0; draw < draws; draw++) {
               const seed = seedOf(d, logical, t, draw);
@@ -163,6 +169,7 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
                 if (res.logicalError) {
                   k++;
                   target[offset + s] += 1 / draws;
+                  fails[offset + s]++;
                 }
               }
             }
@@ -184,7 +191,7 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
       }
     }
   }
-  return { perShot, series, perLogical, seeds, used, nonExact };
+  return { perShot, failCounts, series, perLogical, seeds, used, nonExact };
 }
 
 // tau*_log per decoder, distance and mode from the per-shot values, bootstrapped over pooled
@@ -215,6 +222,156 @@ function c2Table({ taus, distances, decoders, series }) {
     }
   }
   return c2;
+}
+
+// ---- Cluster and paired statistics (CC-A19, team checklist U4 revision 2.1) ----
+// Every interval below resamples quantum shots (the R readout draws of one shot share its gate
+// faults). Seeds are fixed and do not depend on the decoder (common random numbers):
+//   series loCluster/hiCluster   base + 10000*d + 1000*modeIndex + tauIndex
+//   paired softMinusHard         base + 100000 + 10000*d + tauIndex
+//   paired learnedMinusNaive     base + 200000 + 10000*d + 1000*modeIndex + tauIndex
+//   shiftDelta                   base + 300000 + 10000*d + 1000*modeIndex
+// with modeIndex 0 hard, 1 soft, and base CLUSTER_SEED[stage] (+ 1000000*rateIndex in the scan).
+const CLUSTER_B = 500;
+const CLUSTER_SEED = { 2: 2600000, 3: 3600000, xt: 27000000 };
+const CLUSTER_SEED_RULE = 'cluster bootstrap B = 500 over quantum shots; seed = base + 10000*d + 1000*modeIndex + tauIndex (series), base + 100000 + 10000*d + tauIndex (softMinusHard), base + 200000 + 10000*d + 1000*modeIndex + tauIndex (learnedMinusNaive), base + 300000 + 10000*d + 1000*modeIndex (shiftDelta); modeIndex hard 0, soft 1; base 2600000 (Stage 2), 3600000 (Stage 3), 27000000 + 1000000*rateIndex (crosstalk scan); the same for both decoders';
+const modeIndex = (mode) => (mode === 'soft' ? 1 : 0);
+// The dense superconducting grid (--dense): 0.40, 0.45, ..., 1.30 us, and shiftDelta's step on it.
+const DENSE_BAND = Array.from({ length: 19 }, (_, i) => (40 + 5 * i) / 100);
+const DENSE_SHORT_STEP = 0.15;
+const sameTau = (a, b) => Math.abs(a - b) < 1e-9;
+
+// Adds loCluster and hiCluster (cluster bootstrap over quantum shots, 95%) to every series.
+function addClusterIntervals(series, failCounts, draws, base) {
+  for (const s of series) {
+    const rows = failCounts.get(keyOf(s.decoder, s.d, s.mode));
+    const cs = rows.map((fc, t) => clusterBootstrapRate(fc, draws, CLUSTER_B, createRng(base + 10000 * s.d + 1000 * modeIndex(s.mode) + t)));
+    s.loCluster = cs.map((c) => round(c.lo));
+    s.hiCluster = cs.map((c) => round(c.hi));
+  }
+}
+
+// Paired differences on the same quantum shots and readout draws: softMinusHard per (decoder,
+// d, tau), and learnedMinusNaive per (mode, d, tau) when both decoders ran.
+function pairedTable({ taus, distances, modes, decoders, failCounts, draws, base }) {
+  const out = [];
+  const pd = (a, b, seed) => {
+    const p = pairedClusterDiff(a, b, draws, CLUSTER_B, createRng(seed));
+    return { diff: round(p.diff), lo: round(p.lo), hi: round(p.hi) };
+  };
+  if (modes.includes('hard') && modes.includes('soft')) {
+    for (const decoder of decoders) {
+      for (const d of distances) {
+        const soft = failCounts.get(keyOf(decoder, d, 'soft'));
+        const hard = failCounts.get(keyOf(decoder, d, 'hard'));
+        taus.forEach((x, t) => out.push({ kind: 'softMinusHard', decoder, d, x, ...pd(soft[t], hard[t], base + 100000 + 10000 * d + t) }));
+      }
+    }
+  }
+  if (decoders.includes('naive') && decoders.includes('learned')) {
+    for (const mode of modes) {
+      for (const d of distances) {
+        const learned = failCounts.get(keyOf('learned', d, mode));
+        const naive = failCounts.get(keyOf('naive', d, mode));
+        taus.forEach((x, t) => out.push({ kind: 'learnedMinusNaive', mode, d, x, ...pd(learned[t], naive[t], base + 200000 + 10000 * d + 1000 * modeIndex(mode) + t) }));
+      }
+    }
+  }
+  return out;
+}
+
+// Grid points of shiftDelta (pre-specified, CC-A19): tauRef = the grid point nearest tauPhys
+// in ln tau (the lower one on a tie); tauShort = the grid point immediately below tauRef, or on
+// the dense grid the point DENSE_SHORT_STEP us below tauRef. null when there is no such point.
+export function shiftDeltaPoints(taus, tauPhys, { dense = false } = {}) {
+  let ref = 0;
+  for (let i = 1; i < taus.length; i++) {
+    if (Math.abs(Math.log(taus[i] / tauPhys)) < Math.abs(Math.log(taus[ref] / tauPhys))) ref = i;
+  }
+  const short = dense ? taus.findIndex((x) => sameTau(x, taus[ref] - DENSE_SHORT_STEP)) : ref - 1;
+  return short < 0 ? null : { ref, short };
+}
+
+// shiftDelta of one curve from its per-shot failure counts (rows[t] over the same quantum
+// shots at every tau): diff = pL(tauRef) - pL(tauShort) with the paired cluster interval;
+// resolved when lo > 0 (pL rises from tauShort to tauRef, so the optimum lies below tauRef).
+export function shiftDelta(taus, tauPhys, rows, draws, B, rng, { dense = false } = {}) {
+  const pts = shiftDeltaPoints(taus, tauPhys, { dense });
+  if (pts === null) return { tauRef: null, tauShort: null, diff: null, lo: null, hi: null, resolved: false, note: 'no grid point below tauRef' };
+  const p = pairedClusterDiff(rows[pts.ref], rows[pts.short], draws, B, rng);
+  return { tauRef: taus[pts.ref], tauShort: taus[pts.short], diff: round(p.diff), lo: round(p.lo), hi: round(p.hi), resolved: p.lo > 0 };
+}
+
+function shiftDeltaOf(taus, tauPhys, failCounts, { decoder, d, mode }, draws, base, dense) {
+  const rng = createRng(base + 300000 + 10000 * d + 1000 * modeIndex(mode));
+  return shiftDelta(taus, tauPhys, failCounts.get(keyOf(decoder, d, mode)), draws, CLUSTER_B, rng, { dense });
+}
+
+// --dense tau grid: the card grid with 0.40, 0.45, ..., 1.30 us added, ascending, no repeats.
+export function denseGrid(grid) {
+  const out = [...grid];
+  for (const x of DENSE_BAND) if (!out.some((g) => sameTau(g, x))) out.push(x);
+  return out.sort((a, b) => a - b);
+}
+
+// --set key=value: overrides card fields after loading. Unknown keys are refused; the value is
+// read as JSON (numbers, booleans, arrays), else kept as a string. A field stored as
+// { value, source } keeps its object form with the new value and source "override (--set)".
+export function applyOverrides(card, sets) {
+  let out = card;
+  const overrides = {};
+  for (const item of sets) {
+    const eq = item.indexOf('=');
+    if (eq <= 0) throw new UsageError(`--set expects key=value, got ${item}`);
+    const key = item.slice(0, eq);
+    const raw = item.slice(eq + 1);
+    if (!Object.hasOwn(card, key) || key === 'schema' || key === 'platform') throw new UsageError(`--set: unknown parameter-card key ${key}`);
+    let value;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = raw;
+    }
+    out = out[key] !== null && typeof out[key] === 'object' && !Array.isArray(out[key])
+      ? { ...out, [key]: { ...out[key], value, source: 'override (--set)' } }
+      : { ...out, [key]: value };
+    overrides[key] = value;
+  }
+  return { card: out, overrides };
+}
+
+// Results path: --out if given (refused if the file exists: results files are never
+// overwritten), else the stage's default file.
+function outPath(opts, defaultName) {
+  if (!opts.out) return join(RESULTS_DIR, defaultName);
+  if (existsSync(opts.out)) throw new UsageError(`--out ${opts.out} exists; results files are never overwritten`);
+  return opts.out;
+}
+
+function writeResult(out, result) {
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+}
+
+// The extra options as they appear in provenance.tool.
+const extraArgs = (opts) => `${opts.dense ? ' --dense' : ''}${opts.set.map((s) => ` --set ${s}`).join('')}${opts.out ? ` --out ${opts.out}` : ''}`;
+
+function printShiftDeltas(rows, xDigits) {
+  console.log('\nshiftDelta (pre-specified, paired cluster bootstrap): pL(tauRef) - pL(tauShort); resolved when lo > 0');
+  for (const m of rows) {
+    const s = m.shiftDelta;
+    const head = `  ${(m.decoder ?? 'learned').padEnd(7)} d = ${m.d} ${m.mode.padEnd(4)}`;
+    if (s.tauRef === null) console.log(`${head}: ${s.note}`);
+    else console.log(`${head}: tauRef ${fmt(s.tauRef, xDigits)} tauShort ${fmt(s.tauShort, xDigits)}  diff ${s.diff.toExponential(2)} [${s.lo.toExponential(2)}, ${s.hi.toExponential(2)}]${s.resolved ? '  RESOLVED' : ''}`);
+  }
+}
+
+function printPairedSummary(paired) {
+  for (const kind of ['softMinusHard', 'learnedMinusNaive']) {
+    const rows = paired.filter((p) => p.kind === kind);
+    if (rows.length === 0) continue;
+    console.log(`  paired ${kind}: below 0 beyond the interval at ${rows.filter((p) => p.hi < 0).length} of ${rows.length} points, above 0 beyond it at ${rows.filter((p) => p.lo > 0).length}`);
+  }
 }
 
 function printF2Summary({ series, taus, tauLog, c2, r, xDigits }) {
@@ -305,7 +462,7 @@ const interval = (w) => `${fmt(w.p)} [${fmt(w.lo)}, ${fmt(w.hi)}]`;
 // tie-breaking spike at epsilon = 0 must be gone). Seed index EPS_GRID.length for 1e-9.
 const V11_EPS = [0, 1e-9];
 
-function stage1({ decoders, basis }) {
+function stage1({ decoders, basis, opts }) {
   const t0 = Date.now();
   const banks = loadRepBanks(basis);
 
@@ -480,7 +637,7 @@ function stage1({ decoders, basis }) {
       ...(diagBank ? { V9: { bank: DIAG_BANK, hash: diagHash }, V9L: { bank: DIAG_BANK, hash: diagHashL } } : {}),
     },
     provenance: {
-      tool: `tools/sweep.mjs --stage 1 --decoder ${decoderArg(decoders)} --basis ${basis}`,
+      tool: `tools/sweep.mjs --stage 1 --decoder ${decoderArg(decoders)} --basis ${basis}${extraArgs(opts)}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
@@ -492,9 +649,8 @@ function stage1({ decoders, basis }) {
       runtime_s: runtimeS,
     },
   };
-  mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, resultFile('stage1_flat.json', basis));
-  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+  const out = outPath(opts, resultFile('stage1_flat.json', basis));
+  writeResult(out, result);
 
   console.log(`\nV1: flat flip rate at epsilon ${V1_EPS} (${V1_DRAWS} draws, seed ${V1_SEED}): ${interval(v1)} -> ${v1Pass ? 'PASS' : 'FAIL'} (|p - eps| <= 4 SE)`);
   for (const decoder of decoders) {
@@ -565,9 +721,9 @@ function poisCdf(m, lambda) {
   return Math.min(1, s);
 }
 
-function stage2({ decoders, basis }) {
+function stage2({ decoders, basis, opts }) {
   const t0 = Date.now();
-  const card = JSON.parse(readFileSync(ION_PARAMS, 'utf8'));
+  const { card, overrides } = applyOverrides(JSON.parse(readFileSync(ION_PARAMS, 'utf8')), opts.set);
   const taus = fieldValue(card, 'tau_grid_us');
   const banks = loadRepBanks(basis);
   const byKey = new Map(banks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
@@ -643,15 +799,18 @@ function stage2({ decoders, basis }) {
 
   // F2-ion: per bank, R readout draws per quantum shot; hard and soft share the draws.
   const cal = new Map();
-  const { perShot, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
+  const { perShot, failCounts, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
     distances, byKey, r: STAGE2_R, taus, readouts, modes: STAGE2_MODES, decoders, seedOf: seedFor2, cal, rates, basis,
   });
+  addClusterIntervals(series, failCounts, READOUT_DRAWS, CLUSTER_SEED[2]);
+  const paired = pairedTable({ taus, distances, modes: STAGE2_MODES, decoders, failCounts, draws: READOUT_DRAWS, base: CLUSTER_SEED[2] });
 
   // Optima. tau*_phys from the belief curve; tau*_log per decoder, distance and mode from the
   // per-shot values, bootstrapped over pooled quantum shots.
   const tauPhys = findMinimum(taus, assignment.belief, { logX: true });
   const tauPhysNoPump = findMinimum(taus, f1Detail.map((f) => f.beliefNoPumping), { logX: true });
   const tauLog = tauLogTable({ taus, distances, modes: STAGE2_MODES, decoders, perShot, bootSeed: BOOT_SEED });
+  for (const m of tauLog) m.shiftDelta = shiftDeltaOf(taus, tauPhys.xMin, failCounts, m, READOUT_DRAWS, CLUSTER_SEED[2], false);
 
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
   const c2 = c2Table({ taus, distances, decoders, series });
@@ -666,14 +825,18 @@ function stage2({ decoders, basis }) {
   const xtRates = crosstalkScanRates(fieldValue(card, 'crosstalk_scan_per_us') ?? XT_RATES, fieldValue(card, 'crosstalk_rate_per_us'));
   const xtLearned = new Map(XT_DISTANCES.map((d) => [d, pooledRates(byKey, d, STAGE2_R)]));
   const xtEntries = [];
+  const xtPaired = [];
   let xtNonExact = 0;
-  for (const rate of xtRates) {
+  for (const [rateIndex, rate] of xtRates.entries()) {
+    const xtBase = CLUSTER_SEED.xt + 1000000 * rateIndex;
     const xtReadouts = taus.map((tau) => createIonReadout(card, tau, { crosstalkRate: rate }));
     const sw = f2Sweep({
       distances: XT_DISTANCES, byKey, r: STAGE2_R, taus, readouts: xtReadouts, modes: STAGE2_MODES, decoders: ['learned'],
       seedOf: seedForXt, cal, rates: xtLearned, basis, draws: XT_DRAWS,
     });
     xtNonExact += sw.nonExact;
+    addClusterIntervals(sw.series, sw.failCounts, XT_DRAWS, xtBase);
+    for (const p of pairedTable({ taus, distances: XT_DISTANCES, modes: STAGE2_MODES, decoders: ['learned'], failCounts: sw.failCounts, draws: XT_DRAWS, base: xtBase })) xtPaired.push({ rate, ...p });
     const tl = tauLogTable({ taus, distances: XT_DISTANCES, modes: STAGE2_MODES, decoders: ['learned'], perShot: sw.perShot, bootSeed: BOOT_SEED_XT });
     for (const s of sw.series) {
       const m = tl.find((x) => x.d === s.d && x.mode === s.mode);
@@ -684,6 +847,8 @@ function stage2({ decoders, basis }) {
         tauLog: tauLogXt,
         interiorBelowTauPhys: interiorBelowTauPhys(tauLogXt, tauPhys.xMin),
         interiorBelowTauPhysResolved: !tauLogXt.atEdge && tauLogXt.hi < tauPhys.xMin,
+        loCluster: s.loCluster, hiCluster: s.hiCluster,
+        shiftDelta: shiftDeltaOf(taus, tauPhys.xMin, sw.failCounts, s, XT_DRAWS, xtBase, false),
       });
     }
   }
@@ -694,6 +859,7 @@ function stage2({ decoders, basis }) {
     distances: XT_DISTANCES, modes: STAGE2_MODES, decoder: 'learned', readoutDrawsPerShot: XT_DRAWS, bootstrapB: BOOT_B,
     seedRule: 'seed = 2500000 + 10000*d + 1000*logical + 10*tauIndex + draw (the same at every rate; hard and soft share it); bootstrap seed 2502 + 10*d + (soft ? 1 : 0)',
     entries: xtEntries,
+    paired: xtPaired,
     perRate: xtRates.map((rate) => ({ rate, interiorBelowTauPhys: xtEntries.some((e) => e.rate === rate && e.interiorBelowTauPhys) })),
     nonExact: xtNonExact,
     runtime_s: (Date.now() - tXt) / 1000,
@@ -711,13 +877,15 @@ function stage2({ decoders, basis }) {
     assignment,
     budget,
     crosstalkScan,
+    paired,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
       tauPhysEmpirical: { xMin: round(tauPhysEmp.xMin), atEdge: tauPhysEmp.atEdge },
-      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
+      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied, shiftDelta: sd }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied, shiftDelta: sd })),
     },
     params: {
       card,
+      overrides,
       distances, r: STAGE2_R, modes: STAGE2_MODES, decoders, basis, logical_states: 'pooled (L0 + L1)',
       readoutDrawsPerShot: READOUT_DRAWS, bootstrapB: BOOT_B, f1Samples: F1_SAMPLES,
       readout: 'createIonReadout(card, tau)', pGate: 'estimatePGate per bank, readout off',
@@ -739,7 +907,7 @@ function stage2({ decoders, basis }) {
       perLogical: perLogical.map((row) => ({ ...row, pL: row.k.map((k, t) => round(k / row.n[t])) })),
     },
     provenance: {
-      tool: `tools/sweep.mjs --stage 2 --decoder ${decoderArg(decoders)} --basis ${basis}`,
+      tool: `tools/sweep.mjs --stage 2 --decoder ${decoderArg(decoders)} --basis ${basis}${extraArgs(opts)}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
@@ -749,13 +917,16 @@ function stage2({ decoders, basis }) {
       pGate: Object.fromEntries(used.map((f) => [f, round(cal.get(f).p)])),
       seeds,
       seedRule: 'seed = 2000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft, and both decoders, share it); F1 seed 201; V7 seed 1201 + tauIndex; bootstrap seed 202 + 10*d + (soft ? 1 : 0)',
+      clusterSeedRule: CLUSTER_SEED_RULE,
+      shiftDeltaRule: 'tauRef = grid point nearest optima.tauPhys (belief) in ln tau; tauShort = the grid point below it; diff = pL(tauRef) - pL(tauShort), paired over the same quantum shots; resolved = lo > 0',
+      grid: 'standard',
+      overrides,
       nonExact: nonExactTotal,
       runtime_s: runtimeS,
     },
   };
-  mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, resultFile('stage2_ion.json', basis));
-  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+  const out = outPath(opts, resultFile('stage2_ion.json', basis));
+  writeResult(out, result);
 
   const g = (v) => v.toExponential(2);
   console.log(`V7: assignment error with both gammas 0, ${F1_SAMPLES} truth samples per tau, analytic Poisson tails at nTh (4 SE)`);
@@ -776,6 +947,8 @@ function stage2({ decoders, basis }) {
   console.log(`tau*_phys without pumping = ${fmt(tauPhysNoPump.xMin, 2)} us${edge(tauPhysNoPump)}`);
   console.log(`\nF2-ion: logical error by tau, r = ${STAGE2_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
   printF2Summary({ series, taus, tauLog, c2, r: STAGE2_R, xDigits: 2 });
+  printPairedSummary(paired);
+  printShiftDeltas(tauLog, 2);
   printBudget(budget, g);
   console.log(`\nCrosstalk scan (C1, ion part): learned decoder, d = ${XT_DISTANCES.join(', ')}, R = ${XT_DRAWS}, tau*_phys = ${fmt(tauPhys.xMin, 2)} us, card rate ${g(crosstalkScan.cardRate_per_us)} /us (${crosstalkScan.runtime_s.toFixed(1)} s)`);
   for (const rate of xtRates) {
@@ -785,7 +958,8 @@ function stage2({ decoders, basis }) {
     for (const e of es) {
       const t = e.tauLog;
       const where = t.atEdge ? `at grid edge (tau ${t.xMin})` : `${fmt(t.xMin, 2)} us [${fmt(t.lo, 2)}, ${fmt(t.hi, 2)}]`;
-      console.log(`    d = ${e.d} ${e.mode.padEnd(4)}: tau*_log ${where}${e.interiorBelowTauPhys ? ' < tau*_phys' : ''}${e.interiorBelowTauPhysResolved ? ' (beyond bootstrap interval)' : ''}  pL ${e.pL.map((p) => fmt(p)).join(' ')}`);
+      const sd = e.shiftDelta.tauRef === null ? '' : `  shiftDelta ${e.shiftDelta.diff.toExponential(2)} [${e.shiftDelta.lo.toExponential(2)}, ${e.shiftDelta.hi.toExponential(2)}]${e.shiftDelta.resolved ? ' RESOLVED' : ''}`;
+      console.log(`    d = ${e.d} ${e.mode.padEnd(4)}: tau*_log ${where}${e.interiorBelowTauPhys ? ' < tau*_phys' : ''}${e.interiorBelowTauPhysResolved ? ' (beyond bootstrap interval)' : ''}${sd}  pL ${e.pL.map((p) => fmt(p)).join(' ')}`);
     }
   }
   console.log(`\nnon-exact matchings: ${nonExactTotal} (crosstalk scan: ${xtNonExact})`);
@@ -825,11 +999,11 @@ function addToBins(bins, llr, bit) {
   if ((llr > 0 ? 1 : 0) !== bit) bins[b].wrong++;
 }
 
-function stage3({ decoders, basis }) {
+function stage3({ decoders, basis, opts }) {
   const t0 = Date.now();
   if (!existsSync(SC_PARAMS)) throw new Error(`${SC_PARAMS} not found: create the superconducting parameter card first (team checklist Appendix T6)`);
-  const card = JSON.parse(readFileSync(SC_PARAMS, 'utf8'));
-  const taus = fieldValue(card, 'tau_grid_us');
+  const { card, overrides } = applyOverrides(JSON.parse(readFileSync(SC_PARAMS, 'utf8')), opts.set);
+  const taus = opts.dense ? denseGrid(fieldValue(card, 'tau_grid_us')) : fieldValue(card, 'tau_grid_us');
   const ringup = fieldValue(card, 'ringup');
   const banks = loadRepBanks(basis);
   const byKey = new Map(banks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
@@ -900,15 +1074,18 @@ function stage3({ decoders, basis }) {
 
   // F2-sc: per bank, R readout draws per quantum shot; hard and soft share the draws.
   const cal = new Map();
-  const { perShot, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
+  const { perShot, failCounts, series, perLogical, seeds, used, nonExact: nonExactTotal } = f2Sweep({
     distances, byKey, r: STAGE3_R, taus, readouts, modes: STAGE3_MODES, decoders, seedOf: seedFor3, cal, rates, basis,
   });
+  addClusterIntervals(series, failCounts, READOUT_DRAWS, CLUSTER_SEED[3]);
+  const paired = pairedTable({ taus, distances, modes: STAGE3_MODES, decoders, failCounts, draws: READOUT_DRAWS, base: CLUSTER_SEED[3] });
 
   // Optima. tau*_phys from the belief curve; tau*_log per decoder, distance and mode from the
   // per-shot values, bootstrapped over pooled quantum shots.
   const tauPhys = findMinimum(taus, assignment.belief, { logX: true });
   const tauPhysEmp = findMinimum(taus, assignment.empirical, { logX: true });
   const tauLog = tauLogTable({ taus, distances, modes: STAGE3_MODES, decoders, perShot, bootSeed: BOOT_SEED3 });
+  for (const m of tauLog) m.shiftDelta = shiftDeltaOf(taus, tauPhysEmp.xMin, failCounts, m, READOUT_DRAWS, CLUSTER_SEED[3], opts.dense);
 
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
   const c2 = c2Table({ taus, distances, decoders, series });
@@ -926,13 +1103,16 @@ function stage3({ decoders, basis }) {
     series,
     assignment,
     budget,
+    paired,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
       tauPhysEmpirical: { xMin: round(tauPhysEmp.xMin), atEdge: tauPhysEmp.atEdge },
-      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
+      tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied, shiftDelta: sd }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied, shiftDelta: sd })),
     },
     params: {
       card,
+      overrides,
+      tauGrid: opts.dense ? 'dense: the card grid with 0.40, 0.45, ..., 1.30 us added (x.values)' : 'the card grid',
       distances, r: STAGE3_R, modes: STAGE3_MODES, decoders, basis, logical_states: 'pooled (L0 + L1)',
       readoutDrawsPerShot: READOUT_DRAWS, bootstrapB: BOOT_B, f1Samples: F1_SAMPLES,
       readout: 'createScReadout(card, tau)', pGate: 'estimatePGate per bank, readout off',
@@ -955,7 +1135,7 @@ function stage3({ decoders, basis }) {
       perLogical: perLogical.map((row) => ({ ...row, pL: row.k.map((k, t) => round(k / row.n[t])) })),
     },
     provenance: {
-      tool: `tools/sweep.mjs --stage 3 --decoder ${decoderArg(decoders)} --basis ${basis}`,
+      tool: `tools/sweep.mjs --stage 3 --decoder ${decoderArg(decoders)} --basis ${basis}${extraArgs(opts)}`,
       commit: gitCommit(),
       date: new Date().toISOString(),
       node: process.version,
@@ -965,13 +1145,16 @@ function stage3({ decoders, basis }) {
       pGate: Object.fromEntries(used.map((f) => [f, round(cal.get(f).p)])),
       seeds,
       seedRule: 'seed = 3000000 + 10000*d + 1000*logical + 10*tauIndex + draw (hard and soft, and both decoders, share it); F1 seed 301; V8 seed 1301 + tauIndex; V10 seed 2301 + tauIndex; bootstrap seed 302 + 10*d + (soft ? 1 : 0)',
+      clusterSeedRule: CLUSTER_SEED_RULE,
+      shiftDeltaRule: `tauRef = grid point nearest optima.tauPhysEmpirical in ln tau; tauShort = ${opts.dense ? 'the grid point 0.15 us below it (dense grid)' : 'the grid point below it'}; diff = pL(tauRef) - pL(tauShort), paired over the same quantum shots; resolved = lo > 0`,
+      grid: opts.dense ? 'dense' : 'standard',
+      overrides,
       nonExact: nonExactTotal,
       runtime_s: runtimeS,
     },
   };
-  mkdirSync(RESULTS_DIR, { recursive: true });
-  const out = join(RESULTS_DIR, resultFile('stage3_sc.json', basis));
-  writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+  const out = outPath(opts, resultFile('stage3_sc.json', basis));
+  writeResult(out, result);
 
   const g = (v) => v.toExponential(2);
   console.log(`V8: Gaussian assignment error (T1 = ${V8_T1_US} us, ring-up off), ${F1_SAMPLES} truth samples per tau, against 0.5 erfc(SNR / (2 sqrt 2)) (4 SE)`);
@@ -997,6 +1180,8 @@ function stage3({ decoders, basis }) {
   console.log(`tau*_phys from the empirical curve = ${fmt(tauPhysEmp.xMin, 3)} us${edge(tauPhysEmp)}`);
   console.log(`\nF2-sc: logical error by tau, r = ${STAGE3_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
   printF2Summary({ series, taus, tauLog, c2, r: STAGE3_R, xDigits: 3 });
+  printPairedSummary(paired);
+  printShiftDeltas(tauLog, 3);
   printBudget(budget, g);
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
@@ -2036,17 +2221,20 @@ function stageDem() {
 }
 
 const USAGE = 'usage: node tools/sweep.mjs --stage 1 | 2 | 3 | 4 [--decoder naive | learned | both] [--basis Z | X]\n'
+  + '       stages 1-3: [--out <file>]; stages 2-3: [--set key=value ...]; stage 3: [--dense] (--set and --dense need --out)\n'
   + '       node tools/sweep.mjs --stage dem\n'
   + '       node tools/sweep.mjs --diag [--decoder naive | learned | both]';
 
 function parseArgs(argv) {
-  const opts = { stage: null, diag: false, decoder: null, basis: null };
+  const opts = { stage: null, diag: false, decoder: null, basis: null, out: null, dense: false, set: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--diag') opts.diag = true;
-    else if (a === '--stage' || a === '--decoder' || a === '--basis') {
+    else if (a === '--dense') opts.dense = true;
+    else if (a === '--stage' || a === '--decoder' || a === '--basis' || a === '--out' || a === '--set') {
       if (i + 1 >= argv.length) throw new UsageError(`${a} needs a value`);
-      opts[a.slice(2)] = argv[++i];
+      if (a === '--set') opts.set.push(argv[++i]);
+      else opts[a.slice(2)] = argv[++i];
     } else throw new UsageError(`unknown argument ${a}`);
   }
   if (opts.decoder !== null && !['naive', 'learned', 'both'].includes(opts.decoder)) throw new UsageError(`--decoder must be naive, learned or both, got ${opts.decoder}`);
@@ -2055,6 +2243,12 @@ function parseArgs(argv) {
   if (opts.stage !== null && !['1', '2', '3', '4', 'dem'].includes(opts.stage)) throw new UsageError(`unknown stage ${opts.stage}`);
   if (opts.diag && opts.basis !== null) throw new UsageError(`--diag reads ${DIAG_BANK} (Z basis) only; drop --basis`);
   if (opts.stage === 'dem' && (opts.decoder !== null || opts.basis !== null)) throw new UsageError('--stage dem always runs both decoders on every available basis; drop --decoder and --basis');
+  if (opts.out !== null && !['1', '2', '3'].includes(opts.stage)) throw new UsageError('--out is available for --stage 1, 2 and 3 only');
+  if (opts.set.length && !['2', '3'].includes(opts.stage)) throw new UsageError('--set overrides the ion or superconducting card: --stage 2 or 3 only');
+  if (opts.dense && opts.stage !== '3') throw new UsageError('--dense is for --stage 3 only');
+  if ((opts.dense || opts.set.length) && opts.out === null) throw new UsageError('--dense and --set need --out, so the standard results file is not overwritten');
+  // Checked again when writing (outPath); here so a long run does not start in vain.
+  if (opts.out !== null && existsSync(opts.out)) throw new UsageError(`--out ${opts.out} exists; results files are never overwritten`);
   return opts;
 }
 
@@ -2078,7 +2272,7 @@ function main() {
   }
   const decoders = (opts.decoder ?? 'both') === 'both' ? ['naive', 'learned'] : [opts.decoder];
   const run = { 1: stage1, 2: stage2, 3: stage3, 4: stage4 }[opts.stage];
-  run({ decoders, basis: opts.basis ?? 'Z' });
+  run({ decoders, basis: opts.basis ?? 'Z', opts });
 }
 
 // Run only as a script, so tests can import the exported helpers without starting a stage.

@@ -526,3 +526,70 @@ test('interiorBelowTauPhys: strict, interior only; boundary at tau*_phys', () =>
   assert.equal(interiorBelowTauPhys({ xMin: tauPhys - 0.01, atEdge: false }, tauPhys), true);
   assert.equal(interiorBelowTauPhys({ xMin: 1, atEdge: true }, tauPhys), false);
 });
+
+// ---- tools/sweep.mjs helpers (CC-A19): dense grid, shiftDelta, --set overrides ----
+
+const { denseGrid, shiftDeltaPoints, shiftDelta, applyOverrides } = await import('../tools/sweep.mjs');
+
+// Catches: fails if the dense band misses a point of 0.40..1.30 in 0.05 steps, repeats a card
+// point that is already in the band (0.4, 0.5, 0.7, 1.0), drops a card point, or is unsorted.
+test('denseGrid: the card grid plus 0.40..1.30 us in 0.05 steps, once each, ascending', () => {
+  const card = cardValue(scCard, 'tau_grid_us');
+  const g = denseGrid(card);
+  for (let k = 40; k <= 130; k += 5) assert.equal(g.filter((x) => Math.abs(x - k / 100) < 1e-9).length, 1, `tau ${k / 100}`);
+  for (const x of card) assert.ok(g.includes(x), `card point ${x}`);
+  for (let i = 1; i < g.length; i++) assert.ok(g[i] > g[i - 1]);
+  assert.equal(g.length, card.length + 19 - card.filter((x) => x >= 0.4 - 1e-9 && x <= 1.3 + 1e-9 && Math.abs(x * 20 - Math.round(x * 20)) < 1e-9).length);
+});
+
+// Catches: fails if tauRef is the nearest point in tau instead of ln tau, or tauShort is not the
+// point below it. Boundary: on [1, 2, 4] the ln-midpoint of 2 and 4 is sqrt(8) = 2.828;
+// tauPhys = 2.82 gives tauRef 2 and 2.83 (a step of 0.01 past) gives 4 (in linear tau both
+// would give 2, since the linear midpoint is 3). At the grid start there is no tauShort.
+test('shiftDeltaPoints: nearest grid point in ln tau, the point below it; dense step 0.15 us', () => {
+  const taus = [1, 2, 4];
+  assert.deepEqual(shiftDeltaPoints(taus, 2.82), { ref: 1, short: 0 });
+  assert.deepEqual(shiftDeltaPoints(taus, 2.83), { ref: 2, short: 1 });
+  assert.equal(shiftDeltaPoints(taus, 1.1), null);
+  const dense = denseGrid(cardValue(scCard, 'tau_grid_us'));
+  const p = shiftDeltaPoints(dense, 0.9, { dense: true });
+  assert.ok(Math.abs(dense[p.ref] - 0.9) < 1e-9 && Math.abs(dense[p.short] - 0.75) < 1e-9, JSON.stringify(p));
+  // tauRef 0.4: 0.25 us is not on the dense grid, so there is no dense tauShort.
+  assert.equal(shiftDeltaPoints(dense, 0.41, { dense: true }), null);
+});
+
+// Catches: fails if diff has the wrong sign (pL(tauShort) - pL(tauRef)), if tauRef and tauShort
+// are swapped, or if "resolved" accepts lo = 0. Identical rows give lo = 0 exactly (boundary:
+// not resolved); adding failures at tauRef on every 4th shot (shift 0.25 * 2 / 2 = 0.25 of a
+// rate, many SE from 0 at n = 400) is resolved.
+test('shiftDelta: paired pL(tauRef) - pL(tauShort); resolved only when lo > 0', () => {
+  const taus = [1, 2, 4];
+  const n = 400;
+  const base = Uint8Array.from({ length: n }, (_, i) => (i % 10 === 0 ? 1 : 0));
+  const flat = shiftDelta(taus, 2, [base, base, base], 2, 200, createRng(19));
+  assert.deepEqual(flat, { tauRef: 2, tauShort: 1, diff: 0, lo: 0, hi: 0, resolved: false });
+  const up = Uint8Array.from(base, (f, i) => (i % 4 === 0 ? 2 : f));
+  const s = shiftDelta(taus, 2, [base, up, base], 2, 200, createRng(19));
+  const expected = up.reduce((a, f, i) => a + f - base[i], 0) / (n * 2);
+  assert.ok(Math.abs(s.diff - expected) < 1e-12, `${s.diff} vs ${expected}`);
+  assert.ok(s.resolved && s.lo > 0, JSON.stringify(s));
+  const down = shiftDelta(taus, 2, [up, base, base], 2, 200, createRng(19));
+  assert.ok(down.diff < 0 && !down.resolved, JSON.stringify(down));
+});
+
+// Catches: fails if --set changes the loaded card object in place, drops the field's object form,
+// accepts a key the card does not have, or bypasses the card checks: T2 <= 2*T1 (T1 = 50 us)
+// must still be enforced by createScReadout. Boundary: T2 = 100 us is allowed, 100.5 us is not.
+test('applyOverrides: --set T2_us=25 on a copy; unknown keys refused; card checks still run', () => {
+  const before = JSON.stringify(scCard);
+  const { card, overrides } = applyOverrides(scCard, ['T2_us=25']);
+  assert.equal(JSON.stringify(scCard), before);
+  assert.equal(card.T2_us.value, 25);
+  assert.equal(card.T2_us.source, 'override (--set)');
+  assert.deepEqual(overrides, { T2_us: 25 });
+  assert.ok(Math.abs(createScReadout(card, 0.5).idleBreakdown('X').idle - 0.5 * (1 - Math.exp(-0.5 / 25))) < 1e-15);
+  assert.throws(() => applyOverrides(scCard, ['T3_us=25']), /unknown parameter-card key T3_us/);
+  assert.throws(() => applyOverrides(scCard, ['T2_us']), /key=value/);
+  assert.doesNotThrow(() => createScReadout(applyOverrides(scCard, ['T2_us=100']).card, 0.5));
+  assert.throws(() => createScReadout(applyOverrides(scCard, ['T2_us=100.5']).card, 0.5), /exceeds 2 \* T1_us/);
+});
