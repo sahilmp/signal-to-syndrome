@@ -632,3 +632,103 @@ test('v18Verdict: the V12(b) two-clause rule; clause 1 alone is not a pass', () 
   assert.deepEqual(v18Verdict([row(3, 10, 0.001, 11, 0.01), row(5, 20, 0.002, 9, 0.001)]), { clause1: false, clause2: true, verdict: 'fail' });
   assert.equal(v18Verdict([row(3, 10, 0.5, 1, 0.1)]).verdict, 'fail'); // no d = 5 row
 });
+
+// ---- CC-A22: final Stage 4 helpers ----
+const { STAGE4_INPUTS, pickStage4Input, cardMatchesParams, unpairedClusterDiff, perRoundBounds, c6Conclusion, PLAIN } = await import('../tools/sweep.mjs');
+const { perRound: perRoundM, perMicrosecond: perMicrosecondM } = await import('../src/core/metrics.js');
+
+// Catches: fails if Stage 4 reads the pre-2.1 files (stage2_ion.json, stage3_sc.json) instead of
+// the v2b and dense ones, if the X-basis superconducting input does not fall back to the
+// standard-grid file when the dense one is missing, or if a missing input passes silently.
+test('pickStage4Input: v2b and dense files; X superconducting falls back to the standard grid', () => {
+  assert.equal(pickStage4Input('Z', 'trapped-ion', () => true), 'stage2_ion_v2b.json');
+  assert.equal(pickStage4Input('Z', 'superconducting', () => true), 'stage3_sc_dense.json');
+  assert.equal(pickStage4Input('X', 'trapped-ion', () => true), 'stage2_ion_x_v2b.json');
+  assert.equal(pickStage4Input('X', 'superconducting', () => true), 'stage3_sc_x_dense.json');
+  assert.equal(pickStage4Input('X', 'superconducting', (n) => n !== 'stage3_sc_x_dense.json'), 'stage3_sc_x.json');
+  assert.throws(() => pickStage4Input('Z', 'superconducting', () => false), /stage3_sc_dense\.json/);
+  assert.ok(!Object.values(STAGE4_INPUTS).some((b) => Object.values(b).flat().includes('stage2_ion.json')));
+});
+
+// Catches: fails if a results file whose card differs from params/*.json is accepted, or if a
+// difference recorded in provenance.overrides (--set) is refused. Boundary: the recorded
+// override T2_us = 25 with a file card at 25 matches; the same record with the file at 26 does not.
+test('cardMatchesParams: equal cards and recorded overrides pass; anything else is refused', () => {
+  assert.equal(cardMatchesParams(scCard, scCard, {}), true);
+  const at = (v) => ({ ...scCard, T2_us: { ...scCard.T2_us, value: v, source: 'override (--set)' } });
+  assert.equal(cardMatchesParams(at(25), scCard, { T2_us: 25 }), true);
+  assert.equal(cardMatchesParams(at(26), scCard, { T2_us: 25 }), false);
+  assert.equal(cardMatchesParams(at(25), scCard, {}), false);
+  assert.equal(cardMatchesParams({ ...scCard, eta: { ...scCard.eta, value: 0.31 } }, scCard, undefined), false);
+});
+
+// Catches: fails if the unpaired difference uses the wrong sign (it is b - a), adds the
+// half-widths linearly instead of in quadrature, or pairs a lower bound with a lower bound.
+// Hand numbers: a = 0.010 (0.008, 0.013), b = 0.014 (0.011, 0.018): diff 0.004,
+// lo = 0.004 - hypot(0.003, 0.003), hi = 0.004 + hypot(0.004, 0.002).
+test('unpairedClusterDiff: b - a with cluster half-widths in quadrature', () => {
+  const r = unpairedClusterDiff({ pL: 0.010, loCluster: 0.008, hiCluster: 0.013 }, { pL: 0.014, loCluster: 0.011, hiCluster: 0.018 });
+  assert.ok(Math.abs(r.diff - 0.004) < 1e-15);
+  assert.ok(Math.abs(r.lo - (0.004 - Math.hypot(0.003, 0.003))) < 1e-15);
+  assert.ok(Math.abs(r.hi - (0.004 + Math.hypot(0.004, 0.002))) < 1e-15);
+});
+
+// Catches: fails if the cluster bounds are not carried through the per-round transform and on to
+// per microsecond the same way as the value (perRound, then divide by the cycle time), or if lo
+// and hi are swapped.
+test('perRoundBounds: cluster bounds through perRound and perMicrosecond', () => {
+  const b = perRoundBounds(0.002, 0.005, 3, 1.1);
+  assert.equal(b.perRound.lo, perRoundM(0.002, 3));
+  assert.equal(b.perRound.hi, perRoundM(0.005, 3));
+  assert.equal(b.perMicrosecond.lo, perMicrosecondM(perRoundM(0.002, 3), 1.1));
+  assert.ok(b.perRound.lo < b.perRound.hi && b.perMicrosecond.lo < b.perMicrosecond.hi);
+});
+
+// Synthetic superconducting files for C6: one (d = 3, hard) learned tau*_log per file.
+function c6Files({ zTau, xTau, xTied = 0, T1 = 50, T2 = 77 }) {
+  const res = (tl, card) => ({
+    x: { values: [0.5, 0.7, 1] },
+    params: { card },
+    optima: { tauLog: [{ d: 3, mode: 'hard', decoder: 'learned', ...tl }] },
+    series: [{ d: 3, mode: 'hard', decoder: 'learned', pL: [0.01, 0.008, 0.009], loCluster: [0.009, 0.007, 0.008], hiCluster: [0.011, 0.009, 0.010] }],
+  });
+  const card = { ...scCard, T1_us: { ...scCard.T1_us, value: T1 }, T2_us: { ...scCard.T2_us, value: T2 } };
+  return {
+    Z: { names: { superconducting: 'z.json' }, superconducting: res({ xMin: zTau[0], lo: zTau[1], hi: zTau[2], fractionTied: 0 }, card) },
+    X: { names: { superconducting: 'x.json' }, superconducting: res({ xMin: xTau[0], lo: xTau[1], hi: xTau[2], fractionTied: xTied }, card) },
+  };
+}
+
+// Catches: fails if C6 gets a held/refuted verdict while its premise T2 < T1 is not met (it must
+// be "not applicable"), if the premise check is <= instead of <, or if an UNRESOLVED tau*_log
+// (fractionTied >= 0.5) enters the rule. Boundary: T2 = T1 = 50 is not applicable, T2 = 49 with
+// X entirely below Z is held; an X row tied exactly 50% is left out (undetermined), 49.5% is used.
+test('c6Conclusion: not applicable unless T2 < T1; the tie rule excludes UNRESOLVED rows', () => {
+  const below = { zTau: [0.8, 0.75, 0.85], xTau: [0.6, 0.55, 0.65] };
+  const na = c6Conclusion(c6Files({ ...below, T2: 50 }), null);
+  assert.equal(na.conclusion.verdict, 'not applicable');
+  assert.equal(na.conclusion.automated, 'not applicable');
+  assert.equal(na.detail.ruleResultWithCard, 'held');
+  assert.equal(c6Conclusion(c6Files({ ...below, T2: 49 }), null).conclusion.verdict, 'held');
+  assert.equal(c6Conclusion(c6Files({ ...below, T2: 49, xTied: 0.5 }), null).conclusion.verdict, 'undetermined');
+  assert.equal(c6Conclusion(c6Files({ ...below, T2: 49, xTied: 0.495 }), null).conclusion.verdict, 'held');
+  // Variant card: its rule result goes to the detail; the verdict stays "not applicable".
+  const variant = c6Files({ ...below, T2: 25 }).X.superconducting;
+  const withVariant = c6Conclusion(c6Files({ ...below, T2: 77 }), variant);
+  assert.equal(withVariant.conclusion.verdict, 'not applicable');
+  assert.equal(withVariant.detail.variant.result, 'held');
+  assert.match(withVariant.conclusion.note, /UNSOURCED/);
+  assert.equal(withVariant.detail.variant.cases['d3 hard'].pLDiff.paired, false);
+});
+
+// Catches: fails if a draft plain-language sentence grows past the 20-word limit of CC-A22, or if
+// a conclusion verdict, the framing or F1 has no draft at all.
+test('PLAIN: a draft of at most 20 words for every conclusion verdict, F1 and the framing', () => {
+  const words = (s) => s.trim().split(/\s+/).length;
+  const all = [PLAIN.framing, PLAIN.F1, ...['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'O4'].flatMap((id) => Object.values(PLAIN[id]))];
+  for (const s of all) {
+    assert.ok(s.length > 0);
+    assert.ok(words(s) <= 20, `${words(s)} words: ${s}`);
+  }
+  assert.ok('not applicable' in PLAIN.C6);
+});

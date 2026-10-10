@@ -175,3 +175,20 @@ test('C3 dominance rule on two synthetic curves, one dominating and one not', ()
   assert.equal(dominance(edge, other), null);
   assert.equal(dominance({ ...edge, hi: 4e-3 - 1e-6 }, other), 'A');
 });
+
+// Catches: fails if cycleTime, roundsPerSecond or perRound drift from the V15 hand formulas on
+// the real cycle card (rounds per second = 1e6 / T_cyc with T_cyc = layers x gate + tau + reset;
+// error per round = 1/2 [1 - (1 - 2 pL)^(1/r)]), e.g. if the ion's "2*(d-1)" layers were read as 2.
+// Hand numbers at d = 3: ion 4 x 970 + 23.02 + 50 = 3953.02 us; superconducting 2 x 0.042 + 0.764
+// + 0.25 = 1.098 us; pL = 0.00336 at r = 3.
+test('V15 hand formulas on params/cycle.json at d = 3', async () => {
+  const { readFileSync } = await import('node:fs');
+  const cycle = JSON.parse(readFileSync(new URL('../params/cycle.json', import.meta.url), 'utf8'));
+  const ion = cycleTime(cycle['trapped-ion'], 23.02, 3);
+  assert.ok(Math.abs(ion - 3953.02) < 1e-9, `ion ${ion}`);
+  assert.ok(Math.abs(roundsPerSecond(ion) - 1e6 / 3953.02) < 1e-9);
+  const sc = cycleTime(cycle.superconducting, 0.764, 3);
+  assert.ok(Math.abs(sc - 1.098) < 1e-12, `sc ${sc}`);
+  assert.ok(Math.abs(perRound(0.00336, 3) - 0.5 * (1 - (1 - 2 * 0.00336) ** (1 / 3))) < 1e-15);
+  assert.ok(Math.abs(perMicrosecond(perRound(0.00336, 3), sc) - perRound(0.00336, 3) / sc) < 1e-15);
+});
