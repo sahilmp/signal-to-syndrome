@@ -5,16 +5,20 @@
 // (iqview.js) and the stage-3 assignment-error curve. Both: the assignment error, the
 // curves of logical error against tau (hard mode) with the optima, and a "Batch" button
 // that runs runPoint on 200 shots of bankD3R3.
+// With FEATURES.uxV2 (team checklist U7.5): a distance selector (only the chosen d's tau_log
+// marker, with tau_phys and the current tau), the error-budget bar at the current tau, and the
+// challenge "Set τ to minimise logical error" with a "Lock in" button.
 
 import { createIonReadout, createScReadout, runPoint, findMinimum } from './bridge_core.js';
-import { bankD3R3, stage2, stage3, paramsIon, paramsSc } from './bridge_data.js';
+import { bankD3R3, stage2, stage3, stage2v2, stage3v2, paramsIon, paramsSc } from './bridge_data.js';
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import {
   createChart, svgEl, formatNumber, SERIES_STYLES, isNarrow, onNarrowChange, htmlLegend, scrollBox, drawVlineLabels,
-  TOKENS, tokenStyle, goalLine, explainMore, takeawayCard,
+  TOKENS, tokenStyle, goalLine, explainMore, takeawayCard, createStackedBars,
 } from './charts.js';
+import { budgetAt, budgetBarOptions, budgetSentence } from './budget.js';
 import { drawIqView } from './iqview.js';
 import { P_GATE } from './level1.js';
 import { sampleBank } from './level2.js';
@@ -44,11 +48,11 @@ export function naiveResults(results) {
 // assignment.empirical instead and the belief value is quoted beside it.
 export const PLATFORMS = [
   {
-    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: naiveResults(stage2), stage: 2,
+    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: naiveResults(stage2), stage: 2, budgetResults: stage2v2,
     create: createIonReadout, tauName: 'Detection time',
   },
   {
-    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: naiveResults(stage3), stage: 3,
+    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: naiveResults(stage3), stage: 3, budgetResults: stage3v2,
     create: createScReadout, tauName: 'Integration time', physFromEmpirical: true,
   },
 ];
@@ -219,6 +223,32 @@ export function optimaInfo(results, mode, ds, { physFromEmpirical = false } = {}
     else merged.push({ ...v });
   }
   return { lines, vlines: merged };
+}
+
+// Markers of the logical-error chart with the distance selector (U7.5): the current tau,
+// tau_phys and the tau_log of the chosen d only (hard decoding).
+export function distanceMarkers(results, d, tau, { physFromEmpirical = false } = {}) {
+  return [{ x: tau, label: `τ = ${formatTau(tau)}` }, ...optimaInfo(results, 'hard', [d], { physFromEmpirical }).vlines];
+}
+
+// Challenge score bands by pL(chosen) / pL(min) (U7.5).
+export const CHALLENGE_BANDS = [{ max: 1.1, text: 'spot on' }, { max: 1.5, text: 'close' }];
+export function scoreBand(ratio) {
+  return (CHALLENGE_BANDS.find((b) => ratio <= b.max) || { text: 'try again' }).text;
+}
+
+// The challenge after "Lock in": the chosen tau's logical error against the lowest point of
+// the same curve (one results series on the grid xs), or null when tau is not on the grid.
+// Returns { tau, pL, best: { tau, pL }, ratio, band }.
+export function challengeResult(xs, series, tau) {
+  const i = xs.findIndex((x) => Math.abs(x - tau) <= 1e-9 * Math.max(1, tau));
+  if (i < 0 || !Number.isFinite(series.pL[i])) return null;
+  let b = -1;
+  series.pL.forEach((p, k) => { if (Number.isFinite(p) && (b < 0 || p < series.pL[b])) b = k; });
+  const pL = series.pL[i];
+  const pMin = series.pL[b];
+  const ratio = pMin > 0 ? pL / pMin : (pL > 0 ? Infinity : 1);
+  return { tau: xs[i], pL, best: { tau: xs[b], pL: pMin }, ratio, band: scoreBand(ratio) };
 }
 
 // Threshold in photon counts. The Module API does not expose it, so it is read from the
@@ -426,8 +456,50 @@ export function mountLevel3(container) {
   const batchOut = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(batchOut);
 
+  // Distance selector (uxV2): which d's tau_log marker the chart shows, and the challenge's d.
+  let selD = 3;
+  const challengeOut = el('p', { class: 'status', 'aria-live': 'polite' });
+  if (ux) {
+    const fs = el('fieldset', { class: 'platform-toggle' });
+    fs.appendChild(el('legend', {}, 'Code distance d (whose optimum the chart marks)'));
+    for (const d of [3, 5, 7]) {
+      const id = `l3-d-${d}`;
+      const input = el('input', { type: 'radio', name: 'l3-d', id, value: String(d) });
+      input.checked = d === selD;
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        selD = d;
+        challengeOut.textContent = '';
+        render();
+      });
+      const wrap = el('span', { class: 'platform-option' });
+      wrap.append(input, el('label', { for: id }, `d = ${d}`));
+      fs.appendChild(wrap);
+    }
+    container.appendChild(fs);
+  }
+
   const chart = createChart({ title: '', xLabel: '', yLabel: 'Logical error probability', series: [], logX: true, logY: true, yFloor: 1e-7 });
   container.appendChild(chart.root);
+
+  // Error budget at the current tau (uxV2), under the curves, with its values table.
+  const budgetBox = el('div', { class: 'budget' });
+  const budgetNote = el('p', { class: 'status', 'aria-live': 'polite' });
+  let budgetChart = null;
+  if (ux) {
+    budgetBox.appendChild(budgetNote);
+    container.appendChild(budgetBox);
+  }
+
+  // Challenge (uxV2): lock in a tau, scored against the lowest point of the chosen d's curve.
+  const challengeBtn = el('button', { type: 'button' }, 'Lock in');
+  const challengeText = el('p', {});
+  if (ux) {
+    const box = el('section', { class: 'challenge', 'aria-labelledby': 'l3-challenge-title' });
+    box.appendChild(el('h3', { id: 'l3-challenge-title' }, 'Challenge: set τ to minimise logical error'));
+    box.append(challengeText, challengeBtn, challengeOut);
+    container.appendChild(box);
+  }
   const optList = el('ul', { class: 'optima' });
   container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
   if (ux) {
@@ -515,6 +587,13 @@ export function mountLevel3(container) {
     out.textContent = formatTau(tau);
     input.setAttribute('aria-valuetext', formatTau(tau));
     const tauLine = { x: tau, label: `τ = ${formatTau(tau)}` };
+    // With the distance selector only the chosen d's tau_log is marked.
+    const marks = ux ? distanceMarkers(plat.results, selD, tau, { physFromEmpirical: plat.physFromEmpirical }) : [tauLine, ...optima.vlines];
+    if (ux) {
+      renderBudget(tau);
+      challengeText.textContent = `Move the slider to the readout time you think gives d = ${selD} its lowest logical error, then lock it in.`;
+      challengeBtn.textContent = `Lock in τ = ${formatTau(tau)}`;
+    }
     if (assignBase) {
       const phys = optima.vlines.filter((v) => v.label.includes('τ_phys')).map((v) => ({ x: v.x, label: 'τ_phys' }));
       assignChart.update({ ...assignBase, vlines: [tauLine, ...phys] });
@@ -526,7 +605,7 @@ export function mountLevel3(container) {
       assign.textContent = `The readout model rejected τ = ${formatTau(tau)}: ${err.message}`;
       visualBox.replaceChildren();
       batchBtn.disabled = true;
-      chart.update({ ...chartBase, vlines: [tauLine, ...optima.vlines], points: [] });
+      chart.update({ ...chartBase, vlines: marks, points: [] });
       return;
     }
     batchBtn.disabled = false;
@@ -542,10 +621,42 @@ export function mountLevel3(container) {
     batchOut.textContent = batch ? batch.text : '';
     chart.update({
       ...chartBase,
-      vlines: [tauLine, ...optima.vlines],
+      vlines: marks,
       points: batch ? [{ name: `Batch, d = 3 (${batch.pt.n} shots)`, x: tau, y: batch.pt.wilson.p, lo: batch.pt.wilson.lo, hi: batch.pt.wilson.hi }] : [],
     });
   }
+
+  function renderBudget(tau) {
+    const src = plat.budgetResults;
+    const entry = budgetAt(src, tau, { crosstalk: plat.id === 'trapped-ion' && FEATURES.crosstalk === true });
+    if (!entry) {
+      if (budgetChart) budgetChart.root.hidden = true;
+      budgetNote.textContent = `No error budget is stored for τ = ${formatTau(tau)}.`;
+      return;
+    }
+    const opts = budgetBarOptions(entry, { tauText: formatTau(tau), placeholder: src?.fixture === true });
+    if (!budgetChart) {
+      budgetChart = createStackedBars(opts);
+      budgetBox.replaceChildren(budgetChart.root, budgetNote);
+    } else budgetChart.update(opts);
+    budgetChart.root.hidden = false;
+    budgetNote.textContent = budgetSentence(entry, formatTau(tau));
+  }
+
+  challengeBtn.addEventListener('click', () => {
+    const tau = grid[idx];
+    const res = plat.results;
+    const series = res.series.find((u) => u.d === selD && u.mode === 'hard');
+    const r = series ? challengeResult(res.x.values, series, tau) : null;
+    if (!r) {
+      challengeOut.textContent = `There is no stored logical error for d = ${selD} at τ = ${formatTau(tau)}.`;
+      return;
+    }
+    const verdict = { 'spot on': 'Spot on!', close: 'Close.', 'try again': 'Try again.' }[r.band];
+    const ratio = Number.isFinite(r.ratio) ? `${sig3(r.ratio)} times the lowest` : 'while the lowest is zero';
+    challengeOut.textContent = `${verdict} At τ = ${formatTau(r.tau)} the logical error for d = ${selD} is ${formatNumber(r.pL)}, ${ratio}. `
+      + `The true optimum on the grid is τ = ${formatTau(r.best.tau)}, with ${formatNumber(r.best.pL)}.`;
+  });
 
   batchBtn.addEventListener('click', () => {
     const tau = grid[idx];

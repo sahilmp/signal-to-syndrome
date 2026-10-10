@@ -68,6 +68,28 @@ export function onNarrowChange(fn) {
   if (typeof matchMedia === 'function') matchMedia(NARROW_QUERY).addEventListener('change', fn);
 }
 
+// True when the reader asked for reduced motion: timed highlights then stay put (U7.13).
+export const prefersReducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Label positions moved apart so that no two are closer than `gap` (in input order), kept
+// inside [lo, hi] when there is room: sorted, pushed down from the top, then back up from hi.
+export function spreadLabels(ys, gap, lo = -Infinity, hi = Infinity) {
+  const order = ys.map((y, i) => i).sort((a, b) => ys[a] - ys[b] || a - b);
+  const out = ys.slice();
+  let prev = -Infinity;
+  for (const i of order) {
+    out[i] = Math.max(ys[i], prev + gap, lo);
+    prev = out[i];
+  }
+  let next = Infinity;
+  for (let k = order.length - 1; k >= 0; k--) {
+    const i = order[k];
+    out[i] = Math.min(out[i], next - gap, hi);
+    next = out[i];
+  }
+  return out;
+}
+
 // Legend as HTML under the SVG, so it wraps and keeps full-size text on narrow screens.
 // entries: [{ name, color, shape, filled = true, swatch?, dash? }]; swatch(svg) draws a custom
 // key; an entry with a dash key (null for solid) also shows its line style.
@@ -102,12 +124,16 @@ export function scrollBox(table, label) {
   return box;
 }
 
+// Line height of chart labels: with the text cut on, a text box (ascenders to descenders,
+// about 1.35 times the font size) clears the next row; v1 keeps its font + 2 px rows.
+export const labelRow = (fontPx) => (FEATURES.uxV2 === true ? Math.ceil(1.4 * fontPx) : fontPx + 2);
+
 // Vertical-marker labels, one row each so that close markers do not overprint; a label
 // that would run past the right edge is drawn to the left of its line.
 export function drawVlineLabels(svg, items, top, right, narrow) {
   const fontPx = narrow ? 22 : 12;
   items.forEach(({ x, label }, i) => {
-    const y = top + (fontPx + 2) * (i + 1);
+    const y = top + labelRow(fontPx) * (i + 1);
     const fits = x + 4 + 0.6 * fontPx * label.length <= right;
     const t = svgEl('text', { x: fits ? x + 4 : x - 4, y, 'text-anchor': fits ? 'start' : 'end', class: 'vline-label' }, svg);
     t.textContent = label;
@@ -338,10 +364,16 @@ export function createChart(opts) {
       svgEl('line', { x1: x - 4, x2: x + 4, y1: y1, y2: y1, stroke: color, 'stroke-width': 1.5 }, g);
       if (!logY || lo >= yMin) svgEl('line', { x1: x - 4, x2: x + 4, y1: y0, y2: y0, stroke: color, 'stroke-width': 1.5 }, g);
     };
+    const plotted = (s) => s.x.map((x, i) => [x, s.y[i]]).filter(([x, y]) => Number.isFinite(y) && (!logY || y > 0) && (!logX || x > 0));
+    // End labels whose last points sit close together are spread apart vertically.
+    const ends = series.map((s, si) => ({ si, pts: plotted(s) })).filter((e) => series[e.si].endLabel && e.pts.length);
+    const endY = new Map();
+    spreadLabels(ends.map((e) => sy(e.pts[e.pts.length - 1][1]) + endFont / 3), labelRow(endFont), m.top + endFont, height - m.bottom)
+      .forEach((y, k) => endY.set(ends[k].si, y));
     series.forEach((s, si) => {
       const st = styleOf(s, si);
       const g = svgEl('g', { class: 'series' }, svg);
-      const pts = s.x.map((x, i) => [x, s.y[i]]).filter(([x, y]) => Number.isFinite(y) && (!logY || y > 0) && (!logX || x > 0));
+      const pts = plotted(s);
       if (pts.length > 1) {
         svgEl('polyline', {
           points: pts.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' '), fill: 'none', stroke: st.color, 'stroke-width': 2,
@@ -351,8 +383,8 @@ export function createChart(opts) {
       s.x.forEach((x, i) => { if (s.lo && s.hi && (!logX || x > 0)) errBar(g, sx(x), s.lo[i], s.hi[i], st.color); });
       for (const [x, y] of pts) drawMarker(g, st.shape, sx(x), sy(y), 4.5, st.color);
       if (s.endLabel && pts.length) {
-        const [x, y] = pts[pts.length - 1];
-        const t = svgEl('text', { x: sx(x) + 9, y: sy(y) + endFont / 3, class: 'end-label', fill: st.color }, g);
+        const [x] = pts[pts.length - 1];
+        const t = svgEl('text', { x: sx(x) + 9, y: endY.get(si), class: 'end-label', fill: st.color }, g);
         t.textContent = s.endLabel;
       }
     });

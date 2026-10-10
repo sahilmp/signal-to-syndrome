@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { optimaInfo, PLATFORMS, assignmentText, formatTau, naiveResults } from '../src/ui/level3.js';
+import {
+  optimaInfo, PLATFORMS, assignmentText, formatTau, naiveResults, distanceMarkers, scoreBand, challengeResult,
+} from '../src/ui/level3.js';
+import { budgetAt } from '../src/ui/budget.js';
+import { spreadLabels } from '../src/ui/charts.js';
 
 // Synthetic results: the belief optimum (optima.tauPhys) sits at 1, the empirical
 // assignment error has its minimum at the grid point 10.
@@ -88,4 +92,85 @@ test('naiveResults: keeps decoder-less and naive entries, drops learned ones', (
   assert.deepEqual(n.optima.tauLog.map((t) => t.d), [3, 5]);
   assert.equal(n.optima.tauPhys, both.optima.tauPhys);
   assert.equal(both.series.length, 3);
+});
+
+// --- U7.5 (CC-B14): distance selector, challenge, error budget ---
+
+// Catches: fails if the chart with the distance selector marks another d's tau_log (or all of
+// them), or drops tau_phys or the current tau.
+test('distanceMarkers: only the chosen d has a tau_log marker', () => {
+  const res = {
+    x: { values: [1, 10, 100] },
+    series: [3, 5, 7].map((d) => ({ d, mode: 'hard', pL: [0.1, 0.01, 0.1], n: [1e5, 1e5, 1e5] })),
+    optima: { tauPhys: { xMin: 5, atEdge: false }, tauLog: [{ d: 3, mode: 'hard', xMin: 8 }, { d: 5, mode: 'hard', xMin: 12 }, { d: 7, mode: 'hard', xMin: 20 }] },
+  };
+  for (const d of [3, 5, 7]) {
+    const labels = distanceMarkers(res, d, 10).map((v) => v.label);
+    assert.deepEqual(labels, ['τ = 10 µs', 'τ_phys', `τ_log d${d}`]);
+  }
+  // On the real ion results as well: one tau_log marker, the chosen one.
+  const real = distanceMarkers(ION.results, 5, 20).filter((v) => v.label.includes('τ_log'));
+  assert.deepEqual(real.map((v) => v.label), ['τ_log d5']);
+});
+
+// Catches: fails if a band boundary is off: ratio exactly 1.1 is "spot on" and 1.1 + 0.001
+// "close"; exactly 1.5 is "close" and 1.5 + 0.001 "try again".
+test('scoreBand: boundaries at 1.1 and 1.5', () => {
+  assert.equal(scoreBand(1), 'spot on');
+  assert.equal(scoreBand(1.1), 'spot on');
+  assert.equal(scoreBand(1.101), 'close');
+  assert.equal(scoreBand(1.5), 'close');
+  assert.equal(scoreBand(1.501), 'try again');
+});
+
+// Catches: fails if the challenge compares against the wrong point (not the curve's lowest),
+// inverts the ratio, or accepts a tau that is not on the grid.
+test('challengeResult: ratio to the lowest point, its band and the revealed optimum', () => {
+  const xs = [1, 2, 5, 10];
+  const s = { pL: [0.4, 0.012, 0.01, 0.02] };
+  assert.deepEqual(challengeResult(xs, s, 5), { tau: 5, pL: 0.01, best: { tau: 5, pL: 0.01 }, ratio: 1, band: 'spot on' });
+  const r2 = challengeResult(xs, s, 2);
+  assert.ok(Math.abs(r2.ratio - 1.2) < 1e-12);
+  assert.equal(r2.band, 'close');
+  assert.equal(r2.best.tau, 5);
+  assert.equal(challengeResult(xs, s, 10).band, 'try again');
+  assert.equal(challengeResult(xs, s, 3), null);
+});
+
+// Catches: fails if the budget bar drops or double-counts a source, so its segments no longer
+// add up to the stored values (readout + idle + crosstalk + gate at that tau), or if the
+// crosstalk segment shows for the ion without the crosstalk switch.
+test('budgetAt: segments sum to the stored total within 1e-12, crosstalk only when on', () => {
+  for (const p of PLATFORMS) {
+    const b = p.budgetResults.budget;
+    b.tau_us.forEach((tau, i) => {
+      for (const crosstalk of [false, true]) {
+        const e = budgetAt(p.budgetResults, tau, { crosstalk });
+        const stored = b.readout[i] + b.idle[i] + (crosstalk ? b.crosstalk[i] : 0) + b.gate;
+        const sum = e.segments.reduce((acc, g) => acc + g.value, 0);
+        assert.ok(Math.abs(sum - stored) <= 1e-12, `${p.id} tau ${tau}: ${sum} vs ${stored}`);
+        assert.ok(Math.abs(e.total - stored) <= 1e-12);
+        assert.deepEqual(e.segments.map((g) => g.key), crosstalk ? ['readout', 'idle', 'crosstalk', 'gate'] : ['readout', 'idle', 'gate']);
+      }
+    });
+  }
+  // A tau that is not on the budget grid has no bar.
+  assert.equal(budgetAt(ION.budgetResults, 4), null);
+});
+
+// Catches: fails if two chart labels closer than one line height are left to overprint
+// (the end labels "d = 3", "d = 5", "d = 7" of curves that finish close together), or if
+// spreading reorders them or pushes one outside the plot.
+test('spreadLabels: at least one gap apart, order kept, inside the bounds', () => {
+  const ys = [100, 104, 103, 300];
+  const out = spreadLabels(ys, 14, 20, 400);
+  const sorted = out.map((y, i) => [y, i]).sort((a, b) => a[0] - b[0]);
+  for (let k = 1; k < sorted.length; k++) assert.ok(sorted[k][0] - sorted[k - 1][0] >= 14 - 1e-9);
+  assert.deepEqual(sorted.map(([, i]) => i), [0, 2, 1, 3]);
+  assert.equal(out[3], 300);
+  // Crowded at the bottom edge: pushed back up inside hi.
+  const low = spreadLabels([398, 399, 400], 14, 20, 400);
+  assert.ok(Math.max(...low) <= 400 && Math.min(...low) >= 20);
+  // Already apart: unchanged.
+  assert.deepEqual(spreadLabels([10, 50], 14), [10, 50]);
 });
