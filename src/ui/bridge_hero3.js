@@ -1,1 +1,1 @@
-export * from './stubs/hero3_text_stub.js';
+export * from './hero3_text.js';
