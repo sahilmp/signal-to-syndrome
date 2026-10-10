@@ -66,6 +66,7 @@ export function createScReadout(params, tau) {
   const nbar = field(params, 'nbar');
   const eta = field(params, 'eta');
   const t1 = field(params, 'T1_us');
+  const t2 = raw(params, 'T2_us') === undefined ? 2 * t1 : field(params, 'T2_us');
   const detection = raw(params, 'detection');
   const ringup = raw(params, 'ringup');
   if (!(chi > 0)) throw new Error(`createScReadout: chi_over_2pi_MHz must be > 0, got ${chi / (2 * Math.PI)}`);
@@ -73,6 +74,8 @@ export function createScReadout(params, tau) {
   if (!(nbar > 0)) throw new Error(`createScReadout: nbar must be > 0, got ${nbar}`);
   if (!(eta > 0 && eta <= 1)) throw new Error(`createScReadout: eta must be in (0, 1], got ${eta}`);
   if (!(t1 > 0)) throw new Error(`createScReadout: T1_us must be > 0, got ${t1}`);
+  if (!(t2 > 0)) throw new Error(`createScReadout: T2_us must be > 0, got ${t2}`);
+  if (t2 > 2 * t1) throw new Error(`createScReadout: T2_us = ${t2} exceeds 2 * T1_us = ${2 * t1}`);
   if (detection !== 'heterodyne' && detection !== 'homodyne') {
     throw new Error(`createScReadout: detection must be "heterodyne" or "homodyne", got ${detection}`);
   }
@@ -183,6 +186,16 @@ export function createScReadout(params, tau) {
   }
   const avgError = 0.5 * (err0 + err1);
 
+  // Idle physics for a wait of tau (CLAUDE.md, "Idle errors"): T1 in the Z basis, T2 in the
+  // X basis, no crosstalk.
+  const pT1 = -0.5 * Math.expm1(-tau / t1);
+  const pT2 = -0.5 * Math.expm1(-tau / t2);
+  function idleBreakdown(basis = 'Z') {
+    if (basis !== 'Z' && basis !== 'X') throw new Error(`idleBreakdown: basis must be "Z" or "X", got ${basis}`);
+    const idle = basis === 'Z' ? pT1 : pT2;
+    return { idle, crosstalk: 0, total: idle };
+  }
+
   return {
     measure(trueBit, rng) {
       if (trueBit !== 0 && trueBit !== 1) throw new Error(`measure: trueBit must be 0 or 1, got ${trueBit}`);
@@ -199,9 +212,10 @@ export function createScReadout(params, tau) {
     decayMean(td) {
       return decayMeanComplex(td)[0];
     },
-    idleFlipProbability() {
-      return -0.5 * Math.expm1(-tau / t1);
+    idleFlipProbability(basis = 'Z') {
+      return idleBreakdown(basis).total;
     },
+    idleBreakdown,
     averageAssignmentError() {
       return avgError;
     },

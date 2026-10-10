@@ -199,3 +199,49 @@ test('createScReadout rejects invalid parameters', () => {
   assert.throws(() => createScReadout(card({ chi_over_2pi_MHz: 0 }), 1));
   assert.doesNotThrow(() => createScReadout({ ...card(), nbar: { value: 2, source: 'x' } }, 1));
 });
+
+// V14 (idle physics per basis; no crosstalk on the superconducting model).
+const half = (x) => 0.5 * (1 - Math.exp(-x));
+
+// Catches (V14): fails if the Z basis uses T2 or the X basis uses T1, or a crosstalk term
+// leaks in: Z = 0.5 (1 - e^{-tau/T1}), X = 0.5 (1 - e^{-tau/T2}), crosstalk 0, at three taus.
+test('V14: idle formulas per basis at three tau values, crosstalk 0', () => {
+  const t1 = 60;
+  const t2 = 45;
+  for (const tau of [0.1, 1, 30]) {
+    const ro = createScReadout(card({ T1_us: t1, T2_us: t2 }), tau);
+    assert.ok(Math.abs(ro.idleFlipProbability() - half(tau / t1)) < 1e-15, `tau=${tau}: Z default`);
+    assert.ok(Math.abs(ro.idleFlipProbability('Z') - half(tau / t1)) < 1e-15, `tau=${tau}: Z`);
+    assert.ok(Math.abs(ro.idleFlipProbability('X') - half(tau / t2)) < 1e-15, `tau=${tau}: X`);
+    for (const basis of ['Z', 'X']) {
+      const b = ro.idleBreakdown(basis);
+      assert.equal(b.crosstalk, 0);
+      assert.equal(b.total, b.idle);
+      assert.equal(b.total, ro.idleFlipProbability(basis));
+    }
+  }
+  assert.throws(() => createScReadout(card(), 1).idleBreakdown('Y'), /basis/);
+});
+
+// Catches (V14): fails if basis "Z" differs in any bit from the old value -0.5 expm1(-tau/T1)
+// (every Z-basis superconducting number depends on it), or an absent T2_us does not default
+// to 2 T1.
+test('V14: basis Z equals the old idle value exactly; T2 defaults to 2 T1', () => {
+  for (const tau of [0.05, 1, 3]) {
+    const ro = createScReadout(card({ T1_us: 50 }), tau);
+    const old = -0.5 * Math.expm1(-tau / 50);
+    assert.equal(ro.idleFlipProbability(), old);
+    assert.deepEqual(ro.idleBreakdown(), { idle: old, crosstalk: 0, total: old });
+    assert.equal(ro.idleFlipProbability('X'), -0.5 * Math.expm1(-tau / 100));
+  }
+});
+
+// Boundary (V14). Catches: fails if T2 = 2 T1 is rejected or T2 = 2 T1 (1 + 1e-9) accepted;
+// the error must name both values.
+test('V14: T2 = 2 T1 accepted, T2 = 2 T1 (1 + 1e-9) rejected', () => {
+  assert.doesNotThrow(() => createScReadout(card({ T1_us: 50, T2_us: 100 }), 1));
+  const bad = 100 * (1 + 1e-9);
+  assert.throws(() => createScReadout(card({ T1_us: 50, T2_us: bad }), 1),
+    (e) => /T2_us/.test(e.message) && e.message.includes(String(bad)) && e.message.includes('100'));
+  assert.throws(() => createScReadout(card({ T2_us: NaN }), 1), /T2_us/);
+});

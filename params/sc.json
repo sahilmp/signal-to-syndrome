@@ -6,6 +6,7 @@
   "nbar": { "value": 5, "source": "UNSOURCED (illustrative): a few photons, below typical critical photon numbers; plan section 7.4 default" },
   "eta": { "value": 0.3, "source": "representative heterodyne chain with a quantum-limited amplifier (plan section 7.4 default); Walter et al., Phys. Rev. Applied 7, 054020 (2017) report eta = 0.66 with a phase-sensitive parametric amplifier, so 0.3 is conservative" },
   "T1_us": { "value": 50, "source": "representative transmon T1 (plan section 7.4 default), within the published range from 7.6 us (Walter et al., Phys. Rev. Applied 7, 054020 (2017)) to a few hundred us in current devices" },
+  "T2_us": { "value": 77, "source": "Norris et al., arXiv:2503.12603 (2025), Sec. 3, device A qubit 2: median T1 = 50 us (matches T1_us) and median Hahn-echo T2 = 77 us over 104 measurements (Ramsey T2* = 50 us); echo value used for an idle with refocusing; satisfies T2 <= 2 T1 = 100 us" },
   "detection": "heterodyne",
   "ringup": true,
   "tau_grid_us": { "value": [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 3.0], "source": "spans published integration times: 48-88 ns (Walter et al. 2017) up to the few-us regime where T1 decay dominates" }
