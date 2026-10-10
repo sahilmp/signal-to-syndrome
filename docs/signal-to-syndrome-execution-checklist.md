@@ -450,7 +450,7 @@ git push
 
 Set the laptop to never sleep. Paste the overnight command printed at the end of the CC-A19 report into a terminal (dense Z, then the T2 = 25 µs X variant, then dense X) and check that the first run prints progress.
 **Pass:** V17 passes; V9 `53933f98`, V9L `53933f98`; `_v2b` pL values equal the earlier files; the overnight command running.
-- [ ] Done
+- [x] Done
 
 **Sun 00:00 → 05:30: sleep, both.**
 

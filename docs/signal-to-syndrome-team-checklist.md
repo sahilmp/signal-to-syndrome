@@ -765,7 +765,7 @@ Run `npm test`, `node tools/sweep.mjs --diag`, `node tools/sweep.mjs --diag --de
 
 Then commit `src\core tools tests data\results DECISIONS.md` ("CC-A19: cluster and paired statistics, shiftDelta, --dense, --set") and push. Set the laptop to never sleep, paste the overnight command from the report into a terminal, and check that the first run prints progress before you go to sleep.
 **Pass:** tests pass (V17); V9 and V9L unchanged; the `_v2b` pL values equal the earlier files; the overnight command running.
-- [ ] Done
+- [x] Done
 
 ### A52a · TERMINAL · Sun 05:30 — Check the overnight runs
 
