@@ -59,6 +59,23 @@ SEEDS = {
     "v13_d3_r3_i0_k0": 1053593574,
     "v13_d3_r3_i1_k1": 2040420216,
     "v13_d3_r3_i2_k2": 1511624236,
+    # Held-out banks (V18, DECISIONS E11): same circuit, gate set and noise model as the
+    # bank without the _h<n> suffix; only the seed differs. Generated once by
+    #   g = random.Random(20261010); g.randrange(1, 2**31) per name, in this order,
+    #   skipping any value already in SEEDS (none was skipped),
+    # and written here as literals.
+    "rep_d5_r3_L0_h1": 752030431,
+    "rep_d5_r3_L0_h2": 500702941,
+    "rep_d5_r3_L0_h3": 1421832150,
+    "rep_d5_r3_L0_h4": 1720468559,
+    "rep_d5_r3_L0_h5": 90581388,
+    "rep_d5_r3_L1_h1": 1576346417,
+    "rep_d5_r3_L1_h2": 1785786764,
+    "rep_d5_r3_L1_h3": 2137379825,
+    "rep_d5_r3_L1_h4": 552158568,
+    "rep_d5_r3_L1_h5": 707352969,
+    "rep_d3_r3_L0_h1": 862003252,
+    "rep_d3_r3_L1_h1": 702194306,
 }
 # -------------------------------------------------------------------------------------------
 
@@ -152,7 +169,15 @@ def build_memory_circuit(d, r, logical, inject=None, basis="Z", inject_pauli="X"
 
 
 def _parse_name(name):
+    """Configuration of a bank name. An optional suffix _h<n> (held-out bank, V18) gives the
+    same configuration as the name without it, plus "heldout": n."""
     parts = name.split("_")
+    if len(parts) > 1 and parts[-1].startswith("h") and parts[-1][1:].isdigit():
+        if parts[0] != "rep" or len(parts) != 5:
+            raise ValueError(f"{name}: the held-out suffix _h<n> is only defined for rep_ names")
+        cfg = _parse_name("_".join(parts[:-1]))
+        cfg["heldout"] = int(parts[-1][1:])
+        return cfg
     d, r = int(parts[1][1:]), int(parts[2][1:])
     if parts[0] in ("rep", "repx"):
         return {"d": d, "r": r, "logical": int(parts[3][1:]), "inject": None,
@@ -188,6 +213,11 @@ V13_BATCH = {}
 for _i, _k in [(0, 0), (1, 1), (2, 2)]:
     _n = f"v13_d3_r3_i{_i}_k{_k}"
     V13_BATCH[_n] = _parse_name(_n)
+
+# Held-out banks (V18, DECISIONS E11), in the order they are run on Qollab: d = 5 L0 and L1
+# interleaved by h, then d = 3, so a run cut short still has matched L0/L1 pairs.
+HELDOUT_ORDER = [f"rep_d5_r3_L{_L}_h{_h}" for _h in range(1, 6) for _L in (0, 1)] +     ["rep_d3_r3_L0_h1", "rep_d3_r3_L1_h1"]
+HELDOUT = {_n: _parse_name(_n) for _n in HELDOUT_ORDER}
 
 
 def run_native(qc, shots, noise_model, seed):
@@ -309,7 +339,8 @@ def _expected_duration(cfg):
 
 
 def main():
-    all_configs = {**CONFIGS, **V4_BATCH, **CONFIGS_X, **V13_BATCH}
+    all_configs = {**CONFIGS, **V4_BATCH, **CONFIGS_X, **V13_BATCH, **HELDOUT}
+    print("Held-out run order (V18): " + ", ".join(HELDOUT_ORDER))
     if CONFIG not in all_configs:
         raise ValueError(f"Unknown CONFIG '{CONFIG}'. Valid names: {', '.join(all_configs)}")
     cfg = all_configs[CONFIG]
@@ -317,6 +348,10 @@ def main():
     seed = SEEDS[CONFIG]
     qc, layout = build_memory_circuit(d, r, logical, cfg["inject"], basis=cfg["basis"],
                                       inject_pauli=cfg["inject_pauli"])
+    if "heldout" in cfg:
+        print(f"{CONFIG}: held-out bank {cfg['heldout']} of {CONFIG.rsplit('_', 1)[0]} "
+              f"(run {HELDOUT_ORDER.index(CONFIG) + 1} of {len(HELDOUT_ORDER)}); "
+              "assemble it into data/banks/heldout/, never data/banks/")
     print(f"{CONFIG}: basis {cfg['basis']}, {qc.num_qubits} qubits, {cfg['shots']} shots, noise model {cfg['noise_model']}, "
           f"seed {seed}; expected {_expected_duration(cfg)}")
 

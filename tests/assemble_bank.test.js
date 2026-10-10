@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assembleTexts, countsSha256 } from '../tools/assemble_bank.mjs';
+import { assembleTexts, bankPath, countsSha256, parseHeldout } from '../tools/assemble_bank.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../tools/assemble_bank.mjs', import.meta.url));
 
@@ -189,4 +189,37 @@ test('repx_ bank with detector_rate 0 fails, 0.03 passes', () => {
   const run = (bank) => assembleTexts([{ text: makeBlock('repx_d3_r1_L0', bank).text, source: 's' }]);
   assert.equal(run(makeBank({ basis: 'X', detector_rate: 0.03 })).length, 1);
   assert.throws(() => run(makeBank({ basis: 'X', detector_rate: 0 })), /optimised away/);
+});
+
+// Catches: a held-out name (V18) parsed to a different configuration from its base name, the
+// suffix accepted on names that do not take it, or a held-out bank written into the main
+// bank folder where sweeps and the page build would pick it up. Non-vacuous pairs: the same
+// d = 3, r = 1, L = 0 bank passes as rep_d3_r1_L0 (main folder) and as rep_d3_r1_L0_h1
+// (heldout folder), and fails as rep_d3_r1_L1_h1 or rep_d3_r3_L0_h1, like its base name.
+test('held-out names parse as their base name and land in the heldout folder', () => {
+  assert.deepEqual(parseHeldout('rep_d5_r3_L1_h4'), { base: 'rep_d5_r3_L1', heldout: 4 });
+  assert.deepEqual(parseHeldout('rep_d5_r3_L1'), { base: 'rep_d5_r3_L1', heldout: null });
+  assert.equal(parseHeldout('repx_d5_r3_L1_h4').heldout, null);
+  assert.equal(parseHeldout('rep_d5_r3_L1_h0').heldout, null);
+  assert.equal(bankPath('data/banks', 'rep_d5_r3_L0'), join('data/banks', 'rep_d5_r3_L0.json'));
+  assert.equal(bankPath('data/banks', 'rep_d5_r3_L0_h2'), join('data/banks', 'heldout', 'rep_d5_r3_L0_h2.json'));
+
+  const run = (name, bank) => assembleTexts([{ text: makeBlock(name, bank).text, source: 's' }]);
+  const bank = makeBank({ sampler_seed: 752030431 });
+  assert.deepEqual(run('rep_d3_r1_L0_h1', bank)[0], { name: 'rep_d3_r1_L0_h1', bank });
+  assert.throws(() => run('rep_d3_r1_L1_h1', bank), /logical 0 \(name says 1\)/);
+  assert.throws(() => run('rep_d3_r3_L0_h1', bank), /r 1 \(name says 3\)/);
+  assert.throws(() => run('repx_d3_r1_L0_h1', makeBank({ basis: 'X' })), /name is neither/);
+
+  const dir = mkdtempSync(join(tmpdir(), 's2s-heldout-'));
+  const inDir = join(dir, 'in');
+  const outDir = join(dir, 'banks');
+  mkdirSync(inDir);
+  writeFileSync(join(inDir, 'a.txt'), makeBlock('rep_d3_r1_L0_h1', bank).text);
+  writeFileSync(join(inDir, 'b.txt'), makeBlock('rep_d3_r1_L0', makeBank()).text);
+  const res = spawnSync(process.execPath, [SCRIPT, inDir, '--out', outDir], { encoding: 'utf8' });
+  assert.equal(res.status, 0, res.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(outDir, 'heldout', 'rep_d3_r1_L0_h1.json'), 'utf8')), bank);
+  assert.equal(existsSync(join(outDir, 'rep_d3_r1_L0_h1.json')), false);
+  assert.equal(existsSync(join(outDir, 'rep_d3_r1_L0.json')), true);
 });

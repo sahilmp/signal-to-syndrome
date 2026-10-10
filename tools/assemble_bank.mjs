@@ -6,10 +6,14 @@
 // joined, checked against the sha256 on its BEGIN_BANK line, parsed, re-checked
 // (shots, n_keys, counts sha256, s2s-bank/1 contract) and written to <out>/<name>.json.
 // Nothing is written unless every block passes; any mismatch exits with status 1.
+//
+// Held-out banks (names ending _h<n>, V18, DECISIONS E11) are written to <out>/heldout/,
+// never to <out>/ itself, so nothing that reads data/banks/*.json picks them up. Their raw
+// console text belongs in data/raw/heldout/.
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateBank } from '../src/core/bank.js';
 
@@ -82,15 +86,32 @@ export function parseBlocks(text, source = 'input') {
   return blocks;
 }
 
+const HELDOUT = /^(rep_d\d+_r\d+_L[01])_h([1-9]\d*)$/;
+
+// Splits a bank name into its base name and held-out index (null for an ordinary bank):
+// rep_d5_r3_L0_h2 -> { base: 'rep_d5_r3_L0', heldout: 2 }. Only rep_ names take the suffix.
+export function parseHeldout(name) {
+  const h = HELDOUT.exec(name);
+  return h ? { base: h[1], heldout: Number(h[2]) } : { base: name, heldout: null };
+}
+
+// Output file of a bank: held-out banks go to <outDir>/heldout/<name>.json.
+export function bankPath(outDir, name) {
+  const sub = parseHeldout(name).heldout === null ? [] : ['heldout'];
+  return join(outDir, ...sub, `${name}.json`);
+}
+
 // The block name becomes the file name, so it must describe the bank inside it:
 // rep_d{d}_r{r}_L{logical} or repx_d{d}_r{r}_L{logical} (basis X), or v4_d{d}_r{r}_i{i}_k{k}
 // or v13_d{d}_r{r}_i{i}_k{k} (basis X) with logical 0 and inject [[i, k]] (the names of
-// qollab/bank_generator.py). A bank without a basis field is basis Z. A mislabelled paste
-// would otherwise be written under the wrong name.
-function checkName(name, bank) {
+// qollab/bank_generator.py). A rep_ name may end in _h<n> (held-out bank) and is checked as
+// its base name. A bank without a basis field is basis Z. A mislabelled paste would
+// otherwise be written under the wrong name.
+function checkName(fullName, bank) {
+  const name = parseHeldout(fullName).base;
   const mem = /^(rep|repx)_d(\d+)_r(\d+)_L([01])$/.exec(name);
   const inj = /^(v4|v13)_d(\d+)_r(\d+)_i(\d+)_k(\d+)$/.exec(name);
-  if (!mem && !inj) throw new Error(`bank ${name}: name is neither rep(x)_d<d>_r<r>_L<0|1> nor v4_ / v13_d<d>_r<r>_i<i>_k<k>`);
+  if (!mem && !inj) throw new Error(`bank ${fullName}: name is neither rep(x)_d<d>_r<r>_L<0|1>[_h<n>] nor v4_ / v13_d<d>_r<r>_i<i>_k<k>`);
   const match = mem ?? inj;
   const prefix = match[1];
   const d = Number(match[2]);
@@ -107,7 +128,7 @@ function checkName(name, bank) {
     const site = JSON.stringify([[Number(inj[4]), Number(inj[5])]]);
     if (JSON.stringify(bank.inject) !== site) mismatch.push(`inject ${JSON.stringify(bank.inject)} (name says ${site})`);
   }
-  if (mismatch.length) throw new Error(`bank ${name}: the bank inside does not match its name: ${mismatch.join(', ')}`);
+  if (mismatch.length) throw new Error(`bank ${fullName}: the bank inside does not match its name: ${mismatch.join(', ')}`);
 }
 
 // Verifies one block and returns the parsed bank object.
@@ -184,10 +205,11 @@ export function main(argv) {
   if (files.length === 0) throw new Error('no input files (a folder argument needs .txt files)');
   const banks = assembleTexts(files.map((f) => ({ text: readFileSync(f, 'utf8'), source: f })));
   if (banks.length === 0) throw new Error('no BEGIN_BANK ... END_BANK blocks found');
-  mkdirSync(outDir, { recursive: true });
   for (const { name, bank } of banks) {
-    writeFileSync(join(outDir, `${name}.json`), `${JSON.stringify(bank, null, 2)}\n`);
-    console.log(`${name}: shots ${bank.shots}, distinct keys ${Object.keys(bank.counts).length}, detector_rate ${bank.detector_rate}, sampler_seed ${bank.sampler_seed}`);
+    const file = bankPath(outDir, name);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(bank, null, 2)}\n`);
+    console.log(`${name}: shots ${bank.shots}, distinct keys ${Object.keys(bank.counts).length}, detector_rate ${bank.detector_rate}, sampler_seed ${bank.sampler_seed} -> ${file}`);
   }
   return banks;
 }

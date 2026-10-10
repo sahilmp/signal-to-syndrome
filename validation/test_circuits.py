@@ -106,9 +106,10 @@ def test_detector_rate_zero_and_positive():
 
 # Catches: a configuration without its own seed, two banks sharing a seed (correlated noise),
 # or a seed outside the range IonQ accepts (DECISIONS D2: integer 1 to 2^31). Covers the
-# basis-X lists (CONFIGS_X, V13_BATCH) as well as the basis-Z ones.
+# basis-X lists (CONFIGS_X, V13_BATCH) and the held-out banks (HELDOUT, V18) as well as the
+# basis-Z ones.
 def test_seeds_table():
-    tables = (bg.CONFIGS, bg.V4_BATCH, bg.CONFIGS_X, bg.V13_BATCH)
+    tables = (bg.CONFIGS, bg.V4_BATCH, bg.CONFIGS_X, bg.V13_BATCH, bg.HELDOUT)
     names = set().union(*tables)
     assert len(names) == sum(len(t) for t in tables)
     assert set(bg.SEEDS) == names
