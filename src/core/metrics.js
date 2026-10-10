@@ -1,6 +1,7 @@
 // Stage 4 comparison metrics: per-round logical error from the error after r rounds (and the
-// inverse), the QEC cycle time of a platform, the error per microsecond, and the break-even
-// point where d = 5 starts to beat d = 3.
+// inverse), the QEC cycle time of a platform, rounds per second and the trade-off curve, the
+// error per microsecond, the C3 dominance rule, and the break-even point where d = 5 starts
+// to beat d = 3.
 
 function checkRounds(r, name) {
   if (!Number.isInteger(r) || r < 1) throw new Error(`${name}: r must be an integer >= 1, got ${r}`);
@@ -25,21 +26,72 @@ export function perRoundToTotal(eps, r) {
 }
 
 // Parameter cards store { value, source }; plain numbers are accepted too.
-function cardNumber(card, name) {
+const cardValue = (card, name) => {
   const p = card[name];
-  const v = p !== null && typeof p === 'object' && 'value' in p ? p.value : p;
+  return p !== null && typeof p === 'object' && 'value' in p ? p.value : p;
+};
+
+function cardNumber(card, name) {
+  const v = cardValue(card, name);
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
     throw new Error(`cycleTime: ${name} must be a finite number >= 0, got ${v}`);
   }
   return v;
 }
 
-// QEC cycle time in microseconds: gate_layers_per_round * two_qubit_gate_us + tau + reset_us.
-// `card` is one platform's entry of params/cycle.json; tau is the readout time in us.
-export function cycleTime(card, tau) {
+// Two-qubit gate layers per round: a number, or the one accepted expression "2*(d-1)" (the
+// 2(d - 1) CNOTs of a repetition-code round run one after another; DECISIONS E8), which
+// needs the distance d. Any other expression throws: the card is data, never evaluated code.
+const SEQUENTIAL_LAYERS = '2*(d-1)';
+function gateLayers(card, d) {
+  const v = cardValue(card, 'gate_layers_per_round');
+  if (typeof v === 'string') {
+    if (v.replace(/\s+/g, '') !== SEQUENTIAL_LAYERS) {
+      throw new Error(`cycleTime: gate_layers_per_round expression "${v}" is not supported (only "${SEQUENTIAL_LAYERS}")`);
+    }
+    if (!Number.isInteger(d) || d < 2) throw new Error(`cycleTime: gate_layers_per_round "${v}" needs an integer distance d >= 2, got ${d}`);
+    return 2 * (d - 1);
+  }
+  return cardNumber(card, 'gate_layers_per_round');
+}
+
+// QEC cycle time in microseconds: layers * two_qubit_gate_us + tau + reset_us, with layers =
+// gate_layers_per_round (a number, or "2*(d-1)" evaluated at d). `card` is one platform's entry
+// of params/cycle.json; tau is the readout time in us; d is needed only by the expression.
+export function cycleTime(card, tau, d) {
   if (card === null || typeof card !== 'object') throw new Error('cycleTime: card must be an object');
   if (typeof tau !== 'number' || !Number.isFinite(tau) || tau < 0) throw new Error(`cycleTime: tau must be a finite number >= 0, got ${tau}`);
-  return cardNumber(card, 'gate_layers_per_round') * cardNumber(card, 'two_qubit_gate_us') + tau + cardNumber(card, 'reset_us');
+  return gateLayers(card, d) * cardNumber(card, 'two_qubit_gate_us') + tau + cardNumber(card, 'reset_us');
+}
+
+// QEC rounds per second for a cycle time in microseconds: 1e6 / Tcyc_us.
+export function roundsPerSecond(Tcyc_us) {
+  if (!(Tcyc_us > 0) || !Number.isFinite(Tcyc_us)) throw new Error(`roundsPerSecond: Tcyc_us must be a positive finite number, got ${Tcyc_us}`);
+  return 1e6 / Tcyc_us;
+}
+
+// The trade-off curve of one (platform, d, mode): at each readout time tau, the rounds per
+// second 1e6 / cycleTime(card, tau, d) and the per-round error perRound(pL, r).
+export function tradeoffCurve(taus, pLs, r, card, d) {
+  if (taus.length !== pLs.length) throw new Error(`tradeoffCurve: taus and pLs must have equal length (${taus.length}, ${pLs.length})`);
+  return {
+    tau: [...taus],
+    roundsPerSecond: taus.map((tau) => roundsPerSecond(cycleTime(card, tau, d))),
+    perRound: pLs.map((pL) => perRound(pL, r)),
+  };
+}
+
+// C3 dominance rule (team checklist Appendix U4), on two arms' trade-off points at their own
+// tau*_log: { perRound, lo, hi, roundsPerSecond }. Arm A dominates if its per-round error is
+// lower beyond the intervals (A.hi < B.lo) and its rounds per second higher. Returns "A", "B"
+// or null (neither dominates). Exported for sweep.mjs; not part of the Module API.
+export function dominance(a, b) {
+  for (const [name, p] of [['A', a], ['B', b]]) {
+    if (![p.perRound, p.lo, p.hi, p.roundsPerSecond].every(Number.isFinite)) throw new Error(`dominance: arm ${name} needs finite perRound, lo, hi and roundsPerSecond`);
+  }
+  if (a.hi < b.lo && a.roundsPerSecond > b.roundsPerSecond) return 'A';
+  if (b.hi < a.lo && b.roundsPerSecond > a.roundsPerSecond) return 'B';
+  return null;
 }
 
 // Logical error per microsecond of wall-clock time: eps / Tcyc.

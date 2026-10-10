@@ -2,12 +2,12 @@
   "schema": "s2s-params/1",
   "trapped-ion": {
     "two_qubit_gate_us": { "value": 970, "source": "IonQ Forte 1, 2-q gate speed 970 us (ZZ gate) at job submission: Robertson et al., 'Variational Gibbs State Preparation on Trapped-Ion Devices', arXiv:2603.03801 (2026), Table 1. For comparison: Aria two-qubit gate 600 us (Microsoft Azure Quantum IonQ provider page, Aria system timing); Forte Enterprise 1 650 us (same Table 1)" },
-    "gate_layers_per_round": { "value": 2, "source": "derived: each round is two parallel CNOT layers" },
+    "gate_layers_per_round": { "value": "2*(d-1)", "source": "conservative choice: the 2(d-1) CNOTs of a round run one after another on the single chain (no published statement found that IonQ Forte runs two-qubit gates on disjoint pairs in parallel; simultaneous entangling gates in one chain are demonstrated only in research systems). See DECISIONS E8" },
     "reset_us": { "value": 50, "source": "IonQ Forte 1, reset speed 50 us at job submission: Robertson et al., arXiv:2603.03801 (2026), Table 1 (Aria 1: 20 us; Forte Enterprise 1: 150 us, same table)" }
   },
   "superconducting": {
     "two_qubit_gate_us": { "value": 0.042, "source": "Google Quantum AI, 'Quantum error correction below the surface code threshold', Nature 638, 920 (2025), arXiv:2408.13687, Supplementary Information Section I: CZ gates in 42 ns on the 105-qubit processor (37 ns on the 72-qubit processor)" },
     "gate_layers_per_round": { "value": 2, "source": "derived: each round is two parallel CNOT layers" },
-    "reset_us": { "value": 0.25, "source": "multi-level reset to the ground state within 250 ns: McEwen et al., 'Removing leakage-induced correlated errors in superconducting quantum error correction', Nat. Commun. 12, 1761 (2021), arXiv:2102.06131 (value as stated in the APS March Meeting 2021 abstract L33.12; check against the paper). Google's 1.1 us surface-code cycle (arXiv:2408.13687) gives no reset duration" }
+    "reset_us": { "value": 0.25, "source": "multi-level reset to the ground state, total duration about 250 ns (error about 1e-3): McEwen et al., 'Removing leakage-induced correlated errors in superconducting quantum error correction', Nat. Commun. 12, 1761 (2021), arXiv:2102.06131, main text (Fig. 2 discussion: 'The total duration of the reset protocol is about 250 ns'; checked against the arXiv PDF Sat 10 Oct). Google's 1.1 us surface-code cycle (arXiv:2408.13687) gives no reset duration" }
   }
 }

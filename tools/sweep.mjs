@@ -3,8 +3,12 @@
 //   node tools/sweep.mjs --stage 1   flat readout over epsilon; writes data/results/stage1_flat.json
 //   node tools/sweep.mjs --stage 2   trapped-ion readout over tau; writes data/results/stage2_ion.json
 //   node tools/sweep.mjs --stage 3   superconducting readout over tau; writes data/results/stage3_sc.json
-//   node tools/sweep.mjs --stage 4   platform comparison, break-even, sensitivity; writes data/results/stage4_comparison.json
-//                                    (reads stage2_ion.json, stage3_sc.json and params/cycle.json, ion.json, sc.json)
+//   node tools/sweep.mjs --stage 4   platform comparison (learned decoder): trade-off, budget at the optimum,
+//                                    break-even, sensitivity, conclusions C1-C6 and O4; writes
+//                                    data/results/stage4_comparison.json (reads stage2_ion*.json, stage3_sc*.json
+//                                    in both bases, dem_forte1.json and params/cycle.json, ion.json, sc.json).
+//                                    With --basis X: stage4_comparison_x.json, tradeoff, perRound and
+//                                    budgetAtOptimum only.
 //   node tools/sweep.mjs --stage dem learned edge rates, out-of-sample check (V12b) and naive
 //                                    against learned decoding; writes data/results/dem_forte1.json
 //   node tools/sweep.mjs --diag      prints only the V9 fingerprint of data/banks/rep_d3_r3_L0.json
@@ -39,7 +43,7 @@ import { createScReadout } from '../src/core/readout/sc.js';
 import { erfc } from '../src/core/special.js';
 import { runPoint, diagnostic, decodeShot } from '../src/core/sweep.js';
 import { findMinimum, minimumWithBootstrap } from '../src/core/optimum.js';
-import { perRound, cycleTime, perMicrosecond, breakEvenDetail } from '../src/core/metrics.js';
+import { perRound, cycleTime, perMicrosecond, breakEvenDetail, roundsPerSecond, tradeoffCurve, dominance } from '../src/core/metrics.js';
 
 const BANK_DIR = 'data/banks';
 const RESULTS_DIR = 'data/results';
@@ -1015,8 +1019,8 @@ const SENS_F1_SAMPLES = 50000;
 const SENS_SUBSAMPLE_SEED = 401;
 const SENS_F1_SEED = 402;
 const SENS_PARAMS = {
-  [ION]: ['R_bright_per_us', 'R_dark_per_us', 'gamma_bright_to_dark_per_us', 'gamma_dark_to_bright_per_us', 'T1_idle_us'],
-  [SC]: ['chi_over_2pi_MHz', 'kappa_over_2pi_MHz', 'nbar', 'eta', 'T1_us'],
+  [ION]: ['R_bright_per_us', 'R_dark_per_us', 'gamma_bright_to_dark_per_us', 'gamma_dark_to_bright_per_us', 'T1_idle_us', 'T2_idle_us', 'crosstalk_rate_per_us'],
+  [SC]: ['chi_over_2pi_MHz', 'kappa_over_2pi_MHz', 'nbar', 'eta', 'T1_us', 'T2_us'],
 };
 // Cycle-card parameters scaled too (gate_layers_per_round is a count, not a physical value).
 // They change only the per-microsecond numbers, so they reuse the reduced baseline decode.
@@ -1167,7 +1171,7 @@ function platformTable(arm, cycleCard) {
       const tau = tl.xMin;
       const pL = [s.pL, s.lo, s.hi].map((ys) => atTau(arm.taus, ys, tau));
       const eps = pL.map((p) => perRound(p, s.r));
-      const tcyc = cycleTime(cycleCard, tau);
+      const tcyc = cycleTime(cycleCard, tau, d);
       const lam = eps.map((e) => perMicrosecond(e, tcyc));
       P.tauLog[mode].push({ d, xMin: tau, lo: tl.lo ?? null, hi: tl.hi ?? null, atEdge: tl.atEdge });
       P.pLAtTauLog[mode].push({ d, r: s.r, tau_us: tau, value: pL[0], lo: pL[1], hi: pL[2] });
@@ -1299,12 +1303,279 @@ function evaluateConclusions(ion, sc, tables) {
   };
 }
 
-// Headline decoder of Stage 4: learned when it is requested, otherwise naive. The full
-// tables and conclusions of every requested decoder are in byDecoder; the sensitivity
-// reruns use the headline decoder.
+// ---- Stage 4 v2 (CC-A15): trade-off, budget at the optimum, conclusions C1-C6 and O4 ----
+
+const FRAMING = 'Two readout physics models at fixed gate noise: the same IonQ forte-1 banks and learned decoder; different readout models, idle physics and cycle times.';
+const BASES = ['Z', 'X'];
+// Tie rule (DECISIONS E12, from A49): a tau*_log with fractionTied >= 0.5 is UNRESOLVED and
+// takes no part in a verdict.
+const TIED_MAX = 0.5;
+const unresolved = (tl) => (tl.fractionTied ?? 0) >= TIED_MAX;
+// Pre-registered statements (team checklist Section 1.2, verbatim).
+const STATEMENTS = {
+  C1: 'Superconducting: τ*_log < τ*_phys (empirical), with the learned decoder, in both bases. Trapped ion with crosstalk off: no idle-driven optimum. Trapped ion with crosstalk at the card value: an interior τ*_log < τ*_phys appears',
+  C2: 'Soft decoding is at or below hard at every τ, with most gain where readouts are short',
+  C3: 'Neither readout model dominates: along the τ grids the ion arm has lower error per round and the superconducting arm more rounds per second',
+  C4: 'Break-even ε̄ (d = 5 beats d = 3) similar on both arms, on the empirical ε̄ axis',
+  C5: 'The learned detector error model lowers the logical error against the naive one at every (d, arm, mode) at τ*_log, out of sample',
+  C6: 'In the phase-flip memory the superconducting τ*_log is shorter than in the bit-flip memory when T2 < T1',
+  O4: 'Ratio of bulk detector rates, X-basis to Z-basis banks, per (d, r): how biased forte-1 noise looks to the decoder (measurement, no hypothesis)',
+};
+// v2 verdict words; a verdict is "refuted" if any part is, "held" if every part is.
+const combineV2 = (verdicts) => (verdicts.includes('refuted') ? 'refuted' : verdicts.length > 0 && verdicts.every((v) => v === 'held') ? 'held' : 'undetermined');
+const conclusion = (id, automated, note) => ({ statement: STATEMENTS[id], verdict: automated, automated, note, plain: '' });
+const g3 = (v) => (v === null || v === undefined ? '—' : Number(v).toPrecision(3));
+
+// Trade-off curves of one arm (U4): per d and mode, rounds per second and error per round at
+// every tau of the grid, with the per-round values of the Wilson bounds.
+function tradeoffTable(arm, cycleCard) {
+  const out = {};
+  for (const d of arm.distances) {
+    out[d] = {};
+    for (const mode of STAGE4_MODES) {
+      const s = arm.series.find((x) => x.d === d && x.mode === mode);
+      const c = tradeoffCurve(arm.taus, s.pL, s.r, cycleCard, d);
+      out[d][mode] = {
+        tau: c.tau,
+        roundsPerSecond: c.roundsPerSecond.map(round),
+        perRound: c.perRound.map(round),
+        lo: s.lo.map((p) => round(perRound(p, s.r))),
+        hi: s.hi.map((p) => round(perRound(p, s.r))),
+      };
+    }
+  }
+  return out;
+}
+
+// Error budget of one arm at its tau*_log (d = 3, hard, learned): the Stage 2/3 budget arrays
+// interpolated in ln tau (as atTau); the gate part is one number.
+function budgetAtOptimum(res, arm) {
+  const tl = arm.tauLog.find((x) => x.d === 3 && x.mode === 'hard');
+  const b = res.budget;
+  if (!b || !tl) return null;
+  const at = (ys) => round(atTau(b.tau_us, ys, tl.xMin));
+  return { readout: at(b.readout), idle: at(b.idle), crosstalk: at(b.crosstalk), gate: round(b.gate), tau_us: tl.xMin, label: b.label, d: 3, mode: 'hard', decoder: 'learned' };
+}
+
+// The trade-off point of one arm at tau*_log (d = 3, hard): per-round error with its bounds
+// (interpolated as in platformTable) and rounds per second at that tau.
+function c3Point(table, cycleCard) {
+  const pr = table.perRound.hard.find((u) => u.d === 3);
+  const tl = table.tauLog.hard.find((u) => u.d === 3);
+  return { tau_us: tl.xMin, perRound: pr.value, lo: pr.lo, hi: pr.hi, roundsPerSecond: roundsPerSecond(cycleTime(cycleCard, tl.xMin, 3)) };
+}
+
+// C1 (revised). Superconducting: per (basis, d = 3 and 5, mode), the learned tau*_log interval
+// entirely below tau*_phys (empirical) is "held", an interval containing or above it "refuted"
+// (the pre-registered falsifier), an UNRESOLVED row "undetermined". Ion, from crosstalkScan
+// (learned), with the pre-registered point flag interiorBelowTauPhys: (a) crosstalk off:
+// refuted if any row at rate 0 has the flag; (b) card rate: held if every row has it, refuted
+// if none has it, otherwise undetermined (split); (c) refuted if no row at any scanned rate
+// has it. The same three with interiorBelowTauPhysResolved are reported beside them (E12).
+function c1Conclusion(files) {
+  const detail = { superconducting: {}, ion: { pointFlag: {}, resolvedFlag: {} } };
+  const scCases = {};
+  for (const b of BASES) {
+    const res = files[b]?.[SC];
+    if (!res) continue;
+    const phys = res.optima.tauPhysEmpirical;
+    for (const tl of res.optima.tauLog.filter((t) => t.decoder === 'learned' && (t.d === 3 || t.d === 5))) {
+      const key = `${b} d${tl.d} ${tl.mode}`;
+      let verdict;
+      if (phys.atEdge || unresolved(tl)) verdict = 'undetermined';
+      else verdict = tl.hi < phys.xMin ? 'held' : 'refuted';
+      scCases[key] = { verdict, xMin: tl.xMin, lo: tl.lo, hi: tl.hi, tauPhysEmpirical: phys.xMin, fractionTied: tl.fractionTied, unresolved: unresolved(tl) };
+    }
+  }
+  detail.superconducting = scCases;
+  const scVerdict = files.X?.[SC] ? combineV2(Object.values(scCases).map((c) => c.verdict)) : 'undetermined';
+
+  const ionVerdicts = {};
+  for (const flag of ['interiorBelowTauPhys', 'interiorBelowTauPhysResolved']) {
+    const rows = [];
+    for (const b of BASES) {
+      const scan = files[b]?.[ION]?.crosstalkScan;
+      if (!scan) continue;
+      for (const e of scan.entries.filter((x) => (x.decoder ?? 'learned') === 'learned')) {
+        rows.push({ basis: b, rate: e.rate, card: e.rate === scan.cardRate_per_us, d: e.d, mode: e.mode, flag: e[flag], unresolved: unresolved(e.tauLog) });
+      }
+    }
+    const used = rows.filter((x) => !x.unresolved);
+    const off = used.filter((x) => x.rate === 0);
+    const card = used.filter((x) => x.card);
+    const parts = {
+      crosstalkOff: off.length === 0 ? 'undetermined' : off.some((x) => x.flag) ? 'refuted' : 'held',
+      cardRate: card.length === 0 ? 'undetermined' : card.every((x) => x.flag) ? 'held' : card.some((x) => x.flag) ? 'undetermined' : 'refuted',
+      anyRate: used.length === 0 ? 'undetermined' : used.some((x) => x.flag) ? 'held' : 'refuted',
+    };
+    const where = (xs) => xs.filter((x) => x.flag).map((x) => `${x.basis} d${x.d} ${x.mode}`);
+    const verdict = parts.crosstalkOff === 'refuted' || parts.anyRate === 'refuted' ? 'refuted' : parts.cardRate;
+    const target = flag === 'interiorBelowTauPhys' ? detail.ion.pointFlag : detail.ion.resolvedFlag;
+    Object.assign(target, { verdict, parts, offFlagged: where(off), cardFlagged: where(card), cardRows: card.length, excludedUnresolved: rows.length - used.length });
+    ionVerdicts[flag] = verdict;
+  }
+  const ionVerdict = files.X?.[ION] ? ionVerdicts.interiorBelowTauPhys : 'undetermined';
+  const automated = combineV2([scVerdict, ionVerdict]);
+  const scBad = Object.entries(scCases).filter(([, c]) => c.verdict !== 'held').map(([k, c]) => `${k} ${c.verdict}${c.unresolved ? ' (UNRESOLVED)' : ''} [${g3(c.lo)}, ${g3(c.hi)}] us`);
+  const p = detail.ion.pointFlag;
+  const r = detail.ion.resolvedFlag;
+  const note = `Provisional (A50). Superconducting ${scVerdict} against tau*_phys (empirical); not held: ${scBad.length ? scBad.join('; ') : 'none'}. `
+    + `Ion, pre-registered point flag: off ${p.parts.crosstalkOff}${p.offFlagged.length ? ` (${p.offFlagged.join(', ')})` : ''}, card rate ${p.parts.cardRate} (${p.cardFlagged.length} of ${p.cardRows} rows flagged), any rate ${p.parts.anyRate}. `
+    + `Resolved flag (DECISIONS E12, added after seeing the data): off ${r.parts.crosstalkOff}, card rate ${r.parts.cardRate}, any rate ${r.parts.anyRate}. `
+    + `Rows with fractionTied >= ${TIED_MAX} are UNRESOLVED and excluded.${files.X ? '' : ' X-basis files missing: undetermined.'}`;
+  return { conclusion: conclusion('C1', automated, note), detail: { superconducting: { verdict: scVerdict, cases: scCases }, ion: { verdict: ionVerdict, ...detail.ion } } };
+}
+
+// C2: per (basis, arm), learned series: refuted if soft is above hard beyond the Wilson
+// intervals at any (d, tau).
+function c2Conclusion(files) {
+  const cases = {};
+  for (const b of BASES) {
+    for (const p of [ION, SC]) {
+      const res = files[b]?.[p];
+      if (!res) continue;
+      let above = 0;
+      let below = 0;
+      let points = 0;
+      for (const h of res.series.filter((s) => s.decoder === 'learned' && s.mode === 'hard')) {
+        const s = res.series.find((x) => x.decoder === 'learned' && x.mode === 'soft' && x.d === h.d);
+        h.pL.forEach((_, t) => {
+          points++;
+          if (s.lo[t] > h.hi[t]) above++;
+          if (s.hi[t] < h.lo[t]) below++;
+        });
+      }
+      cases[`${b} ${p}`] = { verdict: above === 0 ? 'held' : 'refuted', softAboveBeyondIntervals: above, softBelowBeyondIntervals: below, points };
+    }
+  }
+  const automated = combineV2(Object.values(cases).map((c) => c.verdict));
+  const note = `Provisional (A50). Soft above hard beyond the Wilson intervals: ${Object.entries(cases).map(([k, c]) => `${k} ${c.softAboveBeyondIntervals} of ${c.points}`).join('; ')}. Wilson intervals treat the R readout draws of a shot as independent; cluster and paired intervals come at CC-A19 and the counts are redone at A53a.`;
+  return { conclusion: conclusion('C2', automated, note), detail: cases };
+}
+
+// C3: the U4 dominance rule at each arm's tau*_log (d = 3, hard, learned), Z basis.
+function c3Conclusion(tables, cycle) {
+  const a = c3Point(tables[ION], cycle[ION]);
+  const b = c3Point(tables[SC], cycle[SC]);
+  const dom = dominance(a, b);
+  const automated = dom === null ? 'held' : 'refuted';
+  const who = dom === 'A' ? ION : dom === 'B' ? SC : null;
+  const note = `Provisional (A50). At tau*_log (d = 3, hard, learned): ion ${g3(a.perRound)} [${g3(a.lo)}, ${g3(a.hi)}] per round at ${g3(a.roundsPerSecond)} rounds/s; superconducting ${g3(b.perRound)} [${g3(b.lo)}, ${g3(b.hi)}] at ${g3(b.roundsPerSecond)} rounds/s; ${who ? `${who} dominates` : 'neither dominates'}. With these cards the outcome is fixed by construction (cycle times differ by orders of magnitude and the gate noise is shared); reported with informative: false at A53c (DECISIONS E12).`;
+  return { conclusion: conclusion('C3', automated, note), detail: { rule: 'U4 dominance at tau*_log, d = 3, hard, learned', [ION]: a, [SC]: b, dominant: who } };
+}
+
+// C4: per mode, break-even on the empirical assignment axis: held if the two arms differ by less
+// than the sum of their half-widths; undetermined if an arm has no crossing or a refutation
+// rests on a clamped interval.
+function c4Conclusion(tables) {
+  const cases = {};
+  for (const mode of STAGE4_MODES) {
+    const a = tables[ION].breakEven.empiricalAxis[mode];
+    const b = tables[SC].breakEven.empiricalAxis[mode];
+    let verdict;
+    let diff = null;
+    let sumHalfWidths = null;
+    if (a.epsBar === null || b.epsBar === null) verdict = 'undetermined';
+    else {
+      diff = Math.abs(a.epsBar - b.epsBar);
+      sumHalfWidths = a.halfWidth + b.halfWidth;
+      verdict = diff < sumHalfWidths ? 'held' : a.clamped || b.clamped ? 'undetermined' : 'refuted';
+    }
+    cases[mode] = { verdict, [ION]: a.epsBar, [SC]: b.epsBar, diff, sumHalfWidths };
+  }
+  const automated = combineV2(Object.values(cases).map((c) => c.verdict));
+  const note = `Provisional (A50). Empirical axis, learned: ${STAGE4_MODES.map((m) => `${m}: ion ${g3(cases[m][ION])}, superconducting ${g3(cases[m][SC])} (|diff| ${g3(cases[m].diff)} against sum of half-widths ${g3(cases[m].sumHalfWidths)}) ${cases[m].verdict}`).join('; ')}.`;
+  return { conclusion: conclusion('C4', automated, note), detail: cases };
+}
+
+// C5 and decoderComparison: learned against naive at the learned tau*_log per (basis, arm, d,
+// mode), both interpolated in ln tau with their Wilson bounds. Refuted if learned is above
+// naive beyond the intervals anywhere. In sample: the rates are learned from the banks decoded.
+function c5Conclusion(files) {
+  const rows = [];
+  for (const b of BASES) {
+    for (const p of [ION, SC]) {
+      const res = files[b]?.[p];
+      if (!res || !res.series.some((s) => s.decoder === 'naive')) continue;
+      const taus = res.x.values;
+      for (const tl of res.optima.tauLog.filter((t) => t.decoder === 'learned')) {
+        const pick = (decoder) => {
+          const s = res.series.find((x) => x.decoder === decoder && x.d === tl.d && x.mode === tl.mode);
+          return { pL: round(atTau(taus, s.pL, tl.xMin)), lo: round(atTau(taus, s.lo, tl.xMin)), hi: round(atTau(taus, s.hi, tl.xMin)) };
+        };
+        const naive = pick('naive');
+        const learned = pick('learned');
+        const verdict = learned.lo > naive.hi ? 'refuted' : 'held';
+        rows.push({ arm: p, basis: b, d: tl.d, mode: tl.mode, tau_us: tl.xMin, naive, learned, learnedBelowBeyondIntervals: learned.hi < naive.lo, verdict });
+      }
+    }
+  }
+  const automated = rows.length === 0 ? 'undetermined' : combineV2(rows.map((x) => x.verdict));
+  const above = rows.filter((x) => x.verdict === 'refuted').map((x) => `${x.basis} ${x.arm} d${x.d} ${x.mode}`);
+  const below = rows.filter((x) => x.learnedBelowBeyondIntervals).length;
+  const note = `Provisional (A50), IN SAMPLE: the learned rates come from the banks being decoded, so this does not test "out of sample"; V12(b) failed (DECISIONS E4) and the held-out test V18 decides it at A53b. Learned above naive beyond the Wilson intervals at ${above.length} of ${rows.length} points${above.length ? ` (${above.join(', ')})` : ''}; below beyond them at ${below}.`;
+  return { conclusion: conclusion('C5', automated, note), rows };
+}
+
+// C6: superconducting tau*_log, X against Z (learned), per (d, mode): refuted if X is at or
+// above Z beyond the intervals (X.lo > Z.hi), held if X is below beyond them, otherwise
+// undetermined; UNRESOLVED rows are undetermined. The statement is conditional on T2 < T1:
+// with a card that has T2 >= T1 the verdict is undetermined (not applicable), the rule
+// result kept in the detail.
+function c6Conclusion(files) {
+  const z = files.Z?.[SC];
+  const x = files.X?.[SC];
+  if (!z || !x) return { conclusion: conclusion('C6', 'undetermined', 'Provisional (A50). stage3_sc_x.json missing.'), detail: null };
+  const cases = {};
+  for (const tz of z.optima.tauLog.filter((t) => t.decoder === 'learned')) {
+    const tx = x.optima.tauLog.find((t) => t.decoder === 'learned' && t.d === tz.d && t.mode === tz.mode);
+    if (!tx) continue;
+    let verdict;
+    if (unresolved(tz) || unresolved(tx)) verdict = 'undetermined';
+    else verdict = tx.lo > tz.hi ? 'refuted' : tx.hi < tz.lo ? 'held' : 'undetermined';
+    cases[`d${tz.d} ${tz.mode}`] = { verdict, Z: { xMin: tz.xMin, lo: tz.lo, hi: tz.hi }, X: { xMin: tx.xMin, lo: tx.lo, hi: tx.hi } };
+  }
+  const T1 = fieldValue(x.params.card, 'T1_us');
+  const T2 = fieldValue(x.params.card, 'T2_us') ?? 2 * T1;
+  const premise = T2 < T1;
+  const rule = combineV2(Object.values(cases).map((c) => c.verdict));
+  const automated = premise ? rule : 'undetermined';
+  const note = premise
+    ? `Provisional (A50). T2 = ${T2} us < T1 = ${T1} us. ${Object.entries(cases).map(([k, c]) => `${k}: X ${g3(c.X.xMin)} [${g3(c.X.lo)}, ${g3(c.X.hi)}] against Z ${g3(c.Z.xMin)} [${g3(c.Z.lo)}, ${g3(c.Z.hi)}] ${c.verdict}`).join('; ')}.`
+    : `Not applicable with the card: the statement is conditional on T2 < T1, and the card has T2 = ${T2} us >= T1 = ${T1} us (DECISIONS E7, E12). The rule on these files gives "${rule}"; C6 is tested with a variant card (T2 = 25 us, UNSOURCED, illustrative) at CC-A19.`;
+  return { conclusion: conclusion('C6', automated, note), detail: { premise: { T1_us: T1, T2_us: T2, satisfied: premise }, ruleResult: rule, cases } };
+}
+
+// O4: a measurement, no hypothesis; from dem_forte1.json -> ratioXoverZ.
+function o4Conclusion(dem) {
+  if (!dem?.ratioXoverZ?.length) return { conclusion: conclusion('O4', 'undetermined', 'dem_forte1.json has no ratioXoverZ: run --stage dem with both bases.'), detail: null };
+  const rows = dem.ratioXoverZ;
+  const contain = rows.filter((x) => x.lo <= 1 && x.hi >= 1).length;
+  const note = `Measurement, no hypothesis (no verdict). X over Z bulk detector rate (dem_forte1.json -> ratioXoverZ): ${rows.map((x) => `d${x.d} r${x.r} ${x.ratio.toFixed(3)} [${x.lo.toFixed(3)}, ${x.hi.toFixed(3)}]`).join('; ')}; ${contain} of ${rows.length} intervals contain 1 (DECISIONS E5).`;
+  return { conclusion: conclusion('O4', 'undetermined', note), detail: rows };
+}
+
+// The two numbers of a sensitivity effect at reduced statistics: per-round error and tau*_log,
+// d = 3, hard, per arm.
+const effectOf = (tables) => ({
+  perRound_d3_hard: Object.fromEntries([ION, SC].map((p) => [p, round(tables[p].perRound.hard.find((u) => u.d === 3).value)])),
+  tauLog_d3_hard: Object.fromEntries([ION, SC].map((p) => [p, tables[p].tauLog.hard.find((u) => u.d === 3).xMin])),
+});
+
+function loadStageFiles(basis) {
+  const out = {};
+  for (const [p, name] of [[ION, STAGE2_FILE], [SC, STAGE3_FILE]]) {
+    const f = join(RESULTS_DIR, resultFile(name, basis));
+    if (existsSync(f)) out[p] = JSON.parse(readFileSync(f, 'utf8'));
+  }
+  return out[ION] && out[SC] ? out : null;
+}
+
+// Stage 4 v2. Every headline value uses the learned decoder; the naive decoder appears only in
+// decoderComparison (and C5). --basis X writes only tradeoff, perRound and budgetAtOptimum.
 function stage4({ decoders, basis }) {
   const t0 = Date.now();
-  const headline = decoders.includes('learned') ? 'learned' : 'naive';
+  if (!decoders.includes('learned')) throw new UsageError('Stage 4 v2 uses the learned decoder for every headline value: drop --decoder or use learned / both');
   const stage2File = resultFile(STAGE2_FILE, basis);
   const stage3File = resultFile(STAGE3_FILE, basis);
   for (const f of [CYCLE_PARAMS, ION_PARAMS, SC_PARAMS, join(RESULTS_DIR, stage2File), join(RESULTS_DIR, stage3File)]) {
@@ -1312,30 +1583,69 @@ function stage4({ decoders, basis }) {
   }
   const cycle = JSON.parse(readFileSync(CYCLE_PARAMS, 'utf8'));
   const cards = { [ION]: JSON.parse(readFileSync(ION_PARAMS, 'utf8')), [SC]: JSON.parse(readFileSync(SC_PARAMS, 'utf8')) };
-  const results = { [ION]: JSON.parse(readFileSync(join(RESULTS_DIR, stage2File), 'utf8')), [SC]: JSON.parse(readFileSync(join(RESULTS_DIR, stage3File), 'utf8')) };
+  const files = { [basis]: loadStageFiles(basis) };
+  const results = files[basis];
   for (const p of [ION, SC]) {
     if (!cycle[p]) throw new Error(`${CYCLE_PARAMS} has no entry for ${p}`);
-    cycleTime(cycle[p], 1); // throws on an unfilled (null) value
+    cycleTime(cycle[p], 1, 3); // throws on an unfilled (null) value or an unknown expression
   }
-  // The full tables come from the stage files; warn if their cards differ from params/.
   const cardsMatch = Object.fromEntries([ION, SC].map((p) => [p, JSON.stringify(results[p].params.card) === JSON.stringify(cards[p])]));
 
-  // Full statistics: tables and conclusions from the Stage 2 and 3 results, per decoder.
-  const byDecoder = {};
-  for (const decoder of decoders) {
-    const arms = { [ION]: armFromResults(results[ION], decoder), [SC]: armFromResults(results[SC], decoder) };
-    const tb = { [ION]: platformTable(arms[ION], cycle[ION]), [SC]: platformTable(arms[SC], cycle[SC]) };
-    byDecoder[decoder] = { platforms: tb, conclusions: evaluateConclusions(arms[ION], arms[SC], tb) };
+  // Full statistics, learned decoder.
+  const arms = { [ION]: armFromResults(results[ION], 'learned'), [SC]: armFromResults(results[SC], 'learned') };
+  const tables = { [ION]: platformTable(arms[ION], cycle[ION]), [SC]: platformTable(arms[SC], cycle[SC]) };
+  for (const p of [ION, SC]) {
+    tables[p].tradeoff = tradeoffTable(arms[p], cycle[p]);
+    tables[p].budgetAtOptimum = budgetAtOptimum(results[p], arms[p]);
   }
-  const { platforms: tables, conclusions } = byDecoder[headline];
+  const inputs = Object.fromEntries([ION, SC].map((p) => [p, { file: join(RESULTS_DIR, p === ION ? stage2File : stage3File), commit: results[p].provenance.commit, date: results[p].provenance.date, cardMatchesParams: cardsMatch[p] }]));
+  const definitions = {
+    cycleTime: 'layers * two_qubit_gate_us + tau + reset_us; layers = gate_layers_per_round (a number, or "2*(d-1)" evaluated at d: sequential ion gates, DECISIONS E8)',
+    roundsPerSecond: '1e6 / cycleTime(us)',
+    tradeoff: 'per d and mode, at every grid tau: roundsPerSecond and perRound = 0.5 (1 - (1 - 2 pL)^(1/r)); lo and hi are perRound of the Wilson bounds',
+    perRound: '0.5 (1 - (1 - 2 pL)^(1/r)) at tau*_log; pL and its Wilson bounds interpolated linearly in ln tau between grid points (the best grid point when tau*_log is at the grid edge)',
+    perMicrosecond: 'perRound / cycleTime at tau*_log and d',
+    budgetAtOptimum: 'Stage 2/3 budget arrays interpolated in ln tau at tau*_log (d = 3, hard, learned); gate is the mean of the learned edge classes',
+    breakEven: 'first sign change of pL(d=5) - pL(d=3) in tau order, x axis averageAssignmentError() (belief; empiricalAxis: the F1 empirical curve); interval from the crossings of hi5 - lo3 and lo5 - hi3 (Wilson) on the same grid segment',
+  };
+
+  if (basis === 'X') {
+    const platformsX = Object.fromEntries([ION, SC].map((p) => [p, { tradeoff: tables[p].tradeoff, perRound: tables[p].perRound, budgetAtOptimum: tables[p].budgetAtOptimum }]));
+    const resultX = {
+      schema: 's2s-results/1', stage: 4, basis, decoder: 'learned', provisional: true, framing: FRAMING,
+      platforms: platformsX,
+      params: { cycle, definitions },
+      provenance: { tool: `tools/sweep.mjs --stage 4 --decoder ${decoderArg(decoders)} --basis ${basis}`, commit: gitCommit(), date: new Date().toISOString(), node: process.version, params: [CYCLE_PARAMS], inputs, runtime_s: (Date.now() - t0) / 1000 },
+    };
+    const outX = join(RESULTS_DIR, resultFile('stage4_comparison.json', basis));
+    mkdirSync(RESULTS_DIR, { recursive: true });
+    writeFileSync(outX, `${JSON.stringify(resultX, null, 2)}\n`);
+    printStage4Tables(tables, cycle);
+    console.log(`wrote ${outX} (provisional; runtime ${resultX.provenance.runtime_s.toFixed(1)} s)`);
+    return;
+  }
+
+  // Conclusions need both bases (C1, C2, C5, C6) and the dem file (O4).
+  files.X = loadStageFiles('X');
+  const demPath = join(RESULTS_DIR, DEM_FILE);
+  const dem = existsSync(demPath) ? JSON.parse(readFileSync(demPath, 'utf8')) : null;
+  const c1 = c1Conclusion(files);
+  const c2 = c2Conclusion(files);
+  const c3 = c3Conclusion(tables, cycle);
+  const c4 = c4Conclusion(tables);
+  const c5 = c5Conclusion(files);
+  const c6 = c6Conclusion(files);
+  const o4 = o4Conclusion(dem);
+  const conclusions = { C1: c1.conclusion, C2: c2.conclusion, C3: c3.conclusion, C4: c4.conclusion, C5: c5.conclusion, C6: c6.conclusion, O4: o4.conclusion };
+  const conclusionDetail = { C1: c1.detail, C2: c2.detail, C3: c3.detail, C4: c4.detail, C5: c5.rows, C6: c6.detail, O4: o4.detail };
 
   // Reduced statistics: banks, calibration and the shot subsample, shared by every rerun.
   const r = 3;
   const repBanks = loadRepBanks(basis);
   const byKey = new Map(repBanks.map((b) => [`${b.bank.d},${b.bank.r},${b.bank.logical}`, b]));
   const distances = [3, 5, 7].filter((d) => byKey.has(`${d},${r},0`) && byKey.has(`${d},${r},1`));
-  const rates = new Map(headline === 'learned' ? distances.map((d) => [d, pooledRates(byKey, d, r)]) : []);
-  const ctx = { r, distances, banks: new Map(), nonExact: 0, decoder: headline, rates, basis };
+  const rates = new Map(distances.map((d) => [d, pooledRates(byKey, d, r)]));
+  const ctx = { r, distances, banks: new Map(), nonExact: 0, decoder: 'learned', rates, basis };
   const usedBanks = [];
   for (const d of distances) {
     for (const logical of [0, 1]) {
@@ -1360,20 +1670,21 @@ function stage4({ decoders, basis }) {
     console.log(`  ${label} (${((Date.now() - t) / 1000).toFixed(1)} s)`);
     return v;
   };
-  console.log(`Sensitivity: reduced statistics, R = 1, ${SENS_SHOTS} shots per bank, no bootstrap, d = ${distances.join(', ')}, ${headline} decoder, basis ${basis}`);
+  console.log(`Sensitivity: reduced statistics, R = 1, ${SENS_SHOTS} shots per bank, no bootstrap, d = ${distances.join(', ')}, learned decoder, basis ${basis}`);
   const base = {
     [ION]: timed(`${ION} baseline`, () => reducedArm(ION, cards[ION], ctx)),
     [SC]: timed(`${SC} baseline`, () => reducedArm(SC, cards[SC], ctx)),
   };
-  const evalArms = (arms, cyc) => {
-    const tb = { [ION]: platformTable(arms[ION], cyc[ION]), [SC]: platformTable(arms[SC], cyc[SC]) };
-    return { tables: tb, conclusions: evaluateConclusions(arms[ION], arms[SC], tb) };
+  const evalArms = (a, cyc) => {
+    const tb = { [ION]: platformTable(a[ION], cyc[ION]), [SC]: platformTable(a[SC], cyc[SC]) };
+    return { tables: tb, conclusions: evaluateConclusions(a[ION], a[SC], tb) };
   };
   const baseline = evalArms(base, cycle);
   const sensitivity = [];
   const row = (platform, parameter, scale, value, ev) => {
     const out = { platform, parameter, scale, value };
     for (const c of ['C1', 'C2', 'C3', 'C4']) out[c] = ev.conclusions[c].verdict;
+    out.effect = effectOf(ev.tables);
     out.parts = Object.fromEntries(['C1', 'C2', 'C3', 'C4'].map((c) => [c, Object.fromEntries(Object.entries(ev.conclusions[c].parts).map(([k, v]) => [k, v.verdict]))]));
     out.tauLog = Object.fromEntries([ION, SC].map((p) => [p, ev.tables[p].tauLog]));
     out.breakEven = Object.fromEntries([ION, SC].map((p) => [p, { hard: ev.tables[p].breakEven.byMode.hard.epsBar, soft: ev.tables[p].breakEven.byMode.soft.epsBar }]));
@@ -1383,7 +1694,15 @@ function stage4({ decoders, basis }) {
     for (const name of SENS_PARAMS[platform]) {
       for (const scale of SENS_SCALES) {
         const value = fieldValue(cards[platform], name) * scale;
-        const arm = timed(`${platform} ${name} x ${scale}`, () => reducedArm(platform, setField(cards[platform], name, value), ctx));
+        let arm;
+        try {
+          arm = timed(`${platform} ${name} x ${scale}`, () => reducedArm(platform, setField(cards[platform], name, value), ctx));
+        } catch (err) {
+          // A scaled card the readout model refuses (e.g. T2 > 2 T1): no verdicts, no effect.
+          console.log(`  ${platform} ${name} x ${scale}: skipped (${err.message})`);
+          sensitivity.push({ platform, parameter: name, scale, value, C1: 'undetermined', C2: 'undetermined', C3: 'undetermined', C4: 'undetermined', effect: null, skipped: err.message });
+          continue;
+        }
         row(platform, name, scale, value, evalArms({ ...base, [platform]: arm }, cycle));
       }
     }
@@ -1396,34 +1715,34 @@ function stage4({ decoders, basis }) {
   }
 
   const runtimeS = (Date.now() - t0) / 1000;
-  const platforms = Object.fromEntries([ION, SC].map((p) => [p, tables[p]]));
   const result = {
     schema: 's2s-results/1',
     stage: 4,
     basis,
-    decoder: headline,
-    platforms,
+    decoder: 'learned',
+    provisional: true,
+    framing: FRAMING,
+    platforms: tables,
     conclusions,
-    byDecoder,
+    conclusionDetail,
+    decoderComparison: c5.rows,
     sensitivity,
     sensitivityBaseline: {
       note: 'scale 1 (card values) at the same reduced statistics as the sensitivity rows',
       C1: baseline.conclusions.C1, C2: baseline.conclusions.C2, C3: baseline.conclusions.C3, C4: baseline.conclusions.C4,
+      effect: effectOf(baseline.tables),
       platforms: baseline.tables,
     },
     params: {
       cycle, ion: cards[ION], sc: cards[SC],
       definitions: {
-        perRound: '0.5 (1 - (1 - 2 pL)^(1/r)) at tau*_log; pL and its Wilson bounds interpolated linearly in ln tau between grid points (the best grid point when tau*_log is at the grid edge)',
-        perMicrosecond: 'perRound / cycleTime, cycleTime = gate_layers_per_round * two_qubit_gate_us + tau*_log + reset_us',
-        breakEven: 'first sign change of pL(d=5) - pL(d=3) in tau order, x axis averageAssignmentError() (belief); interval from the crossings of hi5 - lo3 and lo5 - hi3 (Wilson) on the same grid segment',
-        C1: `superconducting: interior tau*_log below tau*_phys (empirical assignment curve) for every d and mode (full: bootstrap interval; reduced: Wilson intervals on the grid); trapped-ion: idle flip probability below ${C1_ION_IDLE_MAX} at every tau, or no interior tau*_log`,
-        C2: 'per platform: soft never above hard beyond the Wilson intervals, and below hard beyond them at one or more (d, tau)',
-        C3: 'per (d, mode): platform ordering by per-round error differs from ordering by per-microsecond error, each ordering requiring non-overlapping intervals',
-        C4: 'per mode: |epsBar(ion) - epsBar(sc)| < sum of half-widths; undetermined if a platform has no crossing, or a flip rests on a clamped interval',
-        combine: 'a verdict is "flips" if any part flips, "holds" if every part holds, otherwise "undetermined"',
+        ...definitions,
+        conclusions: 'C1-C6 and O4 follow team checklist Section 1.2 (statements verbatim) with the rules in tools/sweep.mjs (c1Conclusion ... o4Conclusion); verdict equals automated until Person A reviews it; plain is filled at A55',
+        tieRule: `a tau*_log with fractionTied >= ${TIED_MAX} is UNRESOLVED and excluded from verdicts (DECISIONS E12)`,
+        sensitivityVerdicts: 'C1-C4 in sensitivity rows keep the v1 rules (holds / flips / undetermined) on the reduced runs; effect is the per-round error and tau*_log at d = 3, hard, learned, at the same reduced statistics (compare with sensitivityBaseline.effect). T2 parameters do not enter the Z-basis (bit-flip) memory, so their rows equal the baseline',
+        C1v1: `superconducting: interior tau*_log below tau*_phys (empirical); trapped-ion: idle flip probability below ${C1_ION_IDLE_MAX} at every tau, or no interior tau*_log`,
       },
-      sensitivity: { scales: SENS_SCALES, readoutDrawsPerShot: 1, shotsPerBank: SENS_SHOTS, f1Samples: SENS_F1_SAMPLES, bootstrap: false, distances, parameters: SENS_PARAMS, cycleParameters: SENS_CYCLE_PARAMS, decoder: headline },
+      sensitivity: { scales: SENS_SCALES, readoutDrawsPerShot: 1, shotsPerBank: SENS_SHOTS, f1Samples: SENS_F1_SAMPLES, bootstrap: false, distances, parameters: SENS_PARAMS, cycleParameters: SENS_CYCLE_PARAMS, decoder: 'learned' },
       decoders, basis,
       learnedRates: ratesRecord(rates, r),
     },
@@ -1433,7 +1752,11 @@ function stage4({ decoders, basis }) {
       date: new Date().toISOString(),
       node: process.version,
       params: [CYCLE_PARAMS, ION_PARAMS, SC_PARAMS],
-      inputs: Object.fromEntries([ION, SC].map((p) => [p, { file: join(RESULTS_DIR, p === ION ? stage2File : stage3File), commit: results[p].provenance.commit, date: results[p].provenance.date, cardMatchesParams: cardsMatch[p] }])),
+      inputs: {
+        ...inputs,
+        X: files.X ? Object.fromEntries([ION, SC].map((p) => [p, { file: join(RESULTS_DIR, resultFile(p === ION ? STAGE2_FILE : STAGE3_FILE, 'X')), commit: files.X[p].provenance.commit }])) : null,
+        dem: dem ? { file: demPath, commit: dem.provenance?.commit ?? null } : null,
+      },
       banks: usedBanks,
       pGate: Object.fromEntries([...ctx.banks.values()].map((b) => [b.file, round(b.pGate)])),
       seedRule: `reduced decode seed = 4000000 + (superconducting ? 100000 : 0) + 10000*d + 1000*logical + tauIndex (same in every rerun; hard and soft share it); shot subsample seed ${SENS_SUBSAMPLE_SEED} + 10*d + logical; F1 seed ${SENS_F1_SEED}`,
@@ -1446,38 +1769,44 @@ function stage4({ decoders, basis }) {
   writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
 
   // Summary.
-  const g = (v) => (v === null || v === undefined ? '—' : v === 0 ? '0' : Number(v).toExponential(3));
   for (const p of [ION, SC]) if (!cardsMatch[p]) console.log(`WARNING: the card in ${p === ION ? stage2File : stage3File} differs from ${p === ION ? ION_PARAMS : SC_PARAMS}; the full tables use the stage file, the sensitivity uses params/`);
+  printStage4Tables(tables, cycle);
+  console.log('\nConclusions (provisional, learned decoder):');
+  for (const [id, c] of Object.entries(conclusions)) console.log(`  ${id} ${c.verdict.padEnd(12)} ${c.note}`);
+  const e = result.sensitivityBaseline.effect;
+  console.log(`\nSensitivity (reduced statistics; baseline per round d3 hard: ion ${g3(e.perRound_d3_hard[ION])}, sc ${g3(e.perRound_d3_hard[SC])}; tau*_log: ion ${g3(e.tauLog_d3_hard[ION])}, sc ${g3(e.tauLog_d3_hard[SC])} us):`);
+  for (const s of sensitivity) {
+    const eff = s.effect ? `perRound ion ${g3(s.effect.perRound_d3_hard[ION])} sc ${g3(s.effect.perRound_d3_hard[SC])}` : `skipped: ${s.skipped}`;
+    console.log(`  ${s.platform.padEnd(15)} ${s.parameter.padEnd(28)} x ${String(s.scale).padEnd(3)}  C1 ${s.C1.padEnd(12)} C2 ${s.C2.padEnd(12)} C3 ${s.C3.padEnd(12)} C4 ${s.C4.padEnd(12)} ${eff}`);
+  }
+  console.log(`\nnon-exact matchings (reduced runs): ${ctx.nonExact}`);
+  console.log(`wrote ${out} (provisional; runtime ${runtimeS.toFixed(1)} s)`);
+}
+
+function printStage4Tables(tables, cycle) {
+  const g = (v) => (v === null || v === undefined ? '—' : v === 0 ? '0' : Number(v).toExponential(3));
   for (const p of [ION, SC]) {
     const P = tables[p];
     const c = cycle[p];
-    console.log(`\n${p}: cycle = ${fieldValue(c, 'gate_layers_per_round')} x ${fieldValue(c, 'two_qubit_gate_us')} us + tau + ${fieldValue(c, 'reset_us')} us; tau*_phys belief ${g(P.tauPhys.belief.xMin)}, empirical ${g(P.tauPhys.empirical.xMin)} us`);
+    console.log(`\n${p}: cycle = ${fieldValue(c, 'gate_layers_per_round')} layers x ${fieldValue(c, 'two_qubit_gate_us')} us + tau + ${fieldValue(c, 'reset_us')} us; tau*_phys belief ${g(P.tauPhys.belief.xMin)}, empirical ${g(P.tauPhys.empirical.xMin)} us`);
     for (const mode of STAGE4_MODES) {
       P.tauLog[mode].forEach((tl, i) => {
         const pl = P.pLAtTauLog[mode][i];
         const pr = P.perRound[mode][i];
         const pm = P.perMicrosecond[mode][i];
-        console.log(`  ${mode.padEnd(4)} d = ${tl.d}: tau*_log ${g(tl.xMin)} us${tl.atEdge ? ' (grid edge)' : ''}  pL(r = ${pl.r}) ${g(pl.value)}  per round ${g(pr.value)} [${g(pr.lo)}, ${g(pr.hi)}]  Tcyc ${g(pm.cycle_us)} us  per us ${g(pm.value)} [${g(pm.lo)}, ${g(pm.hi)}]`);
+        console.log(`  ${mode.padEnd(4)} d = ${tl.d}: tau*_log ${g(tl.xMin)} us${tl.atEdge ? ' (grid edge)' : ''}  pL(r = ${pl.r}) ${g(pl.value)}  per round ${g(pr.value)} [${g(pr.lo)}, ${g(pr.hi)}]  Tcyc ${g(pm.cycle_us)} us  rounds/s ${g(1e6 / pm.cycle_us)}  per us ${g(pm.value)}`);
       });
     }
-    for (const mode of STAGE4_MODES) {
-      const b = P.breakEven.byMode[mode];
-      const e = P.breakEven.empiricalAxis[mode];
-      console.log(`  break-even ${mode}: ${b.epsBar === null ? `none (${b.note})` : `epsBar ${g(b.epsBar)} [${g(b.lo)}, ${g(b.hi)}]${b.clamped ? ' (clamped)' : ''} at tau ${g(b.tau_us)} us`}; on the empirical axis ${e.epsBar === null ? 'none' : g(e.epsBar)}`);
+    const b = P.budgetAtOptimum;
+    if (b) console.log(`  budget at tau*_log ${g(b.tau_us)} us (d = 3, hard): readout ${g(b.readout)}, idle ${g(b.idle)}, crosstalk ${g(b.crosstalk)}, gate ${g(b.gate)}`);
+    if (P.breakEven) {
+      for (const mode of STAGE4_MODES) {
+        const be = P.breakEven.byMode[mode];
+        const em = P.breakEven.empiricalAxis[mode];
+        console.log(`  break-even ${mode}: ${be.epsBar === null ? `none (${be.note})` : `epsBar ${g(be.epsBar)} [${g(be.lo)}, ${g(be.hi)}]${be.clamped ? ' (clamped)' : ''}`}; empirical axis ${em.epsBar === null ? 'none' : `${g(em.epsBar)} [${g(em.lo)}, ${g(em.hi)}]`}`);
+      }
     }
   }
-  const show = (label, cs) => console.log(`${label}: C1 ${cs.C1.verdict}, C2 ${cs.C2.verdict}, C3 ${cs.C3.verdict}, C4 ${cs.C4.verdict}`);
-  console.log('');
-  for (const decoder of decoders.filter((x) => x !== headline)) show(`Conclusions, full statistics, ${decoder} decoder`, byDecoder[decoder].conclusions);
-  show(`Conclusions, full statistics, ${headline} decoder (headline)`, conclusions);
-  for (const c of ['C1', 'C2', 'C3', 'C4']) {
-    console.log(`  ${c}: ${Object.entries(conclusions[c].parts).map(([k, v]) => `${k} ${v.verdict}`).join('; ')}`);
-  }
-  show('Conclusions, reduced baseline', baseline.conclusions);
-  console.log('\nSensitivity (reduced statistics):');
-  for (const s of sensitivity) console.log(`  ${s.platform.padEnd(15)} ${s.parameter.padEnd(28)} x ${String(s.scale).padEnd(3)}  C1 ${s.C1.padEnd(12)} C2 ${s.C2.padEnd(12)} C3 ${s.C3.padEnd(12)} C4 ${s.C4}`);
-  console.log(`\nnon-exact matchings (reduced runs): ${ctx.nonExact}`);
-  console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
 
 // ---- Stage dem: learned detector error model of the Forte-1 banks, naive against learned ----

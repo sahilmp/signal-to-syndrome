@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { perRound, perRoundToTotal, cycleTime, perMicrosecond, breakEven, breakEvenDetail } from '../src/core/metrics.js';
+import { perRound, perRoundToTotal, cycleTime, perMicrosecond, breakEven, breakEvenDetail, roundsPerSecond, tradeoffCurve, dominance } from '../src/core/metrics.js';
 
 // Catches: fails if perRound is not the inverse of compounding r rounds, e.g. if it divides
 // pL by r, uses the exponent r instead of 1/r, or drops the factor 2 inside (1 - 2 pL). The
@@ -92,4 +92,86 @@ test('breakEven works on a falling x axis and gives the segment of the crossing'
   const det = breakEvenDetail(xs, yD3, yD5);
   assert.equal(det.index, 1);
   assert.ok(Math.abs(det.fraction - 0.5) < 1e-12);
+});
+
+// V15. Catches: fails if the sequential-gate expression "2*(d-1)" is ignored, evaluated at the
+// wrong d (e.g. d - 1 layers, or 2d), or if a numeric layer count starts depending on d.
+// Hand example (Forte-like card, 970 us gates, 50 us reset, tau = 20 us): 2 layers give
+// 2 * 970 + 20 + 50 = 2010 us at any d; "2*(d-1)" at d = 5 gives 8 * 970 + 70 = 7830 us and at
+// d = 3 gives 4 * 970 + 70 = 3950 us. Rounds per second at 2010 us: 1e6 / 2010 = 497.512...
+test('cycleTime with 2 layers and with "2*(d-1)" at d = 5', () => {
+  const base = { two_qubit_gate_us: { value: 970, source: 'test' }, reset_us: { value: 50, source: 'test' } };
+  const parallel = { ...base, gate_layers_per_round: { value: 2, source: 'test' } };
+  const sequential = { ...base, gate_layers_per_round: { value: '2*(d-1)', source: 'test' } };
+  assert.ok(Math.abs(cycleTime(parallel, 20, 5) - 2010) < 1e-9);
+  assert.ok(Math.abs(cycleTime(parallel, 20) - 2010) < 1e-9);
+  assert.ok(Math.abs(cycleTime(sequential, 20, 5) - 7830) < 1e-9);
+  assert.ok(Math.abs(cycleTime(sequential, 20, 3) - 3950) < 1e-9);
+  assert.ok(Math.abs(cycleTime({ ...base, gate_layers_per_round: { value: '2 * (d - 1)' } }, 20, 5) - 7830) < 1e-9);
+  assert.ok(Math.abs(roundsPerSecond(2010) - 1e6 / 2010) < 1e-9);
+  assert.throws(() => roundsPerSecond(0), /Tcyc_us/);
+});
+
+// V15. Catches: fails if the card's layer expression is evaluated as code (any string other
+// than "2*(d-1)" must throw, so "3*(d-1)" or "d" never silently gives a number), or if the
+// accepted expression gives a number without a distance (2 * (undefined - 1) is NaN).
+test('cycleTime throws on an unknown layer expression and on "2*(d-1)" without d', () => {
+  const card = (v) => ({ two_qubit_gate_us: 970, reset_us: 50, gate_layers_per_round: { value: v } });
+  for (const v of ['3*(d-1)', '2*d', 'd', '2', 'Math.PI']) {
+    assert.throws(() => cycleTime(card(v), 20, 5), /not supported/, v);
+  }
+  assert.throws(() => cycleTime(card('2*(d-1)'), 20), /distance/);
+  assert.throws(() => cycleTime(card('2*(d-1)'), 20, 1), /distance/);
+});
+
+// V15. Catches: fails if tradeoffCurve mixes up the axes, leaves out the cycle-time parts, or
+// uses pL instead of the per-round error. Hand example: card 2 layers * 0.05 us + reset 0.5 us,
+// taus 0.5 and 1.5 us: Tcyc 1.1 and 2.1 us, rounds per second 1e6 / 1.1 = 909090.909... and
+// 1e6 / 2.1 = 476190.476...; r = 3: perRound(0.244) = 0.1 (0.5 (1 - 0.8^3) = 0.244) and
+// perRound(0) = 0.
+test('tradeoffCurve on hand-computed numbers', () => {
+  const card = { two_qubit_gate_us: 0.05, gate_layers_per_round: 2, reset_us: 0.5 };
+  const c = tradeoffCurve([0.5, 1.5], [0.244, 0], 3, card, 3);
+  assert.deepEqual(c.tau, [0.5, 1.5]);
+  assert.ok(Math.abs(c.roundsPerSecond[0] - 909090.9090909091) < 1e-6);
+  assert.ok(Math.abs(c.roundsPerSecond[1] - 476190.4761904762) < 1e-6);
+  assert.ok(Math.abs(c.perRound[0] - 0.1) < 1e-15);
+  assert.equal(c.perRound[1], 0);
+  assert.throws(() => tradeoffCurve([0.5], [0.1, 0.2], 3, card, 3), /equal length/);
+});
+
+// V15, C3 dominance rule (Appendix U4). Catches: fails if dominance needs only one axis, ignores
+// the intervals, or swaps the arms. Two synthetic arms built with tradeoffCurve and read at
+// their own tau*_log (the grid minimum of perRound). Case 1 (dominating): arm A has per-round
+// error 1e-3 [8e-4, 1.2e-3] at Tcyc 1.1 us and arm B 5e-3 [4e-3, 6e-3] at Tcyc ~ 2000 us: A is
+// lower beyond the intervals and faster, so "A" (and "B" with the arms swapped). Case 2 (not
+// dominating): the same errors but B is the faster arm: neither dominates, null. Boundary pair:
+// A.hi exactly equal to B.lo is not "beyond the intervals" (null); A.hi a step 1e-6 below it is.
+test('C3 dominance rule on two synthetic curves, one dominating and one not', () => {
+  const fast = { two_qubit_gate_us: 0.05, gate_layers_per_round: 2, reset_us: 0.5 };
+  const slow = { two_qubit_gate_us: 970, gate_layers_per_round: 2, reset_us: 50 };
+  const r = 3;
+  const total = (eps) => perRoundToTotal(eps, r);
+  const curveA = { taus: [0.3, 0.5, 0.9], eps: [4e-3, 1e-3, 2e-3], lo: [3e-3, 8e-4, 1.5e-3], hi: [5e-3, 1.2e-3, 2.5e-3] };
+  const curveB = { taus: [10, 30, 100], eps: [9e-3, 5e-3, 7e-3], lo: [8e-3, 4e-3, 6e-3], hi: [1e-2, 6e-3, 8e-3] };
+  const pointAt = (c, card) => {
+    const tc = tradeoffCurve(c.taus, c.eps.map(total), r, card, 3);
+    const lo = tradeoffCurve(c.taus, c.lo.map(total), r, card, 3).perRound;
+    const hi = tradeoffCurve(c.taus, c.hi.map(total), r, card, 3).perRound;
+    let i = 0;
+    tc.perRound.forEach((v, j) => { if (v < tc.perRound[i]) i = j; });
+    return { perRound: tc.perRound[i], lo: lo[i], hi: hi[i], roundsPerSecond: tc.roundsPerSecond[i] };
+  };
+  const aFast = pointAt(curveA, fast);
+  const bSlow = pointAt(curveB, slow);
+  assert.ok(Math.abs(aFast.perRound - 1e-3) < 1e-12);
+  assert.equal(dominance(aFast, bSlow), 'A');
+  assert.equal(dominance(bSlow, aFast), 'B');
+  const aSlow = pointAt(curveA, slow);
+  const bFast = pointAt(curveB, fast);
+  assert.equal(dominance(aSlow, bFast), null);
+  const edge = { perRound: 4e-3, lo: 3e-3, hi: 4e-3, roundsPerSecond: 2 };
+  const other = { perRound: 5e-3, lo: 4e-3, hi: 6e-3, roundsPerSecond: 1 };
+  assert.equal(dominance(edge, other), null);
+  assert.equal(dominance({ ...edge, hi: 4e-3 - 1e-6 }, other), 'A');
 });
