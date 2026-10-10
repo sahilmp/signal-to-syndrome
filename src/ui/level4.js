@@ -5,6 +5,8 @@
 // against tau. The platform toggle is shared with level 3: the trapped ion uses
 // createIonReadout and stage2, the superconducting qubit (FEATURES.superconducting)
 // createScReadout and stage3. With FEATURES.liveRun the shots can come from a fresh run.
+// With the basis toggle (U7.9) the chart shows the chosen memory (stage2x, stage3x in the
+// phase-flip memory); the shots stay those of the bit-flip memory, and a note says so.
 
 import { decodeShot } from './bridge_core.js';
 import { bankD3R3 } from './bridge_data.js';
@@ -18,6 +20,7 @@ import { FEATURES } from './features.js';
 import { describeCorrections, P_GATE } from './level1.js';
 import {
   tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
+  currentBasis, onBasisChange, resultsFor, memoryTag,
 } from './level3.js';
 import { mountLiveRun } from './liverun.js';
 
@@ -186,6 +189,10 @@ export function mountLevel4(container) {
   container.appendChild(pair);
   const shotText = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(shotText);
+  // Shown in the phase-flip memory only: the shots above come from the bit-flip memory.
+  const basisNote = el('p', { class: 'hint basis-note' }, 'The shots above come from the bit-flip memory; the chart below shows the phase-flip memory.');
+  basisNote.hidden = currentBasis() !== 'X';
+  container.appendChild(basisNote);
 
   const nav = el('div', { class: 'control-row' });
   const nextBtn = el('button', { type: 'button' }, 'Next shot');
@@ -204,7 +211,7 @@ export function mountLevel4(container) {
   const dLabel = el('label', { for: 'l4-d' }, 'Distance shown in the chart: ');
   const dSelect = el('select', { id: 'l4-d' });
   function fillDistances() {
-    const ds = [...new Set(plat.results.series.map((s) => s.d))].sort((a, b) => a - b);
+    const ds = [...new Set(resultsFor(plat).series.map((s) => s.d))].sort((a, b) => a - b);
     if (!ds.includes(dSel)) dSel = ds.includes(3) ? 3 : ds[0];
     dSelect.replaceChildren(...ds.map((d) => {
       const o = el('option', { value: String(d) }, `d = ${d}`);
@@ -216,9 +223,10 @@ export function mountLevel4(container) {
   dRow.append(dLabel, dSelect);
   container.appendChild(dRow);
   const chartOpts = () => {
-    const res = plat.results;
+    const res = resultsFor(plat);
+    const mem = memoryTag();
     return {
-      title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${res.fixture ? ' — placeholder data' : ''}`,
+      title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${mem}${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${plat.tauName} τ (µs)`, yLabel: 'Logical error probability',
       series: res.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1))
         .map((s) => ({
@@ -228,7 +236,7 @@ export function mountLevel4(container) {
       logX: true, logY: true, yFloor: 1e-7,
       vlines: [{ x: grid[idx], label: `τ = ${formatTau(grid[idx])}` }],
       ...(ux ? {
-        title: `Hard against soft decoding: logical error against readout time (${plat.label.toLowerCase()}, d = ${dSel})${res.fixture ? ' — placeholder data' : ''}`,
+        title: `Hard against soft decoding: logical error against readout time (${plat.label.toLowerCase()}, d = ${dSel})${mem}${res.fixture ? ' — placeholder data' : ''}`,
         xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
       } : {}),
     };
@@ -239,7 +247,7 @@ export function mountLevel4(container) {
   container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
   function renderChart() {
     chart.update(chartOpts());
-    const lines = ['hard', 'soft'].flatMap((mode) => optimaInfo(plat.results, mode, [dSel]).lines.filter((l) => l.includes('τ_log')));
+    const lines = ['hard', 'soft'].flatMap((mode) => optimaInfo(resultsFor(plat), mode, [dSel]).lines.filter((l) => l.includes('τ_log')));
     optList.replaceChildren(...lines.map((t) => el('li', {}, t)));
   }
 
@@ -352,6 +360,11 @@ export function mountLevel4(container) {
     setTau();
     fillDistances();
     redrawShot();
+  });
+  onBasisChange((basis) => {
+    basisNote.hidden = basis !== 'X';
+    fillDistances();
+    renderChart();
   });
   dSelect.addEventListener('change', () => {
     dSel = Number(dSelect.value);

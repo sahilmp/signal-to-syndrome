@@ -1,5 +1,7 @@
 // Entry point: builds the level selector from FEATURES, mounts the enabled levels,
-// fills in the version and the diagnostics; with FEATURES.hero, the hero panel above the tabs. Bundled by tools/build.mjs into one IIFE.
+// fills in the version and the diagnostics; with FEATURES.hero, the hero panel above the tabs;
+// with FEATURES.phaseFlip, the header switch "Bit-flip memory / Phase-flip memory" (U7.9), which
+// sets the basis of the hero and Levels 3-5 (level3.js setBasis). Bundled by tools/build.mjs into one IIFE.
 
 import pkg from '../../package.json' with { type: 'json' };
 import { FEATURES } from './features.js';
@@ -11,7 +13,7 @@ import { mountLevel5 } from './level5.js';
 import { mountLearnNoise } from './learnnoise.js';
 import { mountDiagnostics } from './diag.js';
 import { mountHero } from './hero.js';
-import { setPlatform } from './level3.js';
+import { setPlatform, setBasis, currentBasis, onBasisChange, BASES } from './level3.js';
 
 const LEVELS = [
   { id: 'level1', flag: 'level1', label: 'Level 1: Be the decoder', mount: mountLevel1 },
@@ -33,6 +35,38 @@ const LEVELS = [
 ];
 
 const isEnabled = (l) => (l.flags || [l.flag]).some((f) => FEATURES[f] === true);
+
+// Levels that stay in the bit-flip memory whatever the toggle says (U7.9).
+const BIT_FLIP_ONLY = new Set(['level1', 'level2']);
+export const BIT_FLIP_NOTE = 'This level stays in the bit-flip memory.';
+
+// The header switch: a radio pair, so the two memories are named and reachable with the arrow keys.
+export function mountBasisSwitch(container) {
+  const fs = document.createElement('fieldset');
+  fs.className = 'platform-toggle basis-switch';
+  const legend = document.createElement('legend');
+  legend.textContent = 'Memory';
+  fs.appendChild(legend);
+  for (const b of ['Z', 'X']) {
+    const id = `s2s-basis-${b}`;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 's2s-basis';
+    input.id = id;
+    input.value = b;
+    input.checked = currentBasis() === b;
+    input.addEventListener('change', () => { if (input.checked) setBasis(b); });
+    const label = document.createElement('label');
+    label.setAttribute('for', id);
+    label.textContent = BASES[b].Memory;
+    const wrap = document.createElement('span');
+    wrap.className = 'platform-option';
+    wrap.append(input, label);
+    fs.appendChild(wrap);
+  }
+  container.appendChild(fs);
+  return fs;
+}
 
 function start() {
   const root = document.getElementById('s2s-app');
@@ -63,6 +97,7 @@ function start() {
         } catch (err) {
           s.textContent = `This level could not start: ${err.message}`;
         }
+        if (FEATURES.phaseFlip === true && BIT_FLIP_ONLY.has(l.id)) addBitFlipNote(s);
       } else if (section) {
         section.hidden = !active;
       }
@@ -76,6 +111,29 @@ function start() {
         h.focus();
       }
     }
+  }
+
+  // Under the level's heading; shown only while the phase-flip memory is chosen.
+  const notes = [];
+  function addBitFlipNote(section) {
+    const note = document.createElement('p');
+    note.className = 'hint basis-note';
+    note.textContent = BIT_FLIP_NOTE;
+    note.hidden = currentBasis() !== 'X';
+    const h = section.querySelector('h2');
+    if (h) h.after(note);
+    else section.prepend(note);
+    notes.push(note);
+  }
+  if (FEATURES.phaseFlip === true) {
+    // Under the title, above the hero, since it sets the hero's memory too.
+    const holder = document.createElement('div');
+    holder.className = 'control-row basis-row';
+    mountBasisSwitch(holder);
+    const title = root.querySelector('h1');
+    if (title) title.after(holder);
+    else selector.parentNode.before(holder);
+    onBasisChange((b) => { for (const n of notes) n.hidden = b !== 'X'; });
   }
 
   if (enabled.length === 0) {

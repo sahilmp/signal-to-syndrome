@@ -21,10 +21,12 @@ import stage4v2 from '../../data/results/stage4_comparison.json' with { type: 'j
 import stage1x from '../../data/results/stage1_flat_x.json' with { type: 'json' };
 import stage2x from '../../data/results/stage2_ion_x.json' with { type: 'json' };
 import stage3x from '../../data/results/stage3_sc_x.json' with { type: 'json' };
+// B49 (U7.9): Level 5 v2 in the phase-flip memory.
+import stage4x from '../../data/results/stage4_comparison_x.json' with { type: 'json' };
 import paramsIonV2 from '../../params/ion.json' with { type: 'json' };
 import paramsScV2 from '../../params/sc.json' with { type: 'json' };
 import paramsCycleV2 from '../../params/cycle.json' with { type: 'json' };
 export {
-  demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x,
+  demForte1, stage1v2, stage2v2, stage3v2, stage4v2, stage1x, stage2x, stage3x, stage4x,
   paramsIonV2, paramsScV2, paramsCycleV2,
 };

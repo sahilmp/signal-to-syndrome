@@ -10,7 +10,9 @@
 // challenge "Set τ to minimise logical error" with a "Lock in" button.
 
 import { createIonReadout, createScReadout, runPoint, findMinimum } from './bridge_core.js';
-import { bankD3R3, stage2, stage3, stage2v2, stage3v2, paramsIon, paramsSc } from './bridge_data.js';
+import {
+  bankD3R3, stage2, stage3, stage2v2, stage3v2, stage2x, stage3x, paramsIon, paramsSc,
+} from './bridge_data.js';
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
@@ -49,10 +51,12 @@ export function naiveResults(results) {
 export const PLATFORMS = [
   {
     id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: naiveResults(stage2), stage: 2, budgetResults: stage2v2,
+    resultsX: naiveResults(stage2x), budgetResultsX: stage2x,
     create: createIonReadout, tauName: 'Detection time',
   },
   {
     id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: naiveResults(stage3), stage: 3, budgetResults: stage3v2,
+    resultsX: naiveResults(stage3x), budgetResultsX: stage3x,
     create: createScReadout, tauName: 'Integration time', physFromEmpirical: true,
   },
 ];
@@ -75,6 +79,44 @@ export function setPlatform(id) {
 export function onPlatformChange(fn) {
   platformListeners.add(fn);
 }
+
+// The memory basis (team checklist U7.9), shared by the hero and Levels 3-5 like the platform:
+// "Z" is the bit-flip memory, "X" the phase-flip memory. Only FEATURES.phaseFlip lets it leave
+// "Z". Levels 1-2 (and the stored shots of Levels 3-4) stay in the bit-flip memory.
+export const BASES = {
+  Z: {
+    id: 'Z', memory: 'bit-flip memory', Memory: 'Bit-flip memory', flip: 'bit flip',
+    idleName: 'Idle (T1 relaxation)',
+    idleText: 'In the bit-flip memory a waiting data qubit loses its value by relaxation, set by T1.',
+  },
+  X: {
+    id: 'X', memory: 'phase-flip memory', Memory: 'Phase-flip memory', flip: 'phase flip',
+    idleName: 'Idle (T2 dephasing)',
+    idleText: 'In the phase-flip memory a waiting data qubit loses its phase by dephasing, set by T2.',
+  },
+};
+let currentBasisId = 'Z';
+const basisListeners = new Set();
+export const basisOn = () => FEATURES.phaseFlip === true;
+export function currentBasis() {
+  return basisOn() && currentBasisId === 'X' ? 'X' : 'Z';
+}
+export function setBasis(id) {
+  if (id !== 'Z' && id !== 'X') throw new Error(`unknown basis ${id}`);
+  if (id === currentBasisId) return;
+  currentBasisId = id;
+  for (const fn of basisListeners) fn(currentBasis());
+}
+export function onBasisChange(fn) {
+  basisListeners.add(fn);
+  return () => basisListeners.delete(fn);
+}
+// " (phase-flip memory)" for chart titles while the toggle exists; nothing without it, so
+// the page is unchanged when FEATURES.phaseFlip is off.
+export const memoryTag = (basis = currentBasis()) => (basisOn() ? ` (${BASES[basis].memory})` : '');
+// A platform's results and error-budget source in a basis: the *_x files in the X basis.
+export const resultsFor = (p, basis = currentBasis()) => (basis === 'X' ? p.resultsX : p.results);
+export const budgetFor = (p, basis = currentBasis()) => (basis === 'X' ? p.budgetResultsX : p.budgetResults);
 
 // Radio group listing only the enabled platforms; arrow keys move between them. With one
 // platform it is a plain line of text. `prefix` keeps the ids unique per level.
@@ -165,8 +207,9 @@ const sig3 = (v) => formatNumber(Number(v.toPrecision(3)));
 // value and signal-to-noise ratio are labelled as such.
 export function assignmentText(plat, readout, tau) {
   const eps = readout.averageAssignmentError();
-  const a = plat.results.assignment;
-  const i = plat.results.x?.values?.findIndex((x) => Math.abs(x - tau) <= 1e-9 * Math.max(1, tau)) ?? -1;
+  const res = resultsFor(plat);
+  const a = res.assignment;
+  const i = res.x?.values?.findIndex((x) => Math.abs(x - tau) <= 1e-9 * Math.max(1, tau)) ?? -1;
   const snr = typeof readout.snr === 'function' ? readout.snr() : null;
   const snrText = Number.isFinite(snr) ? `, signal-to-noise ratio ${sig3(snr)}` : '';
   if (plat.physFromEmpirical && a && i >= 0 && Number.isFinite(a.empirical?.[i])) {
@@ -565,10 +608,15 @@ export function mountLevel3(container) {
   const optList = el('ul', { class: 'optima' });
   container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
   // Trapped ion only, behind FEATURES.crosstalk: the crosstalk scan (CC-B20).
+  // In the phase-flip memory the scan comes from the X-basis file (U7.9).
+  const crosstalkHolder = el('div');
   const crosstalkBox = FEATURES.crosstalk === true && ION.budgetResults?.crosstalkScan
-    ? explainMore([crosstalkTable(ION.budgetResults)], 'Explain more: measurement crosstalk')
+    ? explainMore([crosstalkHolder], 'Explain more: measurement crosstalk')
     : null;
   if (crosstalkBox) container.appendChild(crosstalkBox);
+  // The idle physics of the chosen memory (U7.9: T1 in the bit-flip memory, T2 in the phase-flip one).
+  const idleLine = el('p', { class: 'hint' });
+  if (basisOn()) container.appendChild(idleLine);
   if (ux) {
     container.appendChild(takeawayCard('the readout time with the fewest wrong readings is not always the best for the code: '
       + 'a longer wait has its own cost.').node);
@@ -589,12 +637,14 @@ export function mountLevel3(container) {
     labelText.textContent = ux ? `Readout time τ (${p.tauName.toLowerCase()}): ` : `${p.tauName} τ: `;
     input.max = String(grid.length - 1);
     input.value = String(idx);
-    const res = p.results;
+    const basis = currentBasis();
+    const res = resultsFor(p, basis);
     const tag = `stage ${p.stage}, ${p.label.toLowerCase()}`;
+    const mem = memoryTag(basis);
     const hard = res.series.filter((s) => s.mode === 'hard').sort((a, b) => a.d - b.d);
     optima = optimaInfo(res, 'hard', hard.map((s) => s.d), { physFromEmpirical: p.physFromEmpirical });
     chartBase = {
-      title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
+      title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${mem}${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${p.tauName} τ (µs)`, yLabel: 'Logical error probability',
       series: hard.map((s) => ({
         name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi,
@@ -602,12 +652,17 @@ export function mountLevel3(container) {
       })),
       logX: true, logY: true, yFloor: 1e-7,
       ...(ux ? {
-        title: `Logical error against readout time (${p.label.toLowerCase()}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
+        title: `Logical error against readout time (${p.label.toLowerCase()}, hard decoding)${mem}${res.fixture ? ' — placeholder data' : ''}`,
         xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
       } : {}),
     };
     optList.replaceChildren(...optima.lines.map((t) => el('li', {}, t)));
-    if (crosstalkBox) crosstalkBox.hidden = p.id !== 'trapped-ion';
+    if (crosstalkBox) {
+      crosstalkBox.hidden = p.id !== 'trapped-ion';
+      const ctSrc = budgetFor(ION, basis);
+      crosstalkHolder.replaceChildren(...(ctSrc?.crosstalkScan ? [crosstalkTable(ctSrc)] : []));
+    }
+    idleLine.textContent = BASES[basis].idleText;
 
     const a = p.id === 'superconducting' ? res.assignment : null;
     assignChart.root.hidden = !a;
@@ -656,7 +711,7 @@ export function mountLevel3(container) {
     input.setAttribute('aria-valuetext', formatTau(tau));
     const tauLine = { x: tau, label: `τ = ${formatTau(tau)}` };
     // With the distance selector only the chosen d's tau_log is marked.
-    const marks = ux ? distanceMarkers(plat.results, selD, tau, { physFromEmpirical: plat.physFromEmpirical }) : [tauLine, ...optima.vlines];
+    const marks = ux ? distanceMarkers(resultsFor(plat), selD, tau, { physFromEmpirical: plat.physFromEmpirical }) : [tauLine, ...optima.vlines];
     if (ux) {
       renderBudget(tau);
       challengeText.textContent = `Move the slider to the readout time you think gives d = ${selD} its lowest logical error, then lock it in.`;
@@ -676,7 +731,7 @@ export function mountLevel3(container) {
       chart.update({ ...chartBase, vlines: marks, points: [] });
       return;
     }
-    batchBtn.disabled = false;
+    batchBtn.disabled = currentBasis() === 'X';
     const rng = createRng(SEED + idx);
     assign.textContent = assignmentText(plat, readout, tau);
     try {
@@ -685,8 +740,11 @@ export function mountLevel3(container) {
       visualBox.replaceChildren(el('p', { class: 'status error' }, `The readout picture could not be drawn: ${err.message}`));
     }
 
-    const batch = st.batch && st.batch.tau === tau ? st.batch : null;
+    // The batch decodes stored bit-flip shots, so it is off in the phase-flip memory and says so.
+    const batch = st.batch && st.batch.tau === tau && currentBasis() === 'Z' ? st.batch : null;
     batchOut.textContent = batch ? batch.text : '';
+    batchOut.className = currentBasis() === 'X' ? 'status basis-note' : 'status';
+    if (currentBasis() === 'X') batchOut.textContent = 'The batch decodes stored shots of the bit-flip memory; switch the memory to bit-flip to run it.';
     chart.update({
       ...chartBase,
       vlines: marks,
@@ -695,14 +753,20 @@ export function mountLevel3(container) {
   }
 
   function renderBudget(tau) {
-    const src = plat.budgetResults;
-    const entry = budgetAt(src, tau, { crosstalk: plat.id === 'trapped-ion' && FEATURES.crosstalk === true });
+    const basis = currentBasis();
+    const src = budgetFor(plat, basis);
+    const stored = budgetAt(src, tau, { crosstalk: plat.id === 'trapped-ion' && FEATURES.crosstalk === true });
+    // With the basis toggle the idle segment names its physics (T1 or T2).
+    const entry = stored && basisOn()
+      ? { ...stored, segments: stored.segments.map((g) => (g.key === 'idle' ? { ...g, name: BASES[basis].idleName } : g)) }
+      : stored;
     if (!entry) {
       if (budgetChart) budgetChart.root.hidden = true;
       budgetNote.textContent = `No error budget is stored for τ = ${formatTau(tau)}.`;
       return;
     }
     const opts = budgetBarOptions(entry, { tauText: formatTau(tau), placeholder: src?.fixture === true });
+    opts.title += memoryTag(basis);
     if (!budgetChart) {
       budgetChart = createStackedBars(opts);
       budgetBox.replaceChildren(budgetChart.root, budgetNote);
@@ -713,7 +777,7 @@ export function mountLevel3(container) {
 
   challengeBtn.addEventListener('click', () => {
     const tau = grid[idx];
-    const res = plat.results;
+    const res = resultsFor(plat);
     const series = res.series.find((u) => u.d === selD && u.mode === 'hard');
     const r = series ? challengeResult(res.x.values, series, tau) : null;
     if (!r) {
@@ -742,6 +806,7 @@ export function mountLevel3(container) {
     render();
   });
   onPlatformChange(setPlatformView);
+  onBasisChange(() => setPlatformView(plat));
   // The histogram and the IQ plane are redrawn for the new layout (the charts redraw themselves).
   onNarrowChange(() => render());
   setPlatformView(plat);

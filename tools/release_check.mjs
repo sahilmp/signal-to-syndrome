@@ -26,7 +26,8 @@ const NEEDS = {
   hero: ['findMinimum', 'stage2v2', 'stage3v2'],
   uxV2: ['stage1v2', 'stage2v2', 'stage3v2', 'demForte1'],
   learnNoise: ['demForte1'],
-  phaseFlip: ['stage1x', 'stage2x', 'stage3x'],
+  // stage4x: Level 5 v2 in the phase-flip memory (B49, U7.9).
+  phaseFlip: ['stage1x', 'stage2x', 'stage3x', 'stage4x'],
   crosstalk: ['stage2v2', 'paramsIonV2'],
   level5v2: ['findMinimum', 'stage2v2', 'stage3v2', 'stage4v2', 'paramsIonV2', 'paramsScV2', 'paramsCycleV2'],
   sandbox: ['demForte1'],

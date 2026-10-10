@@ -1,6 +1,9 @@
 // Level 2, "Time is a dimension": d = 3, three rounds. The space-time detector grid
 // with the decoder's matching, an epsilon slider, the stage-1 curves of logical error
 // against epsilon for d = 3, 5, 7, and a live runPoint estimate on 1000 bank shots.
+// With FEATURES.sandbox, the sandbox (U7.8, sandbox.js) below the chart: the player's own errors
+// and matching. The level stays in the bit-flip memory (main.js says so when the basis toggle
+// is on the phase-flip memory).
 
 import { decodeShot, runPoint, createFlatReadout } from './bridge_core.js';
 import { bankD3R3, stage1 } from './bridge_data.js';
@@ -12,6 +15,7 @@ import {
 import { FEATURES } from './features.js';
 import { naiveResults } from './level3.js';
 import { litShotPool, describeCorrections, P_GATE } from './level1.js';
+import { mountSandbox } from './sandbox.js';
 
 const SEED = 20261011;
 const LIVE_SHOTS = 1000;
@@ -198,6 +202,15 @@ export function mountLevel2(container) {
   container.appendChild(chart.root);
   if (ux) {
     container.appendChild(takeawayCard('repeated checks add a time direction: a misread check is matched in time just as a flipped qubit is matched in space.').node);
+  }
+  if (FEATURES.sandbox === true) {
+    const box = el('section', { class: 'sandbox', 'aria-labelledby': 'l2-sandbox-title' });
+    container.appendChild(box);
+    try {
+      mountSandbox(box);
+    } catch (err) {
+      box.textContent = `The sandbox could not start: ${err.message}`;
+    }
   }
 
   function renderShot() {

@@ -14,10 +14,13 @@
 // tab holding the charts above, the error budget of each arm at its tau*_log, the hypothesis
 // scoreboard, a tornado chart of the sensitivity effects, and every table above inside a
 // "Data" expander. It reads stage2v2, stage3v2, stage4v2 and the v2 parameter cards.
+// With the basis toggle (U7.9), the phase-flip memory reads stage2x, stage3x and stage4x for the
+// charts and the budget; the scoreboard, the tornado chart and the "Data" tables have no
+// phase-flip counterpart, so they stay on the bit-flip results and say so.
 
 import {
   stage2, stage3, stage4, paramsIon, paramsSc, paramsCycle,
-  stage2v2, stage3v2, stage4v2, paramsIonV2, paramsScV2, paramsCycleV2,
+  stage2v2, stage3v2, stage4v2, paramsIonV2, paramsScV2, paramsCycleV2, stage2x, stage3x, stage4x,
 } from './bridge_data.js';
 import {
   createChart, createStackedBars, createTornado, SERIES_STYLES, TOKENS, tokenStyle, goalLine, explainMore, takeawayCard,
@@ -25,7 +28,7 @@ import {
 import { FEATURES } from './features.js';
 import {
   cardValue, physicalOptimum, PLATFORMS as LEVEL3_PLATFORMS, MIN_ERRORS_RESOLVED, errorsAtMinimum, isResolved, formatCount,
-  naiveResults,
+  naiveResults, BASES, basisOn, currentBasis, onBasisChange, memoryTag,
 } from './level3.js';
 
 export const CAPTION = 'Both readout models are classical models with literature parameters, applied to the same IonQ-simulated circuit noise. '
@@ -58,8 +61,24 @@ export const PLATFORMS_V2 = [
 // Data sources of the two versions of the level; every table and chart takes one.
 export const SRC_V1 = { v2: false, stage4, paramsCycle, paramsIon, paramsSc, platforms: PLATFORMS };
 export const SRC_V2 = {
-  v2: true, stage4: stage4v2, paramsCycle: paramsCycleV2, paramsIon: paramsIonV2, paramsSc: paramsScV2, platforms: PLATFORMS_V2,
+  v2: true, basis: 'Z', stage4: stage4v2, paramsCycle: paramsCycleV2, paramsIon: paramsIonV2, paramsSc: paramsScV2, platforms: PLATFORMS_V2,
 };
+// The phase-flip memory (U7.9): the X-basis stage 2-4 files, the same cards.
+export const PLATFORMS_X = [
+  { ...PLATFORMS_V2[0], results: headlineResults(stage2x) },
+  { ...PLATFORMS_V2[1], results: headlineResults(stage3x) },
+];
+export const SRC_X = { ...SRC_V2, basis: 'X', stage4: stage4x, platforms: PLATFORMS_X };
+export const level5Source = (basis = 'Z') => (basis === 'X' ? SRC_X : SRC_V2);
+
+// tau*_log entries of one arm and mode: stage 4's own, or, for a stage 4 file without them
+// (stage4_comparison_x.json has tradeoff, perRound and budgetAtOptimum only), the arm's
+// results file (the same decoder, headlineResults).
+export function stage4TauLog(src, p, mode) {
+  const own = src.stage4.platforms?.[p.id]?.tauLog?.[mode];
+  if (Array.isArray(own)) return own;
+  return (p.results.optima?.tauLog || []).filter((t) => t.mode === mode);
+}
 const MODES = [
   { id: 'hard', label: 'Hard' },
   { id: 'soft', label: 'Soft' },
@@ -243,7 +262,7 @@ export function chartOptions(p, mode, metric, src = SRC_V1) {
   const phys = physOf(p);
   if (phys && !phys.atEdge && Number.isFinite(phys.xMin)) vlines.push({ x: phys.xMin, label: 'τ_phys' });
   const points = [];
-  const tl = s4?.tauLog?.[mode] || [];
+  const tl = stage4TauLog(src, p, mode);
   const vals = s4?.[metric]?.[mode] || [];
   // Each stage-4 point takes the shape and colour of its distance's series, drawn open, so
   // the legend tells them apart (A28 item 6, CC-B10).
@@ -259,7 +278,7 @@ export function chartOptions(p, mode, metric, src = SRC_V1) {
   const metricLabel = METRICS.find((m) => m.id === metric).label.toLowerCase();
   const fixture = res.fixture || stage4.fixture ? ' — placeholder data' : '';
   return {
-    title: `${p.label}: logical error ${metricLabel}, ${mode} decoding${fixture}`,
+    title: `${p.label}: logical error ${metricLabel}, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${fixture}`,
     xLabel: ux ? `readout time τ (${p.tauName.toLowerCase()}, µs)` : `${p.tauName} τ (µs)`,
     yLabel: METRICS.find((m) => m.id === metric).yLabel,
     series, points, vlines,
@@ -457,7 +476,15 @@ function cardTable(title, card) {
   return { node: wrap, unsourced };
 }
 
+// Containers already listening for basis changes (a remount must not add a second listener).
+const basisMounted = new WeakSet();
+
 export function mountLevel5(container) {
+  // The basis toggle rebuilds the level in the new memory (only the decoding mode is lost).
+  if (basisOn() && !basisMounted.has(container)) {
+    basisMounted.add(container);
+    onBasisChange(() => mountLevel5(container));
+  }
   if (FEATURES.level5v2 === true) {
     mountLevel5v2(container);
     return;
@@ -465,6 +492,8 @@ export function mountLevel5(container) {
   const src = SRC_V1;
   let mode = 'hard';
   let metric = 'perRound';
+  const v1Note = currentBasis() === 'X'
+    ? el('p', { class: 'hint basis-note' }, 'This version of the level shows the bit-flip memory only.') : null;
 
   const ux = FEATURES.uxV2 === true;
   // Text cut (U7.3): with uxV2 the goal and the caption (two sentences) stay visible; the
@@ -476,6 +505,7 @@ export function mountLevel5(container) {
     + 'Each chart has its own readout-time axis, because the two platforms work on very different time scales.';
   container.replaceChildren();
   container.appendChild(el('h2', {}, 'Level 5: Two platforms'));
+  if (v1Note) container.appendChild(v1Note);
   if (ux) container.appendChild(goalLine('compare two readout models at the same gate noise.'));
   if (!ux) container.appendChild(el('p', { class: 'intro' }, INTRO));
   container.appendChild(el('p', { class: 'l5-caption' }, CAPTION));
@@ -594,7 +624,7 @@ export function tradeoffOptions(mode, src = SRC_V2) {
         // of the three distances overprint; the legend names each curve.
         ...tokenStyle({ d, mode, platform: p.id }),
       });
-      const t = P.tauLog?.[mode]?.find((u) => u.d === d);
+      const t = stage4TauLog(src, p, mode).find((u) => u.d === d);
       const v = P.perRound?.[mode]?.find((u) => u.d === d);
       const x = roundsPerSecondAt(c, t?.xMin);
       if (!t || !v || !Number.isFinite(x)) continue;
@@ -606,7 +636,7 @@ export function tradeoffOptions(mode, src = SRC_V2) {
     }
   }
   return {
-    title: `Speed against accuracy, ${mode} decoding${src.stage4.fixture ? ' — placeholder data' : ''}`,
+    title: `Speed against accuracy, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${src.stage4.fixture ? ' — placeholder data' : ''}`,
     xLabel: 'Rounds per second', yLabel: 'Logical error per round',
     series, points, logX: true, logY: true, yFloor: 1e-8,
     extra: { key: 'tau', label: 'Readout time τ (µs)' },
@@ -627,11 +657,14 @@ export function budgetOptions(src = SRC_V2) {
     if (!b) continue;
     categories.push({
       label: `${p.label}, τ*_log = ${numText(sig3(b.tau_us))} µs`,
-      segments: BUDGET_SEGMENTS.map((s) => ({ name: s.name, value: Number(b[s.key]), color: s.color })),
+      // With the basis toggle the idle segment names its physics (T1 or T2).
+      segments: BUDGET_SEGMENTS.map((s) => ({
+        name: s.key === 'idle' && basisOn() ? BASES[src.basis ?? 'Z'].idleName : s.name, value: Number(b[s.key]), color: s.color,
+      })),
     });
   }
   return {
-    title: `Error sources per round, per qubit (approximate), at each arm's best readout time (d = 3, hard decoding)${src.stage4.fixture ? ' — placeholder data' : ''}`,
+    title: `Error sources per round, per qubit (approximate), at each arm's best readout time (d = 3, hard decoding)${memoryTag(src.basis ?? 'Z')}${src.stage4.fixture ? ' — placeholder data' : ''}`,
     valueLabel: 'Error per round, per qubit', categories,
   };
 }
@@ -795,7 +828,11 @@ function safeUpdate(chart, opts, what) {
 }
 
 function mountLevel5v2(container) {
-  const src = SRC_V2;
+  const src = level5Source(currentBasis());
+  // No phase-flip counterpart: the scoreboard, the tornado chart and the tables (see the top).
+  const zSrc = SRC_V2;
+  const zOnly = (what) => (src.basis === 'X'
+    ? el('p', { class: 'hint basis-note' }, `${what} come from the bit-flip memory; the phase-flip results have no counterpart.`) : null);
   let mode = 'hard';
   const ux = FEATURES.uxV2 === true;
   const hint = (text) => explainMore([el('p', { class: 'hint' }, text)]);
@@ -842,10 +879,14 @@ function mountLevel5v2(container) {
   container.appendChild(safeChart(createStackedBars, () => budgetOptions(src), 'error-budget chart').root);
 
   container.appendChild(el('h3', {}, 'Scoreboard'));
-  container.appendChild(scoreboard(src));
+  const sbNote = zOnly('The scoreboard verdicts');
+  if (sbNote) container.appendChild(sbNote);
+  container.appendChild(scoreboard(zSrc));
 
   container.appendChild(el('h3', {}, 'Which parameters matter'));
-  container.appendChild(safeChart(createTornado, () => tornadoOptions(src), 'sensitivity chart').root);
+  const tnNote = zOnly('The sensitivity effects');
+  if (tnNote) container.appendChild(tnNote);
+  container.appendChild(safeChart(createTornado, () => tornadoOptions(zSrc), 'sensitivity chart').root);
   container.appendChild(hint(`${SENSITIVITY_NOTE_V2} Each bar is the change from the baseline row; parameters are sorted by their largest change.`));
 
   if (ux) {
@@ -853,5 +894,6 @@ function mountLevel5v2(container) {
       + 'and how much error each round adds.').node);
   }
 
-  container.appendChild(explainMore(dataSections(src, hint), 'Data'));
+  const dataNote = zOnly('The tables below');
+  container.appendChild(explainMore([...(dataNote ? [dataNote] : []), ...dataSections(zSrc, hint)], 'Data'));
 }

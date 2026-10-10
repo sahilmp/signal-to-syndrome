@@ -10,17 +10,20 @@
 // number shown comes from those results: x.values, assignment.empirical (lo, hi), the d = 3
 // hard series, optima.tauPhysEmpirical (else findMinimum on assignment.empirical, log x) and
 // the matching optima.tauLog entry. The v1 stage-3 file has no decoder field and no
-// tauPhysEmpirical; the fallbacks below cover it.
+// tauPhysEmpirical; the fallbacks below cover it. With the basis toggle (U7.9) the phase-flip
+// memory reads stage2x and stage3x instead, and the chart title names the memory.
 
-import { stage2v2, stage3v2 } from './bridge_data.js';
+import { stage2v2, stage3v2, stage2x, stage3x } from './bridge_data.js';
 import { findMinimum } from './bridge_core.js';
 import { createChart, TOKENS } from './charts.js';
-import { formatTau } from './level3.js';
+import { formatTau, currentBasis, onBasisChange, memoryTag } from './level3.js';
 
 export const HERO_PLATFORMS = [
-  { id: 'trapped-ion', label: 'Trapped ion', results: stage2v2 },
-  { id: 'superconducting', label: 'Superconducting', results: stage3v2 },
+  { id: 'trapped-ion', label: 'Trapped ion', results: stage2v2, resultsX: stage2x },
+  { id: 'superconducting', label: 'Superconducting', results: stage3v2, resultsX: stage3x },
 ];
+// The results file the hero reads for a platform in a basis: the *_x file in the X basis.
+export const heroResults = (p, basis = 'Z') => (basis === 'X' ? p.resultsX : p.results);
 
 export const QUESTION = 'How long should you listen to a qubit?';
 export const BAND_LABEL = 'listening longer costs more than it gains here';
@@ -144,13 +147,21 @@ function el(tag, attrs = {}, text = null) {
 // goDeeper(platformId): opens Level 3 on that platform; null when Level 3 is off.
 export function mountHero(container, { goDeeper = null } = {}) {
   // Each platform keeps its own slider position; it starts at the grid point nearest tau*_log.
-  const views = new Map(HERO_PLATFORMS.map((p) => {
-    const curves = heroCurves(p.results, HERO_DECODER);
-    const optima = heroOptima(p.results, curves.decoder);
+  // A basis change rebuilds the views and keeps each platform's readout time when it is on the
+  // new grid.
+  let basis = currentBasis();
+  const buildViews = (old = null) => new Map(HERO_PLATFORMS.map((p) => {
+    const results = heroResults(p, basis);
+    const curves = heroCurves(results, HERO_DECODER);
+    const optima = heroOptima(results, curves.decoder);
     const band = bandInfo(optima);
-    const start = optima.tauLog && Number.isFinite(optima.tauLog.xMin) ? snapIndex(curves.tau, optima.tauLog.xMin) : 0;
-    return [p.id, { p, curves, optima, band, idx: start }];
+    const prev = old?.get(p.id);
+    const kept = prev ? curves.tau.indexOf(prev.curves.tau[prev.idx]) : -1;
+    const start = kept >= 0 ? kept
+      : optima.tauLog && Number.isFinite(optima.tauLog.xMin) ? snapIndex(curves.tau, optima.tauLog.xMin) : 0;
+    return [p.id, { p, results, curves, optima, band, idx: start }];
   }));
+  let views = buildViews();
   let view = views.get(HERO_PLATFORMS[0].id);
 
   container.replaceChildren();
@@ -196,7 +207,7 @@ export function mountHero(container, { goDeeper = null } = {}) {
   }
 
   function render() {
-    const { p, curves, optima, band, idx } = view;
+    const { p, results: res, curves, optima, band, idx } = view;
     const tau = curves.tau[idx];
     out.textContent = formatTau(tau);
     input.setAttribute('aria-valuetext', formatTau(tau));
@@ -206,9 +217,8 @@ export function mountHero(container, { goDeeper = null } = {}) {
     const vlines = [];
     if (optima.tauLog && !optima.tauLog.atEdge) vlines.push({ x: optima.tauLog.xMin, label: 'τ*_log' });
     if (!optima.tauPhys.atEdge) vlines.push({ x: optima.tauPhys.xMin, label: 'τ*_phys' });
-    const res = p.results;
     chart.update({
-      title: `${p.label}: readout error and logical error against readout time${res.fixture ? ' — placeholder data' : ''}`,
+      title: `${p.label}: readout error and logical error against readout time${memoryTag(basis)}${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: 'readout time τ (µs)',
       yLabel: 'error probability',
       logX: true, logY: true, yFloor: 1e-6,
@@ -247,6 +257,11 @@ export function mountHero(container, { goDeeper = null } = {}) {
     view.idx = sliderTau(view.curves.tau, input.value).index;
     input.value = String(view.idx);
     render();
+  });
+  onBasisChange((b) => {
+    basis = b;
+    views = buildViews(views);
+    setView(view.p.id);
   });
   setView(view.p.id);
 }
