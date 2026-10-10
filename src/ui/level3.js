@@ -13,6 +13,7 @@ import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import {
   createChart, svgEl, formatNumber, SERIES_STYLES, isNarrow, onNarrowChange, htmlLegend, scrollBox, drawVlineLabels,
+  TOKENS, tokenStyle, goalLine, explainMore, takeawayCard,
 } from './charts.js';
 import { drawIqView } from './iqview.js';
 import { P_GATE } from './level1.js';
@@ -26,17 +27,28 @@ const BATCH_SHOTS = 200;
 // Parameter cards store { value, source }; plain values are accepted too.
 export const cardValue = (p) => (p !== null && typeof p === 'object' && !Array.isArray(p) && 'value' in p ? p.value : p);
 
+// A results file reduced to the naive decoder: series and optima.tauLog entries without a
+// decoder field (written before the learned decoder) or with decoder "naive". Levels 2 to 5
+// show the naive decoder until B44 switches them to the learned one (CC-A12 added learned
+// series to the same files, which would otherwise draw every curve and marker twice).
+export function naiveResults(results) {
+  const naive = (o) => o.decoder === undefined || o.decoder === 'naive';
+  const out = { ...results, series: (results.series || []).filter(naive) };
+  if (results.optima) out.optima = { ...results.optima, tauLog: (results.optima.tauLog || []).filter(naive) };
+  return out;
+}
+
 // The readout platforms of levels 3 and 4, each behind its FEATURES flag. physFromEmpirical:
 // the belief model's tauPhys (results.optima) is not the simulated one, because the belief
 // model ignores resonator ring-up (DECISIONS, A28 item 2), so tau_phys is located on
 // assignment.empirical instead and the belief value is quoted beside it.
 export const PLATFORMS = [
   {
-    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: stage2, stage: 2,
+    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: naiveResults(stage2), stage: 2,
     create: createIonReadout, tauName: 'Detection time',
   },
   {
-    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: stage3, stage: 3,
+    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: naiveResults(stage3), stage: 3,
     create: createScReadout, tauName: 'Integration time', physFromEmpirical: true,
   },
 ];
@@ -352,6 +364,13 @@ const INTRO = {
     + 'But the qubit can decay from |1⟩ to |0⟩ while it is being read, which smears points from the |1⟩ cluster towards |0⟩, and a longer readout also leaves the other qubits idle for longer. '
     + 'So the logical error has an optimum integration time.',
 };
+// Text cut (U7.3): the two sentences that stay visible; INTRO moves under "Explain more".
+const SHORT_INTRO = {
+  'trapped-ion': 'Counting photons for longer separates bright from dark, so fewer readings are wrong. '
+    + 'But every round gets slower, and the ion has more time to change state.',
+  superconducting: 'Integrating the resonator signal for longer separates |0⟩ from |1⟩, so fewer readings are wrong. '
+    + 'But the qubit can decay while it is read, and the other qubits wait longer.',
+};
 
 export function mountLevel3(container) {
   const shots = expandShots(bankD3R3);
@@ -369,11 +388,16 @@ export function mountLevel3(container) {
     return state.get(p.id);
   };
 
+  const ux = FEATURES.uxV2 === true;
   container.replaceChildren();
   container.appendChild(el('h2', {}, 'Level 3: Listen longer?'));
+  if (ux) container.appendChild(goalLine('find the readout time that gives the lowest logical error.'));
   mountPlatformToggle(container, 'l3');
   const intro = el('p', { class: 'intro' });
   container.appendChild(intro);
+  // With the text cut on, the full introduction sits under "Explain more".
+  const longIntro = el('p');
+  if (ux) container.appendChild(explainMore([longIntro]));
 
   const row = el('div', { class: 'control-row' });
   const labelText = document.createTextNode('');
@@ -394,9 +418,10 @@ export function mountLevel3(container) {
   container.appendChild(assignChart.root);
 
   const batchRow = el('div', { class: 'control-row' });
-  const batchBtn = el('button', { type: 'button' }, 'Batch');
-  const batchHelp = el('span', { class: 'hint' }, `Decode ${BATCH_SHOTS} shots of the d = 3, r = 3 bank at this τ (hard mode).`);
-  batchRow.append(batchBtn, batchHelp);
+  // With the text cut on, the button says what it does and the help sentence goes.
+  const batchBtn = el('button', { type: 'button' }, ux ? `Decode ${BATCH_SHOTS} shots at this τ` : 'Batch');
+  batchRow.appendChild(batchBtn);
+  if (!ux) batchRow.appendChild(el('span', { class: 'hint' }, `Decode ${BATCH_SHOTS} shots of the d = 3, r = 3 bank at this τ (hard mode).`));
   container.appendChild(batchRow);
   const batchOut = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(batchOut);
@@ -404,7 +429,11 @@ export function mountLevel3(container) {
   const chart = createChart({ title: '', xLabel: '', yLabel: 'Logical error probability', series: [], logX: true, logY: true, yFloor: 1e-7 });
   container.appendChild(chart.root);
   const optList = el('ul', { class: 'optima' });
-  container.appendChild(optList);
+  container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
+  if (ux) {
+    container.appendChild(takeawayCard('the readout time with the fewest wrong readings is not always the best for the code: '
+      + 'a longer wait has its own cost.').node);
+  }
 
   let chartBase = null;
   let optima = null;
@@ -416,8 +445,9 @@ export function mountLevel3(container) {
     const st = platState(p);
     grid = st.grid;
     idx = st.idx;
-    intro.textContent = INTRO[p.id];
-    labelText.textContent = `${p.tauName} τ: `;
+    intro.textContent = ux ? SHORT_INTRO[p.id] : INTRO[p.id];
+    longIntro.textContent = INTRO[p.id];
+    labelText.textContent = ux ? `Readout time τ (${p.tauName.toLowerCase()}): ` : `${p.tauName} τ: `;
     input.max = String(grid.length - 1);
     input.value = String(idx);
     const res = p.results;
@@ -427,14 +457,34 @@ export function mountLevel3(container) {
     chartBase = {
       title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${p.tauName} τ (µs)`, yLabel: 'Logical error probability',
-      series: hard.map((s) => ({ name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi })),
+      series: hard.map((s) => ({
+        name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi,
+        ...(ux ? tokenStyle({ d: s.d, mode: 'hard', platform: p.id, endLabel: `d = ${s.d}` }) : {}),
+      })),
       logX: true, logY: true, yFloor: 1e-7,
+      ...(ux ? {
+        title: `Logical error against readout time (${p.label.toLowerCase()}, hard decoding)${res.fixture ? ' — placeholder data' : ''}`,
+        xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
+      } : {}),
     };
     optList.replaceChildren(...optima.lines.map((t) => el('li', {}, t)));
 
     const a = p.id === 'superconducting' ? res.assignment : null;
     assignChart.root.hidden = !a;
-    assignBase = a ? {
+    assignBase = a && ux ? {
+      title: `Readout error against readout time (${p.label.toLowerCase()})${res.fixture ? ' — placeholder data' : ''}`,
+      xLabel: 'readout time τ (µs)', yLabel: 'readout error (chance one measurement is wrong)', logX: true, logY: true, yFloor: 1e-6,
+      series: [
+        {
+          name: 'the readout model’s own estimate (no ring-up)', x: res.x.values, y: a.belief,
+          color: 'var(--b-gate)', shape: 'diamond', dash: '6 4', endLabel: 'model',
+        },
+        {
+          name: 'simulated readout error', x: res.x.values, y: a.empirical, lo: a.lo, hi: a.hi,
+          color: TOKENS.readout.color, shape: TOKENS.shape[p.id], dash: TOKENS.readout.dash, endLabel: 'simulated',
+        },
+      ],
+    } : a ? {
       title: `Assignment error against integration time (${tag})${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: 'Integration time τ (µs)', yLabel: 'Assignment error', logX: true, logY: true, yFloor: 1e-6,
       series: [

@@ -1,6 +1,6 @@
 // Build script for dist/qollab/ (CLAUDE.md rule 3; DECISIONS D5, D9).
 // dist/qollab/main.js   : src/ui/main.js bundled by esbuild (IIFE, minified, JSON embedded)
-// dist/qollab/main.css  : src/ui/style.css
+// dist/qollab/main.css  : src/ui/tokens.css followed by src/ui/style.css
 // dist/qollab/index.html: body fragment from src/ui/index.template.html, no script or link tags
 // dist/local/preview.html: one self-contained page with the CSS and JavaScript inlined
 
@@ -43,8 +43,8 @@ if (FEATURES.liveRun === true) {
 }
 writeFileSync(join(qollabDir, 'main.js'), js);
 
-// 2. Stylesheet.
-const css = readFileSync(p('src', 'ui', 'style.css'), 'utf8');
+// 2. Stylesheet: the design tokens (team checklist U7.1) first, so style.css can use them.
+const css = `${readFileSync(p('src', 'ui', 'tokens.css'), 'utf8')}\n${readFileSync(p('src', 'ui', 'style.css'), 'utf8')}`;
 writeFileSync(join(qollabDir, 'main.css'), css);
 
 // 3. Body fragment (D9: Qollab strips <html>, <head>, <body> and does not run <script>).

@@ -10,17 +10,21 @@
 // + reset_us. The stage-4 values at tau*_log are drawn on top as a cross-check.
 
 import { stage2, stage3, stage4, paramsIon, paramsSc, paramsCycle } from './bridge_data.js';
-import { createChart, SERIES_STYLES } from './charts.js';
+import {
+  createChart, SERIES_STYLES, TOKENS, tokenStyle, goalLine, explainMore, takeawayCard,
+} from './charts.js';
+import { FEATURES } from './features.js';
 import {
   cardValue, physicalOptimum, PLATFORMS as LEVEL3_PLATFORMS, MIN_ERRORS_RESOLVED, errorsAtMinimum, isResolved, formatCount,
+  naiveResults,
 } from './level3.js';
 
 export const CAPTION = 'Both readout models are classical models with literature parameters, applied to the same IonQ-simulated circuit noise. '
   + 'This is a controlled comparison of readout physics, not a hardware benchmark.';
 
 export const PLATFORMS = [
-  { id: 'trapped-ion', label: 'Trapped ion', results: stage2, params: paramsIon, tauName: 'Detection time' },
-  { id: 'superconducting', label: 'Superconducting', results: stage3, params: paramsSc, tauName: 'Integration time' },
+  { id: 'trapped-ion', label: 'Trapped ion', results: naiveResults(stage2), params: paramsIon, tauName: 'Detection time' },
+  { id: 'superconducting', label: 'Superconducting', results: naiveResults(stage3), params: paramsSc, tauName: 'Integration time' },
 ];
 // tau_phys as in level 3: the superconducting value comes from the simulated assignment error,
 // because the belief model ignores ring-up (DECISIONS, A28 item 2).
@@ -175,6 +179,7 @@ export function breakEvenParts(b) {
 // Chart options for one platform: one series per d for the chosen mode and metric, the
 // optima as vertical lines and the stage-4 values at tau*_log as highlighted points.
 export function chartOptions(p, mode, metric) {
+  const ux = FEATURES.uxV2 === true;
   const res = p.results;
   const s4 = stage4.platforms?.[p.id];
   const xs = res.x.values;
@@ -188,6 +193,7 @@ export function chartOptions(p, mode, metric) {
     y: s.pL.map((v, i) => conv(v, s.r, xs[i])),
     lo: s.lo ? s.lo.map((v, i) => conv(v, s.r, xs[i])) : undefined,
     hi: s.hi ? s.hi.map((v, i) => conv(v, s.r, xs[i])) : undefined,
+    ...(ux ? tokenStyle({ d: s.d, mode, platform: p.id, endLabel: `d = ${s.d}` }) : {}),
   }));
   const vlines = [];
   const phys = physOf(p);
@@ -201,7 +207,8 @@ export function chartOptions(p, mode, metric) {
   for (const t of [...tl].sort((a, b) => a.d - b.d)) {
     const v = vals.find((u) => u.d === t.d);
     if (!v || !Number.isFinite(t.xMin)) continue;
-    const st = SERIES_STYLES[Math.max(0, seriesDs.indexOf(t.d)) % SERIES_STYLES.length];
+    const st = ux ? { color: TOKENS.d[t.d] ?? 'var(--hard)', shape: TOKENS.shape[p.id] ?? 'circle' }
+      : SERIES_STYLES[Math.max(0, seriesDs.indexOf(t.d)) % SERIES_STYLES.length];
     const note = !t.atEdge && !isResolved(res, t.d, mode) ? ' (not resolved)' : '';
     points.push({ name: `Stage 4, d = ${t.d}${note}`, x: t.xMin, y: v.value, lo: v.lo, hi: v.hi, shape: st.shape, color: st.color });
   }
@@ -209,7 +216,7 @@ export function chartOptions(p, mode, metric) {
   const fixture = res.fixture || stage4.fixture ? ' — placeholder data' : '';
   return {
     title: `${p.label}: logical error ${metricLabel}, ${mode} decoding${fixture}`,
-    xLabel: `${p.tauName} τ (µs)`,
+    xLabel: ux ? `readout time τ (${p.tauName.toLowerCase()}, µs)` : `${p.tauName} τ (µs)`,
     yLabel: METRICS.find((m) => m.id === metric).yLabel,
     series, points, vlines,
     logX: true, logY: true, yFloor: metric === 'perRound' ? 1e-8 : 1e-12, width: 460, height: 340,
@@ -285,7 +292,8 @@ function sensitivityTable() {
   const wrap = el('div', { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-label': 'Sensitivity table' });
   wrap.appendChild(table);
   const box = el('div');
-  box.append(el('p', { class: 'hint' }, SENSITIVITY_NOTE), wrap);
+  const note = el('p', { class: 'hint' }, SENSITIVITY_NOTE);
+  box.append(FEATURES.uxV2 === true ? explainMore([note]) : note, wrap);
   return box;
 }
 
@@ -317,7 +325,8 @@ function verdictTable() {
   const wrap = el('div', { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-label': 'Hypotheses C1–C4 verdicts' });
   wrap.appendChild(table);
   const box = el('div');
-  box.append(wrap, el('p', { class: 'hint' }, AUTOMATED_NOTE));
+  const note = el('p', { class: 'hint' }, AUTOMATED_NOTE);
+  box.append(wrap, FEATURES.uxV2 === true ? explainMore([note]) : note);
   return box;
 }
 
@@ -351,7 +360,7 @@ function cardRows(card) {
 
 function cardTable(title, card) {
   const table = el('table', { class: 'l5-table l5-card' });
-  table.appendChild(el('caption', {}, `${title}${card.fixture ? ' (placeholder fixture, not sourced values)' : ''}`));
+  table.appendChild(el('caption', {}, `${title}${card.fixture ? ' (placeholder values, not sourced)' : ''}`));
   const head = table.createTHead().insertRow();
   for (const h of ['Parameter', 'Value', 'Source']) head.appendChild(th(h));
   const body = table.createTBody();
@@ -384,14 +393,20 @@ export function mountLevel5(container) {
   let mode = 'hard';
   let metric = 'perRound';
 
-  container.replaceChildren();
-  container.appendChild(el('h2', {}, 'Level 5: Two platforms'));
-  container.appendChild(el('p', { class: 'intro' },
-    'The same IonQ-simulated circuits, decoded with two different readout models. A trapped ion reads out slowly; '
+  const ux = FEATURES.uxV2 === true;
+  // Text cut (U7.3): with uxV2 the goal and the caption (two sentences) stay visible; the
+  // introduction and every note move under "Explain more".
+  const hint = (text) => (ux ? explainMore([el('p', { class: 'hint' }, text)]) : el('p', { class: 'hint' }, text));
+  const INTRO = 'The same IonQ-simulated circuits, decoded with two different readout models. A trapped ion reads out slowly; '
     + 'a superconducting qubit reads out fast but can decay while it is read. Compare them per round, then per microsecond: '
     + 'the ion cycle is much longer, so the two measures need not rank the platforms the same way (hypothesis C3). '
-    + 'Each chart has its own readout-time axis, because the two platforms work on very different time scales.'));
+    + 'Each chart has its own readout-time axis, because the two platforms work on very different time scales.';
+  container.replaceChildren();
+  container.appendChild(el('h2', {}, 'Level 5: Two platforms'));
+  if (ux) container.appendChild(goalLine('compare two readout models at the same gate noise.'));
+  if (!ux) container.appendChild(el('p', { class: 'intro' }, INTRO));
   container.appendChild(el('p', { class: 'l5-caption' }, CAPTION));
+  if (ux) container.appendChild(explainMore([INTRO]));
 
   const controls = el('div', { class: 'control-row' });
   const charts = PLATFORMS.map(() => null);
@@ -409,10 +424,10 @@ export function mountLevel5(container) {
     radioGroup('mode', 'Decoding', MODES, mode, (v) => { mode = v; render(); }),
   );
   container.appendChild(controls);
-  container.appendChild(el('p', { class: 'hint' },
+  container.appendChild(hint(
     'Per round: (1 − (1 − 2 p_L)^(1/r)) / 2 from the logical error p_L after r rounds. Per µs: the per-round value divided by the cycle time, '
     + '(gate layers per round) × (two-qubit gate time) + τ + (reset time), from the cycle card below. '
-    + 'Open diamonds: the stage 4 values at τ*_log. The dashed line marks τ_phys, the readout time with the lowest assignment error; for the superconducting qubit '
+    + `${ux ? 'Open markers' : 'Open diamonds'}: the stage 4 values at τ*_log. The dashed line marks τ_phys, the readout time with the lowest assignment error; for the superconducting qubit `
     + 'this is the simulated assignment error, because the readout model ignores resonator ring-up.'));
 
   const pair = el('div', { class: 'l5-pair' });
@@ -428,9 +443,13 @@ export function mountLevel5(container) {
     pair.appendChild(panel);
   });
   container.appendChild(pair);
+  if (ux) {
+    container.appendChild(takeawayCard('at the same gate noise, the readout model alone moves both the best readout time '
+      + 'and the logical error per round.').node);
+  }
 
   container.appendChild(el('h3', {}, 'Comparison at the optimum'));
-  container.appendChild(el('p', { class: 'hint' },
+  container.appendChild(hint(
     'Break-even assignment error: the average assignment error ε̄ (the readout model’s value) at which d = 5 starts to beat d = 3, '
     + 'for each decoding mode, with its 95% interval and the readout time where that happens; “none” means the curves do not cross on the grid. '
     + `A τ*_log is “not resolved” when its curve has fewer than ${MIN_ERRORS_RESOLVED} logical errors at the lowest grid point.`));
@@ -449,7 +468,7 @@ export function mountLevel5(container) {
     ...PLATFORMS.map((p) => cardTable(`Cycle-time card, ${p.label.toLowerCase()}`, { fixture: paramsCycle.fixture, ...(paramsCycle[p.id] || {}) })),
   ];
   const nUnsourced = cards.reduce((s, c) => s + c.unsourced, 0);
-  container.appendChild(el('p', { class: 'hint' }, nUnsourced
+  container.appendChild(hint(nUnsourced
     ? `${nUnsourced} value${nUnsourced === 1 ? ' is' : 's are'} labelled UNSOURCED (illustrative, not taken from the literature).`
     : 'Every value below has a literature source.'));
   for (const c of cards) container.appendChild(c.node);

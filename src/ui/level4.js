@@ -11,7 +11,10 @@ import { bankD3R3 } from './bridge_data.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import { buildGraph, pFromLlr, xorP } from '../core/graph.js';
-import { createChart, svgEl, formatNumber } from './charts.js';
+import {
+  createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard,
+} from './charts.js';
+import { FEATURES } from './features.js';
 import { describeCorrections, P_GATE } from './level1.js';
 import {
   tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
@@ -27,6 +30,10 @@ const INTRO = {
 };
 const INTRO_TAIL = 'Hard decoding treats every reading as equally reliable. Soft decoding uses each reading\'s confidence (its log-likelihood ratio), '
   + 'so a path through doubtful readings costs less. Both decoders below see the same readings of the same shot.';
+// Text cut (U7.3): the two sentences that stay visible; the rest moves under "Explain more".
+const SHORT_INTRO = 'Hard decoding treats every reading as equally reliable; soft decoding also weighs how confident each reading is. '
+  + 'Both decoders below see the same readings of the same shot.';
+const LEGEND_HINT = 'Lit detectors: a solid fill and a thick ring mean the readings behind the detector are trustworthy; a faint fill and a thin ring mean they are doubtful.';
 
 // Confidence of detector (k, j): 1 - 2 p, where p is the chance that the readouts behind
 // it give the wrong parity (xor of the error probabilities pFromLlr(llr) of those
@@ -138,14 +145,19 @@ export function mountLevel4(container) {
   let current = null; // { index, seed }
   let tally = null;
 
+  const ux = FEATURES.uxV2 === true;
   container.replaceChildren();
   container.appendChild(el('h2', {}, 'Level 4: Trust but verify'));
+  if (ux) container.appendChild(goalLine('compare a decoder that trusts every reading with one that weighs each reading’s confidence.'));
   mountPlatformToggle(container, 'l4');
-  const intro = el('p', { class: 'intro' }, INTRO[plat.id] + INTRO_TAIL);
+  const intro = el('p', { class: 'intro' }, ux ? SHORT_INTRO : INTRO[plat.id] + INTRO_TAIL);
   container.appendChild(intro);
+  // With the text cut on: the full introduction, the shot source and the legend of the grids.
+  const longIntro = el('p', {}, INTRO[plat.id] + INTRO_TAIL);
 
   const row = el('div', { class: 'control-row' });
-  const labelText = document.createTextNode(`${plat.tauName} τ: `);
+  const tauLabel = (p) => (ux ? `Readout time τ (${p.tauName.toLowerCase()}): ` : `${p.tauName} τ: `);
+  const labelText = document.createTextNode(tauLabel(plat));
   const label = el('label', { for: 'l4-tau' });
   const out = el('output', { for: 'l4-tau' }, formatTau(grid[idx]));
   label.append(labelText, out);
@@ -154,9 +166,12 @@ export function mountLevel4(container) {
   container.appendChild(row);
 
   const sourceLine = el('p', { class: 'hint' });
-  container.appendChild(sourceLine);
-  container.appendChild(el('p', { class: 'hint' },
-    'Lit detectors: a solid fill and a thick ring mean the readings behind the detector are trustworthy; a faint fill and a thin ring mean they are doubtful.'));
+  if (ux) {
+    container.appendChild(explainMore([longIntro, sourceLine, LEGEND_HINT]));
+  } else {
+    container.appendChild(sourceLine);
+    container.appendChild(el('p', { class: 'hint' }, LEGEND_HINT));
+  }
 
   const pair = el('div', { class: 'l4-pair' });
   const panels = ['hard', 'soft'].map((mode) => {
@@ -178,6 +193,10 @@ export function mountLevel4(container) {
   container.appendChild(nav);
   const tallyText = el('p', { class: 'score', 'aria-live': 'polite' });
   container.appendChild(tallyText);
+  // Shown after a full set of shots, or when the reader scrolls past the two grids.
+  const takeaway = ux ? takeawayCard('weighing each reading’s confidence helps where many readings are doubtful; '
+    + 'where readings are clear, both decoders usually agree.') : null;
+  if (takeaway) container.appendChild(takeaway.node);
 
   // Chart: hard against soft for one distance.
   let dSel = 3;
@@ -202,15 +221,22 @@ export function mountLevel4(container) {
       title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${plat.tauName} τ (µs)`, yLabel: 'Logical error probability',
       series: res.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1))
-        .map((s) => ({ name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi })),
+        .map((s) => ({
+          name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi,
+          ...(ux ? tokenStyle({ d: s.d, mode: s.mode, platform: plat.id, endLabel: s.mode }) : {}),
+        })),
       logX: true, logY: true, yFloor: 1e-7,
       vlines: [{ x: grid[idx], label: `τ = ${formatTau(grid[idx])}` }],
+      ...(ux ? {
+        title: `Hard against soft decoding: logical error against readout time (${plat.label.toLowerCase()}, d = ${dSel})${res.fixture ? ' — placeholder data' : ''}`,
+        xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
+      } : {}),
     };
   };
   const chart = createChart(chartOpts());
   container.appendChild(chart.root);
   const optList = el('ul', { class: 'optima' });
-  container.appendChild(optList);
+  container.appendChild(ux ? explainMore([optList], 'Explain more: the optima in numbers') : optList);
   function renderChart() {
     chart.update(chartOpts());
     const lines = ['hard', 'soft'].flatMap((mode) => optimaInfo(plat.results, mode, [dSel]).lines.filter((l) => l.includes('τ_log')));
@@ -262,7 +288,7 @@ export function mountLevel4(container) {
       pnl.verdict.textContent = `${kept ? '✓ Logical value kept' : '✗ Logical value lost'}: decoded ${res.corrected}, prepared ${bank.logical}. Correction: ${corr.length ? corr.map((c) => c.text).join('; ') : 'none'}.${res.exact ? '' : ' (Matching not exact.)'}`;
     }
     const same = pathKey(both.hard) === pathKey(both.soft);
-    shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (bank shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
+    shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (stored shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
       + `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}. ${same ? 'Both decoders chose the same matching.' : 'The decoders chose different matchings.'}`;
     return { ...both, same };
   }
@@ -279,11 +305,12 @@ export function mountLevel4(container) {
     }
     nextBtn.textContent = tally.n >= SHOTS_PER_SET ? 'New set of 20 shots' : 'Next shot';
     renderTally();
+    if (takeaway && tally.n >= SHOTS_PER_SET) takeaway.show();
   }
 
   function renderSource() {
     const b = source.bank;
-    sourceLine.textContent = `Shots from the ${source.label}: d = ${b.d}, r = ${b.r}, ${b.shots} shots${b.sampler_seed ? `, simulator seed ${b.sampler_seed}` : ''}${b.fixture ? ' (placeholder fixture data)' : ''}.`;
+    sourceLine.textContent = `Shots from the ${source.label}: d = ${b.d}, r = ${b.r}, ${b.shots} shots${b.sampler_seed ? `, simulator seed ${b.sampler_seed}` : ''}${b.fixture ? ' (placeholder data)' : ''}.`;
   }
 
   function setTau() {
@@ -317,8 +344,9 @@ export function mountLevel4(container) {
     grid = tauGrid(p);
     if (!positions.has(p.id)) positions.set(p.id, defaultTauIndex(grid, 0.1, p));
     idx = positions.get(p.id);
-    intro.textContent = INTRO[p.id] + INTRO_TAIL;
-    labelText.textContent = `${p.tauName} τ: `;
+    intro.textContent = ux ? SHORT_INTRO : INTRO[p.id] + INTRO_TAIL;
+    longIntro.textContent = INTRO[p.id] + INTRO_TAIL;
+    labelText.textContent = tauLabel(p);
     input.max = String(grid.length - 1);
     input.value = String(idx);
     setTau();

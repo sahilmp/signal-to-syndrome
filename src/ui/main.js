@@ -1,5 +1,5 @@
 // Entry point: builds the level selector from FEATURES, mounts the enabled levels,
-// fills in the version and the diagnostics. Bundled by tools/build.mjs into one IIFE.
+// fills in the version and the diagnostics; with FEATURES.hero, the hero panel above the tabs. Bundled by tools/build.mjs into one IIFE.
 
 import pkg from '../../package.json' with { type: 'json' };
 import { FEATURES } from './features.js';
@@ -9,6 +9,8 @@ import { mountLevel3 } from './level3.js';
 import { mountLevel4 } from './level4.js';
 import { mountLevel5 } from './level5.js';
 import { mountDiagnostics } from './diag.js';
+import { mountHero } from './hero.js';
+import { setPlatform } from './level3.js';
 
 const LEVELS = [
   { id: 'level1', flag: 'level1', label: 'Level 1: Be the decoder', mount: mountLevel1 },
@@ -29,6 +31,8 @@ function start() {
   if (!root) return;
   const version = pkg.version;
   for (const v of root.querySelectorAll('[data-s2s="version"]')) v.textContent = version;
+  // Text cut and design tokens (U7.1, U7.3): style.css applies the tokens under this class.
+  if (FEATURES.uxV2 === true) root.classList.add('ux-v2');
 
   const enabled = LEVELS.filter(isEnabled);
   const selector = root.querySelector('[data-s2s="levels"]');
@@ -79,6 +83,23 @@ function start() {
       selector.appendChild(b);
     }
     show(enabled[0].id, false);
+  }
+
+  // Hero panel above the level tabs (U7.2). "Go deeper" opens Level 3 on the hero's platform.
+  const hero = root.querySelector('[data-s2s="hero"]');
+  if (hero && FEATURES.hero === true) {
+    hero.hidden = false;
+    const level3 = enabled.find((l) => l.id === 'level3');
+    const goDeeper = level3 ? (platformId) => {
+      setPlatform(platformId);
+      show('level3', true);
+      mounted.get('level3')?.scrollIntoView({ block: 'start' });
+    } : null;
+    try {
+      mountHero(hero, { goDeeper });
+    } catch (err) {
+      hero.textContent = `The hero panel could not start: ${err.message}`;
+    }
   }
 
   const diag = root.querySelector('[data-s2s="diagnostics"]');

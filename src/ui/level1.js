@@ -8,6 +8,8 @@ import { createRng } from '../core/rng.js';
 import { expandShots, split } from '../core/bank.js';
 import { computeDetectors } from '../core/detectors.js';
 import { buildGraph } from '../core/graph.js';
+import { FEATURES } from './features.js';
+import { goalLine, explainMore, takeawayCard } from './charts.js';
 
 // Gate-error estimate passed to decodeShot for the edge weights (mode "hard").
 export const P_GATE = 0.01;
@@ -64,15 +66,25 @@ export function mountLevel1(container) {
   let current = null; // { index, res }
   let answered = false;
 
+  const ux = FEATURES.uxV2 === true;
+  const INTRO = 'Three data qubits store one logical bit (all 0 or all 1). Two checks compare neighbours: a lit check means its two data qubits disagree. '
+    + 'Read the checks and choose the data qubit you think flipped, or no correction. The logical value is read from data qubit 1 after the correction.';
+
   container.replaceChildren();
   container.appendChild(el('h2', { id: 'level1-title' }, 'Level 1: Be the decoder'));
-  container.appendChild(el('p', { class: 'intro' },
-    'Three data qubits store one logical bit (all 0 or all 1). Two checks compare neighbours: a lit check means its two data qubits disagree. '
-    + 'Read the checks and choose the data qubit you think flipped, or no correction. The logical value is read from data qubit 1 after the correction.'));
+  if (ux) {
+    // Text cut (U7.3): the goal, two visible sentences, the rest under "Explain more".
+    container.appendChild(goalLine('read the two check lights and pick the data qubit that flipped.'));
+    container.appendChild(el('p', { class: 'intro' }, 'Three data qubits store one bit, all 0 or all 1. A lit check means its two neighbouring data qubits disagree.'));
+    container.appendChild(explainMore([INTRO,
+      'The readout error ε is the chance that one check reading comes out wrong, so a lit check can also be a misread check.']));
+  } else {
+    container.appendChild(el('p', { class: 'intro' }, INTRO));
+  }
 
   // Epsilon control.
   const epsRow = el('div', { class: 'control-row' });
-  const epsLabel = el('label', { for: 'l1-eps' }, 'Readout error ε: ');
+  const epsLabel = el('label', { for: 'l1-eps' }, ux ? 'Readout error ε (chance one measurement is wrong): ' : 'Readout error ε: ');
   const epsInput = el('input', { id: 'l1-eps', type: 'range', min: '0', max: '0.12', step: '0.005', value: String(epsilon) });
   const epsOut = el('output', { for: 'l1-eps', id: 'l1-eps-out' }, epsilon.toFixed(3));
   epsLabel.appendChild(epsOut);
@@ -115,6 +127,10 @@ export function mountLevel1(container) {
   container.appendChild(reveal);
   const score = el('p', { class: 'score', 'aria-live': 'polite' });
   container.appendChild(score);
+  // Shown when the game ends, or when the reader scrolls past the board.
+  const takeaway = ux ? takeawayCard('one flipped qubit lights the checks on either side of it, so two checks can find it; '
+    + 'but a single misread check can fool you and the decoder alike.') : null;
+  if (takeaway) container.appendChild(takeaway.node);
 
   function renderScore() {
     score.textContent = `Score after ${shotNo - (answered ? 0 : 1)} of ${SHOTS_PER_GAME} shots: you ${scorePlayer}, decoder ${scoreDecoder} (logical value kept).`;
@@ -148,7 +164,7 @@ export function mountLevel1(container) {
     });
     noneBtn.disabled = false;
     nextBtn.disabled = true;
-    status.textContent = `Shot ${shotNo} of ${SHOTS_PER_GAME} (bank shot ${index + 1} of ${shots.length}). Which data qubit flipped?`;
+    status.textContent = `Shot ${shotNo} of ${SHOTS_PER_GAME} (stored shot ${index + 1} of ${shots.length}). Which data qubit flipped?`;
     reveal.replaceChildren();
     renderScore();
     if (focus) qubitButtons[0].focus();
@@ -191,6 +207,7 @@ export function mountLevel1(container) {
     if (shotNo >= SHOTS_PER_GAME) {
       reveal.appendChild(el('p', { class: 'final' }, `Game over: you kept the logical value in ${scorePlayer} of ${SHOTS_PER_GAME} shots, the decoder in ${scoreDecoder}.`));
       nextBtn.textContent = 'New game';
+      if (takeaway) takeaway.show();
     } else {
       nextBtn.textContent = 'Next shot';
     }

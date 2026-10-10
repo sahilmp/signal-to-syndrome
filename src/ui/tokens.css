@@ -1,0 +1,49 @@
+/* Signal to Syndrome design tokens (team checklist U7.1). One colour and one marker per
+   quantity, used by every chart: d = 3 / 5 / 7, hard / soft decoding (solid against dashed
+   lines), trapped ion / superconducting (circle against square markers, charts.js TOKENS),
+   bit-flip / phase-flip memory, and the error-budget segments. Defining the tokens changes
+   nothing on the page; style.css applies them under #s2s-app.ux-v2 (FEATURES.uxV2) and in
+   the hero panel (FEATURES.hero). Line and marker colours reach at least 3:1 on white and
+   on --panel (#f4f6f9). */
+
+#s2s-app {
+  /* Code distance (Okabe-Ito blue, vermillion, bluish green: the v1 series order). */
+  --d3: #0072B2;
+  --d5: #D55E00;
+  --d7: #009E73;
+  /* Decoding mode: hard solid, soft dashed (charts.js TOKENS.dash). */
+  --hard: #1a1a1a;
+  --soft: #6a3d9a;
+  /* Platform: trapped ion circles, superconducting squares (charts.js TOKENS.shape). */
+  --ion: #7a5195;
+  --sc: #2b7bb9;
+  /* Memory basis. */
+  --zbasis: #1f6f8b;
+  --xbasis: #a6463b;
+  /* Error-budget segments; readout is also the colour of every readout-error curve. */
+  --b-readout: #a86f00;
+  --b-idle: #3b6ea8;
+  --b-xt: #ad1457;
+  --b-gate: #5f6b7a;
+  /* Shaded interval between two optima (hero panel). */
+  --band-fill: #fbe7c2;
+
+  /* Spacing scale. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 32px;
+  /* Type scale. */
+  --fs-s: 14px;
+  --fs-m: 16px;
+  --fs-l: 20px;
+  --fs-xl: 28px;
+  --fs-xxl: 40px;
+  /* Rendered chart height (charts.js draws its viewBox to match at the usual widths). */
+  --chart-h: 320px;
+}
+
+@media (max-width: 600px) {
+  #s2s-app { --chart-h: 260px; }
+}

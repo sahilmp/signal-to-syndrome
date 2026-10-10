@@ -277,6 +277,69 @@
   .l5-pair { grid-template-columns: 1fr; }
 }
 
+/* Chart pieces used by the hero and by the v2 charts (shaded band, end-of-line labels). */
+.chart-svg-el .band-label { font-size: 12px; font-weight: 600; fill: var(--text); paint-order: stroke; stroke: var(--band-fill); stroke-width: 3px; stroke-linejoin: round; }
+.chart-svg-el .end-label { font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }
+
+/* Hero panel (FEATURES.hero, U7.2): above the level tabs, inside the header. The panel has no
+   display rule of its own, so the hidden attribute keeps it out of the layout when off. */
+.site-header .hero { flex: 1 0 100%; order: 0; }
+.hero[hidden] { display: none !important; }
+.hero {
+  margin: var(--sp-2) 0 var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  background: var(--panel);  /* --text on --panel: 16:1 */
+  border-radius: 12px;
+}
+#s2s-app .hero-question { font-size: var(--fs-xxl); line-height: 1.15; margin: 0 0 var(--sp-3); }
+.hero-controls { gap: var(--sp-2) var(--sp-4); margin: 0 0 var(--sp-2); }
+.hero-controls .platform-toggle { margin: 0; background: var(--bg); }
+.hero-slider { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.hero-slider output { font-weight: 700; }
+.hero-live { font-size: var(--fs-l); font-weight: 600; min-height: 3em; margin: var(--sp-2) 0; }
+.hero .chart { max-width: none; margin: var(--sp-2) 0; background: var(--bg); padding: var(--sp-2); border-radius: 8px; }
+.hero-note { font-size: var(--fs-s); color: var(--muted); margin: var(--sp-1) 0; }
+.hero-deeper { color: var(--accent); font-weight: 600; }
+
+/* Text cut (FEATURES.uxV2, U7.3): goal line, "Explain more", takeaway card. */
+#s2s-app .goal { font-size: var(--fs-l); margin: 0 0 var(--sp-2); }
+#s2s-app details.explain { margin: var(--sp-2) 0 var(--sp-3); max-width: 70ch; }
+#s2s-app details.explain > p, #s2s-app details.explain > ul { color: var(--muted); }
+.takeaway {
+  margin: var(--sp-4) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 6px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--panel);
+  font-size: var(--fs-l);
+  max-width: 70ch;
+}
+.takeaway p { margin: 0; }
+
+/* Design tokens applied (FEATURES.uxV2, U7.1): type scale, spacing scale, fainter grid. */
+#s2s-app.ux-v2 h1 { font-size: var(--fs-xl); }
+#s2s-app.ux-v2 h2 { font-size: var(--fs-xl); margin: var(--sp-4) 0 var(--sp-2); }
+#s2s-app.ux-v2 .hero h2.hero-question { font-size: var(--fs-xxl); margin-top: 0; }
+#s2s-app.ux-v2 h3 { font-size: var(--fs-l); margin: var(--sp-4) 0 var(--sp-2); }
+#s2s-app.ux-v2 .intro { margin: 0 0 var(--sp-2); }
+#s2s-app.ux-v2 .hint,
+#s2s-app.ux-v2 .chart-legend,
+#s2s-app.ux-v2 .optima,
+#s2s-app.ux-v2 .l5-table,
+#s2s-app.ux-v2 .chart-data table { font-size: var(--fs-s); }
+#s2s-app.ux-v2 .control-row { gap: var(--sp-2) var(--sp-3); margin: var(--sp-3) 0; }
+#s2s-app.ux-v2 .chart { margin: var(--sp-3) 0; }
+#s2s-app.ux-v2 .chart-svg-el .grid { stroke: #eceef2; }
+
+@media (max-width: 600px) {
+  #s2s-app .hero-question,
+  #s2s-app.ux-v2 .hero h2.hero-question { font-size: var(--fs-xl); }
+  .hero { padding: var(--sp-3) var(--sp-3) var(--sp-2); }
+  .hero-live { font-size: var(--fs-m); }
+  .chart-svg-el .band-label,
+  .chart-svg-el .end-label { font-size: 22px; }
+}
+
 /* Nothing on the page animates; this keeps it so if motion is added later. */
 @media (prefers-reduced-motion: reduce) {
   #s2s-app *, #s2s-app *::before, #s2s-app *::after {

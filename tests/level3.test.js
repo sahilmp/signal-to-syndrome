@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { optimaInfo, PLATFORMS, assignmentText, formatTau } from '../src/ui/level3.js';
+import { optimaInfo, PLATFORMS, assignmentText, formatTau, naiveResults } from '../src/ui/level3.js';
 
 // Synthetic results: the belief optimum (optima.tauPhys) sits at 1, the empirical
 // assignment error has its minimum at the grid point 10.
@@ -72,4 +72,20 @@ test('formatTau: three significant figures', () => {
   assert.equal(formatTau(23.4849), '23.5 µs');
   assert.equal(formatTau(0.586604), '0.587 µs');
   assert.equal(formatTau(500), '500 µs');
+});
+
+// Catches: fails if a results file that carries both decoders (CC-A12) reaches the levels
+// unfiltered, drawing every curve and tau_log marker twice, or if the v1 series without a
+// decoder field are dropped as not naive.
+test('naiveResults: keeps decoder-less and naive entries, drops learned ones', () => {
+  const both = {
+    x: { values: [1, 2] },
+    series: [{ d: 3, mode: 'hard' }, { d: 3, mode: 'hard', decoder: 'naive' }, { d: 3, mode: 'hard', decoder: 'learned' }],
+    optima: { tauPhys: { xMin: 1 }, tauLog: [{ d: 3, decoder: 'naive' }, { d: 3, decoder: 'learned' }, { d: 5 }] },
+  };
+  const n = naiveResults(both);
+  assert.deepEqual(n.series.map((s) => s.decoder), [undefined, 'naive']);
+  assert.deepEqual(n.optima.tauLog.map((t) => t.d), [3, 5]);
+  assert.equal(n.optima.tauPhys, both.optima.tauPhys);
+  assert.equal(both.series.length, 3);
 });
