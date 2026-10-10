@@ -512,3 +512,185 @@ Source: `data/results/holdout.json` (`node tools/sweep.mjs --stage holdout`). De
 - Soft worse than hard beyond the paired cluster interval: **naive 13 of 26 points, learned 0 of 26** (`setting2.softWorseCount`). The naive points are d = 3 at τ = 5–500 µs and d = 5 at τ = 100, 200, 500 µs (`softWorsePoints`).
 - d = 3, τ = 20 µs (`series`, cluster intervals): naive soft 0.01019 [0.00794, 0.01233] against hard 0.00491 [0.00345, 0.00642], paired soft − hard +0.0053 [+0.0037, +0.0071]; learned soft 0.00381 [0.00256, 0.00513] against hard 0.00372 [0.00242, 0.00505], paired +0.0001 [−0.0003, +0.0005].
 - **F1 is now out of sample:** the in-sample pattern (naive soft loses, learned soft does not; "Finding F1" above) holds on banks from new simulator seeds, decoded with rates learned elsewhere. It is still post hoc (not pre-registered), and it is shown for the ion card only.
+
+## Verdicts v2 (A53a, CC-A20, Sun 11 Oct 02:15 IST)
+
+**Sources.** Ion: `stage2_ion_v2b.json` and `stage2_ion_x_v2b.json` (23982f7; the A48 pL values, with `loCluster`/`hiCluster`, `paired` and `shiftDelta` added; R = 4, n = 32 000 per point). Superconducting: `stage3_sc_dense.json` and `stage3_sc_x_dense.json` (42d68a3; dense grid, 27 points from 0.05 to 3 µs, R = 4, n = 32 000), and the C6 variant `stage3_sc_x_T2_25.json` (42d68a3; `provenance.overrides` T2_us = 25, UNSOURCED, illustrative, E14 (c)). Also `stage1_flat.json`, `stage1_flat_x.json`, `dem_forte1.json` and `holdout.json`, and DECISIONS rows E4 and E11–E14. `stage4_comparison.json` is not used. C3 and C4 are decided at A53c.
+
+**Conventions.**
+- Intervals are Wilson 95% in square brackets and cluster 95% (`loCluster`/`hiCluster`, a bootstrap over quantum shots) in round brackets.
+- "Paired" is `paired` → `pairedClusterDiff`: the same resampled shots for both arms, and the arms share readout draws.
+- τ*_log is from `optima.tauLog`. Its interval is the bootstrap over shots (B = 200); it carries no Wilson or cluster interval.
+- Tie rule: any τ*_log with `fractionTied` ≥ 0.5 is **UNRESOLVED** and excluded from verdicts.
+- `shiftDelta` is reported beside the pre-registered rule, never in place of it (E12, E14 (b)). It is post hoc.
+
+### Summary
+
+| ID | Pre-registered verdict | Changed from A49 | Changed from v1 |
+|---|---|---|---|
+| C1, superconducting | **Refuted** at d = 3 and 5 (dense grid) | Yes: A49, on the standard grid, had it holding at d = 3 | Yes: v1 (naive) held at d = 3 and 5 |
+| C1, ion (a) crosstalk off | **Holds** | No | v1 had no crosstalk |
+| C1, ion (b) card crosstalk | **Refuted** under the resolved flag and `shiftDelta`; the pre-registered point flag splits between the bases | No (`shiftDelta` added) | New clause |
+| C1, ion (c) any scanned rate | Clause **not met**: an optimum below τ*_phys is resolved at 1e-3 /µs, 60× the card value | No (`shiftDelta` narrows it to X, d = 3) | New clause |
+| C2 | **Holds** with the learned decoder on both arms and in both bases: Wilson, cluster and paired all count 0 points | No | **Yes:** v1 "refuted on the ion arm" was a naive-decoder artefact (F1) |
+| C3 | Decided at A53c; the outcome is fixed by construction (team checklist Section 1.2 note) | — | — |
+| C4 | Decided at A53c | — | — |
+| C5 | **Holds in sample** (no point with learned above naive at τ*_log); out of sample, see V18 | No | New |
+| C6 | Not applicable with the card. With the T2 = 25 µs variant: **undetermined** (X below Z in the point estimate at all four (d, mode) pairs, with every interval overlapping) | New (variant run) | New |
+| O4 | X/Z ratio ≈ 1 at every (d, r) (measurement, no hypothesis) | No | New |
+| F1 | Naive soft decoding is worse than hard; learned soft is not. Holds in sample and out of sample (post hoc) | Paired counts added | New |
+
+### Decoder artefacts in v1, named plainly
+
+1. **The v1 C2 loss on the ion arm was a naive-decoder artefact.** v1 reported soft decoding worse than hard on the ion arm and called C2 refuted (A28). With the learned decoder on the same banks, soft is never worse than hard beyond any interval: 0 of 39 points in Z and in X, by Wilson, cluster and paired counts (table under C2). This also holds out of sample: in `holdout.json` → `setting2.softWorseCount`, naive 13 of 26, learned 0 of 26. The mechanism is the diagonal edge class missing from the naive graph (F1 at A49).
+2. **The ε = 0 spike in Stage 1 was a naive-decoder artefact.** `stage1_flat.json`, d = 3 hard: naive pL 0.0289 [0.0254, 0.0328] at ε = 0 against 0.00450 [0.00325, 0.00622] at ε = 0.005. Learned 0.00325 [0.00222, 0.00476] against 0.00387 [0.00273, 0.00549], so the spike is gone. X basis (`stage1_flat_x.json`): naive 0.0307 against 0.00363; learned 0.00263 against 0.00337. A noiseless readout is never the worst point with the learned decoder.
+3. **The size of the v1 superconducting C1 shift partly came from the naive decoder.** On the dense grid only naive soft still resolves below τ*_phys (Z d = 3 soft 0.545 [0.515, 0.703] µs; `shiftDelta` resolved). No learned row does (C1 below).
+
+### C1, superconducting (dense files, against `optima.tauPhysEmpirical` = 0.910 µs)
+
+Pre-registered rule: refuted if the τ*_log interval contains or exceeds τ*_phys at d = 3 and 5. `shiftDelta` uses τ_ref = 0.9 µs and τ_short = 0.75 µs; it is "resolved" when pL(0.9) − pL(0.75) > 0 beyond the paired interval.
+
+| Basis | d | Mode | Learned τ*_log (µs) [95%] | Tied | Upper bound below 0.910? | `shiftDelta` diff [paired 95%] | Resolved |
+|---|---|---|---|---|---|---|---|
+| Z | 3 | hard | 0.710 [0.662, 0.990] | 4.5% | no | +4.4e-4 [−3.6e-4, +1.3e-3] | no |
+| Z | 3 | soft | 0.694 [0.563, 0.912] | 5.0% | no (by 0.002 µs) | +3e-5 [−9.1e-4, +1.0e-3] | no |
+| Z | 5 | hard | 0.942 [0.643, 0.977] | 10.5% | no | 0 [−3.4e-4, +4.1e-4] | no |
+| Z | 5 | soft | 0.844 [0.518, 0.983] | 16.0% | no | 0 [−3.4e-4, +3.4e-4] | no |
+| Z | 7 | hard | 0.882 [0.557, 1.31] | 43.5% | no | −2.2e-4 [−4.1e-4, −6e-5] | no |
+| Z | 7 | soft | 0.704 [0.543, 1.20] | 56% **UNRESOLVED** | — | −1.6e-4 [−3.0e-4, −3e-5] | no |
+| X | 3 | hard | 0.696 [0.685, 0.946] | 4.5% | no | −2.5e-4 [−1.2e-3, +6.4e-4] | no |
+| X | 3 | soft | 0.677 [0.599, 0.906] | 5.5% | **yes** (by 0.004 µs) | −5.3e-4 [−1.3e-3, +2.7e-4] | no |
+| X | 5 | hard | 0.653 [0.629, 1.01] | 10.0% | no | 0 [−2.8e-4, +2.8e-4] | no |
+| X | 5 | soft | 0.900 [0.642, 1.01] | 20.5% | no | −1.6e-4 [−4.1e-4, +3e-5] | no |
+| X | 7 | hard | 0.775 [0.775, 0.866] | 100% **UNRESOLVED** | — | +3e-5 [0, +9e-5] | no |
+| X | 7 | soft | 0.671 [0.670, 0.837] | 100% **UNRESOLVED** | — | −6e-5 [−1.6e-4, 0] | no |
+
+**Verdict: refuted at d = 3 and d = 5.** Only X d = 3 soft has its upper bound below 0.910 µs, and only by 0.004 µs. No learned row resolves `shiftDelta`.
+
+The reason is visible in the curve. The dense grid shows a flat valley: `stage3_sc_dense.json`, learned Z d = 3 hard, pL is 0.0065–0.0073 at every point from 0.65 to 1.0 µs. The standard grid, with points at 0.5, 0.7 and 1.0 µs only, could not show this. Its bootstrap intervals were narrower, which is why A49 had C1 holding at d = 3 (Z d = 3 hard 0.764 [0.732, 0.802] in `stage3_sc.json`). The point estimates sit below τ*_phys in 8 of the 9 resolved rows; the exception is Z d = 5 hard, at 0.942 µs. So the readout time that is best for the code most likely lies somewhat below 0.91 µs, but within a flat valley that these statistics cannot separate from τ*_phys.
+
+For comparison, the naive dense rows: Z d = 3 soft 0.545 [0.515, 0.703] µs and Z d = 5 soft 0.547 [0.533, 0.756] µs have upper bounds below 0.910 µs; only the d = 3 soft row resolves `shiftDelta` (+2.1e-3 [+8.6e-4, +3.6e-3]).
+
+- **Changed from A49:** d = 3 moves from "holds" to "refuted", because the dense grid replaces the standard grid (E14 (d)). Cluster intervals play no part.
+- **Changed from v1:** v1 (naive, standard grid) held at d = 3 and 5.
+
+### C1, ion (`crosstalkScan` in the v2b files, learned, R = 2, n = 16 000 per point, B = 200)
+
+τ*_phys = 23.5 µs (`crosstalkScan.tauPhys`, the belief value; the empirical value is 23.0 µs). The point and resolved flags are as at A49, with identical τ*_log values. New is `shiftDelta`, with τ_ref = 20 µs and τ_short = 15 µs.
+
+- **(a) Crosstalk off, no idle-driven optimum: holds.** The point flag is true only for Z d = 3 at rate 0, and both of those intervals contain 23.5 µs (hard 15.2 [13.9, 27.4] µs; soft 14.1 [11.8, 500] µs). The resolved flag is false everywhere. `shiftDelta` is not resolved anywhere at rate 0 (Z d = 3 hard +1.9e-4 [0, +4.4e-4]: the lower bound is 0, not above it). Z d = 5 hard at rate 0 is 61.5% tied and UNRESOLVED.
+- **(b) Crosstalk at the card value (1.67e-5 /µs): REFUTED under the resolved flag and under `shiftDelta`. The pre-registered point flag splits between the bases.**
+  - Every interval contains 23.5 µs: Z d = 3 hard 30.2 [21.2, 36.8] µs; X d = 3 hard 19.3 [16.2, 47.5] µs.
+  - `shiftDelta` resolves in neither basis: Z d = 3 hard −1.3e-4 [−5.6e-4, +1.9e-4]; X d = 3 hard −6e-5 [−2.8e-4, +1.3e-4].
+  - Under the point flag, Z shows no optimum below τ*_phys at any (d, mode) and X shows one at every (d, mode). The X d = 5 rows are 100% tied and so UNRESOLVED.
+  - The verdict by the pre-registered point flag is therefore split (E12 (a)).
+- **(c) "No interior optimum at any scanned rate": not met.**
+  - Resolved flag: an optimum below τ*_phys is resolved only at 1e-3 /µs (60× the card value), in Z at d = 3 and 5 and in X at d = 3, each in both modes.
+  - `shiftDelta` resolves it in only two of those rows, X d = 3 at 1e-3 /µs: hard +1.75e-3 [+4.4e-4, +3.0e-3], soft +1.37e-3 [+6e-5, +2.5e-3]. The Z rows at 1e-3 /µs are not resolved by `shiftDelta` (d = 3 hard +7.5e-4 [−5.6e-4, +2.0e-3]).
+  - Either way the clause is met only where crosstalk is as large as gate noise (A49), so meeting it says little.
+- **Changed from A49:** none in the verdicts; `shiftDelta` is added. **Changed from v1:** v1 had no crosstalk term, and its "held on the ion arm" referred to the v1 statement.
+
+### C2 (learned): soft decoding at or below hard at every τ, most gain at short τ
+
+These are the A49 counts redone. "Wilson" is `validation.C2` → `softAboveBeyondIntervals`. "Cluster" is soft `loCluster` > hard `hiCluster` (unpaired). "Paired" is `paired` → `softMinusHard` with lo > 0. Points shown are per arm and basis (ion: 13 τ × d = 3, 5, 7; superconducting dense: 27 τ × 3 d).
+
+| Arm (file) | Basis | Decoder | Points | Soft above hard: Wilson | Cluster | Paired | Soft below hard, paired |
+|---|---|---|---|---|---|---|---|
+| Ion (`stage2_ion_v2b.json`) | Z | **learned** | 39 | **0** | **0** | **0** | 13 |
+| Ion (`stage2_ion_x_v2b.json`) | X | **learned** | 39 | **0** | **0** | **0** | 15 |
+| Superconducting (`stage3_sc_dense.json`) | Z | **learned** | 81 | **0** | **0** | **0** | 31 |
+| Superconducting (`stage3_sc_x_dense.json`) | X | **learned** | 81 | **0** | **0** | **0** | 35 |
+| Ion | Z | naive | 39 | 13 | 8 | 18 | 11 |
+| Ion | X | naive | 39 | 9 | 9 | 10 | 11 |
+| Superconducting | Z | naive | 81 | 0 | 0 | 0 | 64 |
+| Superconducting | X | naive | 81 | 1 | 0 | 1 (d = 3, 0.5 µs) | 58 |
+
+**Verdict (learned): holds on both arms in both bases, under all three counts.** The "most gain at short τ" part also holds. Learned d = 3, paired soft − hard:
+- Ion Z: −0.21 [−0.21, −0.20] at 1 µs and −6.4e-3 [−8.7e-3, −4.3e-3] at 5 µs; no point is resolved from 7 to 200 µs; −9.4e-4 [−1.6e-3, −3.1e-4] at 500 µs.
+- Superconducting Z: resolved gains at every point from 0.1 µs (−9.1e-3) to 0.65 µs (−1.0e-3), largest at 0.2 µs (−0.045 [−0.049, −0.041]), and smaller resolved gains at some longer τ.
+
+With the naive decoder the paired count on the ion arm is higher than the Wilson one (Z: 18 against 13), because pairing removes the shared gate faults. The extra points are d = 5 at 7, 10, 30, 50 and 100 µs. **Changed from v1:** v1 (naive) refuted C2 on the ion arm; that loss was the naive decoder (artefact 1 above).
+
+### C3 and C4
+
+C3: decided at A53c; the outcome is fixed by construction (team checklist Section 1.2 note). C4: decided at A53c.
+
+### C5 (in sample): learned at or below naive at τ*_log
+
+Each (arm, basis, d, mode) is compared at the grid point nearest the learned τ*_log, using `series` and `paired` → `learnedMinusNaive`. The rates are learned from the banks being decoded, so this is **in sample**. Refutation: learned above naive beyond the intervals.
+
+| Arm | Basis | d | Mode | τ (µs) | Learned pL [Wilson] (cluster) | Naive pL [Wilson] (cluster) | Paired learned − naive |
+|---|---|---|---|---|---|---|---|
+| Ion | Z | 3 | hard | 20 | 0.00331 [0.00274, 0.00400] (0.00217, 0.00456) | 0.00347 [0.00288, 0.00418] (0.00220, 0.00475) | −1.6e-4 [−1.0e-3, +7.5e-4] |
+| Ion | Z | 3 | soft | 20 | 0.00356 [0.00297, 0.00428] (0.00237, 0.00488) | 0.00737 [0.00649, 0.00837] (0.00562, 0.00916) | **−3.8e-3** [−5.3e-3, −2.3e-3] |
+| Ion | Z | 5 | hard | 100 | 2.2e-4 [1.1e-4, 4.5e-4] (3e-5, 5.5e-4) | 9.1e-4 [6.3e-4, 1.3e-3] (3.8e-4, 1.6e-3) | **−6.9e-4** [−1.3e-3, −5e-5] |
+| Ion | Z | 5 | soft | 100 | 1.6e-4 [6.7e-5, 3.7e-4] (0, 5.0e-4) | 1.6e-3 [1.2e-3, 2.1e-3] (9.1e-4, 2.4e-3) | **−1.5e-3** [−2.3e-3, −6.7e-4] |
+| Ion | Z | 7 | both | — | τ*_log UNRESOLVED (100% tied) | | |
+| Ion | X | 3 | hard | 30 | 0.00291 [0.00237, 0.00356] (0.00194, 0.00405) | 0.00294 [0.00240, 0.00359] (0.00184, 0.00409) | −3e-5 [−7.2e-4, +7.2e-4] |
+| Ion | X | 3 | soft | 50 | 0.00272 [0.00220, 0.00335] (0.00164, 0.00391) | 0.00713 [0.00626, 0.00811] (0.00545, 0.00874) | **−4.4e-3** [−6.0e-3, −3.0e-3] |
+| Ion | X | 5, 7 | both | — | τ*_log UNRESOLVED (100% tied) | | |
+| Superconducting | Z | 3 | hard | 0.7 | 0.00653 [0.00571, 0.00747] (0.00514, 0.00784) | 0.0230 [0.0214, 0.0247] (0.0201, 0.0260) | **−0.0164** [−0.0195, −0.0139] |
+| Superconducting | Z | 3 | soft | 0.7 | 0.00594 [0.00515, 0.00684] (0.00451, 0.00741) | 0.0131 [0.0119, 0.0144] (0.0112, 0.0152) | **−7.2e-3** [−8.8e-3, −5.7e-3] |
+| Superconducting | Z | 5 | hard | 0.95 | 5.6e-4 [3.6e-4, 8.9e-4] (2.8e-4, 9.2e-4) | 3.2e-3 [2.6e-3, 3.8e-3] (2.1e-3, 4.2e-3) | **−2.6e-3** [−3.6e-3, −1.8e-3] |
+| Superconducting | Z | 5 | soft | 0.85 | 1.2e-3 [8.4e-4, 1.6e-3] (7.5e-4, 1.6e-3) | 3.1e-3 [2.6e-3, 3.8e-3] (2.3e-3, 4.0e-3) | **−2.0e-3** [−2.7e-3, −1.3e-3] |
+| Superconducting | Z | 7 | hard | 0.9 | 6.3e-5 [1.7e-5, 2.3e-4] (0, 1.6e-4) | 1.0e-3 [7.1e-4, 1.4e-3] (5.6e-4, 1.5e-3) | **−9.4e-4** [−1.4e-3, −5.0e-4] |
+| Superconducting | Z | 7 | soft | — | τ*_log UNRESOLVED (56% tied) | | |
+| Superconducting | X | 3 | hard | 0.7 | 0.00491 [0.00420, 0.00573] (0.00372, 0.00602) | 0.0238 [0.0222, 0.0255] (0.0206, 0.0267) | **−0.0189** [−0.0221, −0.0160] |
+| Superconducting | X | 3 | soft | 0.7 | 0.00462 [0.00394, 0.00543] (0.00353, 0.00595) | 0.0108 [0.00977, 0.0120] (0.00911, 0.0127) | **−6.2e-3** [−7.8e-3, −4.8e-3] |
+| Superconducting | X | 5 | hard | 0.65 | 4.1e-4 [2.4e-4, 7.0e-4] (1.6e-4, 7.2e-4) | 2.2e-3 [1.7e-3, 2.8e-3] (1.3e-3, 3.1e-3) | **−1.8e-3** [−2.6e-3, −1.1e-3] |
+| Superconducting | X | 5 | soft | 0.9 | 2.8e-4 [1.5e-4, 5.3e-4] (6e-5, 5.9e-4) | 1.1e-3 [7.9e-4, 1.5e-3] (6.3e-4, 1.7e-3) | **−8.1e-4** [−1.3e-3, −4.1e-4] |
+| Superconducting | X | 7 | both | — | τ*_log UNRESOLVED (100% tied) | | |
+
+**Verdict: holds in sample.**
+- Of the 15 rows with a resolved τ*_log, learned is above naive beyond the intervals at 0, under Wilson and under paired intervals. It is below beyond them at 13 (the bold rows), under both Wilson and paired intervals.
+- The two exceptions are ion d = 3 hard in Z and in X, where learned equals naive within about 5%. The statement "lowers … at every (d, arm, mode)" is met only in the weak sense: learned is never higher, but it is not always lower.
+- Over all grid points, the paired learned − naive is above 0 at 2 of 162 superconducting Z points: d = 3 hard at 0.2 µs (+6.3e-3) and d = 5 soft at 0.05 µs (+3.3e-3). Both are short-τ points where pL is 0.1 to 0.5, far from τ*_log. It is above 0 at no superconducting X point and no ion point.
+- **Out of sample:** V18 passes (`holdout.json` → `setting1`; flat ε = 0.02, hard, d = 3 and 5 r = 3; DECISIONS E4 and E11). The held-out ion-card comparison (`setting2`) is the basis for the final C5 at A53c.
+- **Changed from A49/A50:** the paired intervals are added, and the verdict is unchanged. The A50 note "IN SAMPLE … V18 decides it at A53b" is now answered: V18 passed.
+
+### C6 (variant card T2 = 25 µs, X, against the dense Z file; learned, d = 3 and 5)
+
+C6 is not applicable with the card, where T2 = 77 µs ≥ T1 = 50 µs (E12 (b)). The variant (E14 (c)) changes only T2. Its X idle probability at 1 µs is 0.0196, against Z 0.0099 and X with the card 0.0065 (`budget.idle`). Refutation: τ*_log(X) ≥ τ*_log(Z) beyond the intervals.
+
+| d | Mode | Z (`stage3_sc_dense.json`) τ*_log [95%] | X, T2 = 25 (`stage3_sc_x_T2_25.json`) | X, card (`stage3_sc_x_dense.json`), for reference | Outcome |
+|---|---|---|---|---|---|
+| 3 | hard | 0.710 [0.662, 0.990] | 0.691 [0.640, 0.792] | 0.696 [0.685, 0.946] | X shorter in the point estimate; overlap |
+| 3 | soft | 0.694 [0.563, 0.912] | 0.644 [0.548, 0.728] | 0.677 [0.599, 0.906] | X shorter; overlap |
+| 5 | hard | 0.942 [0.643, 0.977] | 0.798 [0.596, 0.810] | 0.653 [0.629, 1.01] | X shorter; overlap |
+| 5 | soft | 0.844 [0.518, 0.983] | 0.603 [0.561, 0.805] | 0.900 [0.642, 1.01] | X shorter; overlap |
+
+No row is tied 50% or more (largest 16%).
+
+**Verdict: undetermined.** The direction agrees with C6 at all four (d, mode) pairs, and nothing refutes it, but no difference is resolved.
+
+**pL difference at matching τ** (X, T2 = 25, minus Z, learned). The two files decode different banks (`repx_*` against `rep_*`), so a paired difference is not possible. The interval combines the two cluster half-widths in quadrature.
+- d = 3 hard: +3.1e-3 [+3.4e-4, +6.0e-3] at 0.4 µs; +3.0e-3 [+9.8e-4, +5.0e-3] at 0.7 µs; +4.7e-3 [+2.6e-3, +6.8e-3] at 1.0 µs; +0.021 [+0.018, +0.024] at 3 µs.
+- d = 5 hard: unresolved from 0.6 to 0.8 µs (for example 0 [−5.6e-4, +5.5e-4] at 0.7 µs); +9.4e-4 [+2.5e-4, +1.6e-3] at 1.0 µs; +8.9e-3 [+7.4e-3, +0.010] at 3 µs.
+- The soft rows look the same.
+
+The extra dephasing raises X pL more the longer the readout, and this is resolved at d = 3. That is the mechanism C6 relies on. At d = 5, near the optimum, the curves cannot be told apart.
+
+**Changed from A49:** not applicable at A49; the variant is new.
+
+### O4 (`dem_forte1.json` → `ratioXoverZ`)
+
+These are unchanged from A49. The X/Z bulk detector-rate ratio is 1.041 [0.894, 1.213] (d3 r1), 1.027 [0.959, 1.100] (d3 r3), 1.000 [0.953, 1.048] (d5 r3), 1.029 [0.995, 1.064] (d5 r5) and 1.021 [0.983, 1.061] (d7 r3). All 5 intervals contain 1. Measurement, no hypothesis (E5).
+
+### F1 (post hoc): the naive decoder makes soft decoding lose; the learned decoder does not
+
+- **In sample** (v2b files, soft worse than hard beyond the intervals). Z: naive 13 of 39 (Wilson) and 18 of 39 (paired); learned 0 and 0. X: naive 9 and 10; learned 0 and 0.
+  - Example, Z d = 3 at 20 µs: naive soft 0.00737 [0.00649, 0.00837] (0.00562, 0.00916) against hard 0.00347 [0.00288, 0.00418] (0.00220, 0.00475), paired +3.9e-3 [+2.5e-3, +5.3e-3].
+  - Learned at the same point: soft 0.00356 (0.00237, 0.00488) against hard 0.00331 (0.00217, 0.00456), paired +2.5e-4 [−3e-5, +5.6e-4].
+- **Out of sample** (`holdout.json` → `setting2`, paired cluster): naive 13 of 26 points, learned 0 of 26 (A53b).
+- **Changed from v1:** F1 is what replaces v1's "C2 refuted"; it is not a pre-registered result.
+
+### Where a cluster or paired result changes a verdict reached with Wilson intervals
+
+**None of the pre-registered verdicts changes.** Each place where the counts or the flags change:
+
+1. **C2, naive** (comparison only, not the verdict): ion Z soft-worse count 13 (Wilson) → 8 (cluster, unpaired) → 18 (paired); ion X 9 → 9 → 10; superconducting X 1 → 0 → 1. The learned counts stay 0 under all three.
+2. **C5 at τ*_log:** ion X d = 5 soft is "overlap" under Wilson and "learned below" under the paired interval. Its τ*_log is UNRESOLVED, so it is excluded either way. No row moves towards "learned above".
+3. **C1 ion (c):** under the resolved flag, an optimum below τ*_phys at 1e-3 /µs is shown in 6 rows. Under `shiftDelta` it is shown in 2 (X d = 3, both modes). The clause is not met either way.
+4. **C1 ion (b):** `shiftDelta` agrees with the resolved flag (refuted in both bases).
+5. **C1 superconducting:** `shiftDelta` resolves no learned row, which agrees with "refuted". Note that the verdict change from A49 (d = 3 holds → refuted) comes from the dense grid, not from cluster or paired intervals.
+6. **V18** (A53b): the cluster intervals agree with the Wilson verdict (learned upper bound 0.00122 against naive lower bound 0.00135 at d = 5).
