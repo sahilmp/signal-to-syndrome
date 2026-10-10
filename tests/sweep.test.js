@@ -463,3 +463,66 @@ test('runPoint passes bank.basis to idleFlipProbability; malformed noise throws'
   assert.throws(() => runPoint({ bank, readout, mode: 'hard', noise: { model: 'learned', rates: { ...RATES, diag: undefined } }, seed: 1 }), /rates\.diag/);
   assert.throws(() => runPoint({ bank, readout, mode: 'hard', noise: { model: 'other' }, seed: 1 }), /noise\.model/);
 });
+
+// ---- tools/sweep.mjs helpers (CC-A14): error budget, crosstalk scan rates, C1 ion verdict ----
+
+const { errorBudget, crosstalkScanRates, interiorBelowTauPhys } = await import('../tools/sweep.mjs');
+const { createScReadout } = await import('../src/core/readout/sc.js');
+const scCard = JSON.parse(readFileSync(new URL('../params/sc.json', import.meta.url), 'utf8'));
+const cardValue = (card, name) => (card[name] !== null && typeof card[name] === 'object' ? card[name].value : card[name]);
+
+// Catches: fails if the budget takes idle or crosstalk from the wrong basis (T1 instead of T2
+// in the X basis), drops the crosstalk part, takes readout from anything other than the
+// empirical array, averages the gate classes wrongly (or leaves one out), or if importing
+// tools/sweep.mjs starts a stage (it would print and write results during the tests).
+test('errorBudget: readout, idle and crosstalk per tau by basis; gate = mean of the four classes', () => {
+  const taus = [1, 10, 100];
+  const rate = 1e-3;
+  const readouts = taus.map((tau) => createIonReadout(ionCard, tau, { crosstalkRate: rate }));
+  const empirical = [0.1, 0.01, 0.001];
+  const gateRates = { space: 0.01, spaceBoundary: 0.02, time: 0.03, diag: 0.04 };
+  const t1 = cardValue(ionCard, 'T1_idle_us');
+  const t2 = cardValue(ionCard, 'T2_idle_us');
+  const half = (x) => 0.5 * (1 - Math.exp(-x));
+  const rel = (a, b) => Math.abs(a - b) <= 1e-5 * Math.abs(b); // results are rounded to 6 significant digits
+  for (const basis of ['Z', 'X']) {
+    const b = errorBudget({ taus, readouts, empirical, basis, gateRates });
+    assert.equal(b.label, 'error sources per round, per qubit (approximate)');
+    assert.deepEqual(b.tau_us, taus);
+    assert.deepEqual(b.readout, empirical);
+    assert.ok(Math.abs(b.gate - 0.025) < 1e-12, `gate ${b.gate}`);
+    taus.forEach((tau, t) => {
+      const idle = half(tau / (basis === 'Z' ? t1 : t2));
+      assert.ok(rel(b.idle[t], idle), `${basis} idle at tau ${tau}: ${b.idle[t]} vs ${idle}`);
+      assert.ok(rel(b.crosstalk[t], half(rate * tau)), `${basis} crosstalk at tau ${tau}: ${b.crosstalk[t]}`);
+    });
+  }
+  // T2 < T1 on the card, so the X-basis idle part is larger.
+  const z = errorBudget({ taus, readouts, empirical, basis: 'Z', gateRates });
+  const x = errorBudget({ taus, readouts, empirical, basis: 'X', gateRates });
+  assert.ok(x.idle[2] > z.idle[2]);
+  // Superconducting: no crosstalk part.
+  const sc = errorBudget({ taus: [0.5], readouts: [createScReadout(scCard, 0.5)], empirical: [0.01], basis: 'X', gateRates });
+  assert.deepEqual(sc.crosstalk, [0]);
+  assert.throws(() => errorBudget({ taus, readouts, empirical, basis: 'Z', gateRates: { ...gateRates, diag: undefined } }), /gateRates\.diag/);
+  assert.throws(() => errorBudget({ taus, readouts: readouts.slice(1), empirical, basis: 'Z', gateRates }), /readouts/);
+});
+
+// Catches: fails if the card crosstalk rate is not added to the scan when it is off the grid,
+// is added twice when it is on the grid, or if the rates are not in ascending order.
+test('crosstalkScanRates adds the card value once and sorts', () => {
+  const grid = [0, 1e-6, 1e-5, 1e-4, 1e-3];
+  assert.deepEqual(crosstalkScanRates(grid, 1.67e-5), [0, 1e-6, 1e-5, 1.67e-5, 1e-4, 1e-3]);
+  assert.deepEqual(crosstalkScanRates(grid, 1e-5), grid);
+  assert.deepEqual(crosstalkScanRates(grid, undefined), grid);
+});
+
+// Catches: fails if a tau*_log at the grid edge counts as interior, or if the comparison with
+// tau*_phys is <= instead of <. Boundary: xMin exactly at tau*_phys is not below it; one step
+// of 0.01 us below it is.
+test('interiorBelowTauPhys: strict, interior only; boundary at tau*_phys', () => {
+  const tauPhys = 23.4849;
+  assert.equal(interiorBelowTauPhys({ xMin: tauPhys, atEdge: false }, tauPhys), false);
+  assert.equal(interiorBelowTauPhys({ xMin: tauPhys - 0.01, atEdge: false }, tauPhys), true);
+  assert.equal(interiorBelowTauPhys({ xMin: 1, atEdge: true }, tauPhys), false);
+});

@@ -14,6 +14,10 @@
 //   --decoder naive | learned | both (default both): every series carries "decoder".
 //   --basis Z | X (default Z): rep_*.json (Z) or repx_*.json (X) banks; X results go to *_x.json.
 //
+// Stages 2 and 3 also write "budget" (error sources per round, per qubit, at every tau) and
+// Stage 2 writes "crosstalkScan" (the ion arm at several crosstalk rates); team checklist U4.
+// Stage 1 with --basis X prints O4 (X/Z bulk detector-rate ratio) when the Z banks exist.
+//
 // Banks: data/banks/rep_*.json and repx_*.json (the v4_*.json validation banks are never read).
 // Naive model: pGate calibrated per bank from its raw bits (readout off) with estimatePGate.
 // Learned model: edge-class rates from ratesFromBanks of the L0 and L1 banks of the same
@@ -21,7 +25,8 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { validateBank, expandShots, split } from '../src/core/bank.js';
 import { computeDetectors } from '../src/core/detectors.js';
 import { estimatePGate } from '../src/core/calibrate.js';
@@ -108,7 +113,7 @@ const keyOf = (decoder, d, mode) => `${decoder},${d},${mode}`;
 // pooled series (one per decoder, d, mode, in that nesting order), per-logical rows, per-shot
 // mean errors (key decoder,d,mode -> per grid point Float64Array over pooled quantum shots),
 // seeds, the banks used and the number of non-exact matchings.
-function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf, cal, rates, basis }) {
+function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf, cal, rates, basis, draws = READOUT_DRAWS }) {
   const perShot = new Map();
   const series = [];
   const perLogical = [];
@@ -141,7 +146,7 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
           for (const mode of modes) {
             const target = perShot.get(keyOf(decoder, d, mode))[t];
             let k = 0;
-            for (let draw = 0; draw < READOUT_DRAWS; draw++) {
+            for (let draw = 0; draw < draws; draw++) {
               const seed = seedOf(d, logical, t, draw);
               if (mode === modes[0]) tauSeeds.push(seed);
               const rng = createRng(seed);
@@ -153,12 +158,12 @@ function f2Sweep({ distances, byKey, r, taus, readouts, modes, decoders, seedOf,
                 if (!res.exact) nonExact++;
                 if (res.logicalError) {
                   k++;
-                  target[offset + s] += 1 / READOUT_DRAWS;
+                  target[offset + s] += 1 / draws;
                 }
               }
             }
             rows[mode].k.push(k);
-            rows[mode].n.push(shots.length * READOUT_DRAWS);
+            rows[mode].n.push(shots.length * draws);
           }
           if (first) seeds[file].push(tauSeeds);
         });
@@ -220,9 +225,62 @@ function printF2Summary({ series, taus, tauLog, c2, r, xDigits }) {
   }
 }
 
+function printBudget(budget, g) {
+  console.log(`\nBudget: ${budget.label}; gate (mean of learned classes, d = 3, r = 3) ${g(budget.gate)}`);
+  budget.tau_us.forEach((tau, t) => {
+    console.log(`  tau ${String(tau).padStart(4)}  readout ${g(budget.readout[t])}  idle ${g(budget.idle[t])}  crosstalk ${g(budget.crosstalk[t])}`);
+  });
+}
+
 // Learned rates as written to results: { d3_r3: { space, spaceBoundary, time, diag }, ... }.
 function ratesRecord(rates, r) {
   return Object.fromEntries([...rates].map(([d, c]) => [`d${d}_r${r}`, Object.fromEntries(Object.entries(c).map(([k, v]) => [k, round(v)]))]));
+}
+
+const BUDGET_LABEL = 'error sources per round, per qubit (approximate)';
+const GATE_CLASSES = ['space', 'spaceBoundary', 'time', 'diag'];
+
+// Budget (U4) at every tau of the grid: readout = the empirical assignment error, idle and
+// crosstalk = the parts of readout.idleBreakdown(basis), gate = mean of the four learned
+// edge-class rates (one number). Each entry is a per-round, per-qubit probability.
+export function errorBudget({ taus, readouts, empirical, basis, gateRates }) {
+  if (readouts.length !== taus.length || empirical.length !== taus.length) {
+    throw new Error(`errorBudget: ${taus.length} taus, ${readouts.length} readouts, ${empirical.length} empirical values`);
+  }
+  for (const c of GATE_CLASSES) {
+    if (!Number.isFinite(gateRates?.[c])) throw new Error(`errorBudget: gateRates.${c} missing`);
+  }
+  const parts = readouts.map((ro) => ro.idleBreakdown(basis));
+  return {
+    label: BUDGET_LABEL,
+    tau_us: [...taus],
+    readout: [...empirical],
+    idle: parts.map((p) => round(p.idle)),
+    crosstalk: parts.map((p) => round(p.crosstalk)),
+    gate: round(GATE_CLASSES.reduce((s, c) => s + gateRates[c], 0) / GATE_CLASSES.length),
+    gateClasses: Object.fromEntries(GATE_CLASSES.map((c) => [c, round(gateRates[c])])),
+  };
+}
+
+// Crosstalk scan rates: the scan grid plus the card value if it is not on the grid, ascending.
+export function crosstalkScanRates(grid, cardRate) {
+  const out = [...grid];
+  if (Number.isFinite(cardRate) && !out.includes(cardRate)) out.push(cardRate);
+  return out.sort((a, b) => a - b);
+}
+
+// C1, ion part, per scan entry: an interior tau*_log (not at the grid edge) below tau*_phys.
+export const interiorBelowTauPhys = (tauLog, tauPhys) => !tauLog.atEdge && tauLog.xMin < tauPhys;
+
+// O4: X/Z ratio of bulk detector firing rates from two estimatePGate results. Interval: delta
+// method on ln ratio with binomial counts over detectors x shots (detectors in a shot are
+// correlated, so the interval is too narrow; it is a guide, not a test).
+function o4Ratio(calZ, calX) {
+  const nz = calZ.nDetectors * calZ.nShots;
+  const nx = calX.nDetectors * calX.nShots;
+  const ratio = calX.rate / calZ.rate;
+  const se = Math.sqrt((1 - calX.rate) / (calX.rate * nx) + (1 - calZ.rate) / (calZ.rate * nz));
+  return { ratio: round(ratio), lo: round(ratio * Math.exp(-1.96 * se)), hi: round(ratio * Math.exp(1.96 * se)), rateZ: round(calZ.rate), rateX: round(calX.rate) };
 }
 
 const resultFile = (name, basis) => (basis === 'X' ? name.replace(/\.json$/, '_x.json') : name);
@@ -256,6 +314,29 @@ function stage1({ decoders, basis }) {
     const nTot = c.nDetectors * c.nShots;
     const w = wilson(Math.round(c.rate * nTot), nTot);
     console.log(`  ${file.padEnd(20)} d=${bank.d} r=${bank.r} L${bank.logical}  rate ${interval(w)}  pGate ${fmt(c.p, 6)}`);
+  }
+
+  // O4 (X basis only): X/Z bulk detector-rate ratio per (d, r), L0 + L1 pooled, as in Stage dem.
+  const o4 = [];
+  if (basis === 'X') {
+    let zBanks = [];
+    try {
+      zBanks = loadRepBanks('Z');
+    } catch (e) {
+      if (!(e instanceof UsageError)) throw e;
+    }
+    const pooledCal = (list, d, r) => {
+      const sel = list.filter((b) => b.bank.d === d && b.bank.r === r);
+      return sel.length ? estimatePGate(sel.flatMap((b) => detectorArraysOf(b.bank)), d, r) : null;
+    };
+    const drs = [...new Set(banks.map((b) => `${b.bank.d},${b.bank.r}`))].map((k) => k.split(',').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    for (const [d, r] of drs) {
+      const cz = pooledCal(zBanks, d, r);
+      if (cz) o4.push({ d, r, ...o4Ratio(cz, pooledCal(banks, d, r)) });
+    }
+    console.log('\nO4: X/Z bulk detector-rate ratio, L0 + L1 pooled (delta-method 95% interval, detectors treated as independent)');
+    if (o4.length === 0) console.log('  no Z-basis banks to compare with');
+    for (const o of o4) console.log(`  d = ${o.d} r = ${o.r}: ${o.ratio.toFixed(3)} [${o.lo.toFixed(3)}, ${o.hi.toFixed(3)}]  (Z ${fmt(o.rateZ)}, X ${fmt(o.rateX)})`);
   }
 
   // Banks used by the sweep: d = 3, 5, 7 at r = 3, both logical states.
@@ -391,6 +472,7 @@ function stage1({ decoders, basis }) {
       V6: perLogical,
       softEqualsHard: { bank: used[0].file, epsilon: V1_EPS, decoders, pass: true },
       ...(v11.length ? { V11: { rows: v11, pass: v11.every((v) => v.pass) } } : {}),
+      ...(o4.length ? { O4: { definition: 'bulk detector firing rate (estimatePGate rate, L0 + L1 pooled) X over Z; delta-method interval on ln ratio, detectors treated as independent', rows: o4 } } : {}),
       ...(diagBank ? { V9: { bank: DIAG_BANK, hash: diagHash }, V9L: { bank: DIAG_BANK, hash: diagHashL } } : {}),
     },
     provenance: {
@@ -457,6 +539,13 @@ const V10_BINS = [[0, 1], [1, 2], [2, 4], [4, 8]];
 // Seed of one readout draw: distinct for every (d, logical, tau index, draw), and outside
 // the Stage 1 range. Hard and soft use the same seed, so they see the same readout samples.
 const seedFor2 = (d, logical, tauIndex, draw) => 2000000 + 10000 * d + 1000 * logical + 10 * tauIndex + draw;
+// Crosstalk scan (Stage 2): rates per us if the card has no crosstalk_scan_per_us, distances,
+// R and seeds (the same at every rate, outside the seedFor2 range).
+const XT_RATES = [0, 1e-6, 1e-5, 1e-4, 1e-3];
+const XT_DISTANCES = [3, 5];
+const XT_DRAWS = 2;
+const BOOT_SEED_XT = 2502;
+const seedForXt = (d, logical, tauIndex, draw) => 2500000 + 10000 * d + 1000 * logical + 10 * tauIndex + draw;
 const fieldValue = (card, name) => (card[name] !== null && typeof card[name] === 'object' ? card[name].value : card[name]);
 
 // Poisson CDF P(N <= m; lambda) by direct summation (m is small here: it is at most nTh).
@@ -562,6 +651,49 @@ function stage2({ decoders, basis }) {
 
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
   const c2 = c2Table({ taus, distances, decoders, series });
+  const tauPhysEmp = findMinimum(taus, assignment.empirical, { logX: true });
+
+  // Budget: gate part from the learned rates of the d = 3, r = 3 banks of this basis.
+  const budget = errorBudget({ taus, readouts, empirical: assignment.empirical, basis, gateRates: pooledRates(byKey, 3, STAGE2_R) });
+
+  // Crosstalk scan: learned decoder, d = 3 and 5, R = XT_DRAWS, at every scan rate. Every
+  // rate uses the same seeds (common random numbers), so curves differ only by the rate.
+  const tXt = Date.now();
+  const xtRates = crosstalkScanRates(fieldValue(card, 'crosstalk_scan_per_us') ?? XT_RATES, fieldValue(card, 'crosstalk_rate_per_us'));
+  const xtLearned = new Map(XT_DISTANCES.map((d) => [d, pooledRates(byKey, d, STAGE2_R)]));
+  const xtEntries = [];
+  let xtNonExact = 0;
+  for (const rate of xtRates) {
+    const xtReadouts = taus.map((tau) => createIonReadout(card, tau, { crosstalkRate: rate }));
+    const sw = f2Sweep({
+      distances: XT_DISTANCES, byKey, r: STAGE2_R, taus, readouts: xtReadouts, modes: STAGE2_MODES, decoders: ['learned'],
+      seedOf: seedForXt, cal, rates: xtLearned, basis, draws: XT_DRAWS,
+    });
+    xtNonExact += sw.nonExact;
+    const tl = tauLogTable({ taus, distances: XT_DISTANCES, modes: STAGE2_MODES, decoders: ['learned'], perShot: sw.perShot, bootSeed: BOOT_SEED_XT });
+    for (const s of sw.series) {
+      const m = tl.find((x) => x.d === s.d && x.mode === s.mode);
+      const tauLogXt = { xMin: m.xMin, lo: m.lo, hi: m.hi, atEdge: m.atEdge, fractionAtEdge: m.fractionAtEdge, fractionTied: m.fractionTied };
+      xtEntries.push({
+        rate, d: s.d, mode: s.mode, decoder: 'learned', pL: s.pL, lo: s.lo, hi: s.hi, n: s.n,
+        idleCrosstalk: xtReadouts.map((ro) => round(ro.idleBreakdown(basis).crosstalk)),
+        tauLog: tauLogXt,
+        interiorBelowTauPhys: interiorBelowTauPhys(tauLogXt, tauPhys.xMin),
+        interiorBelowTauPhysResolved: !tauLogXt.atEdge && tauLogXt.hi < tauPhys.xMin,
+      });
+    }
+  }
+  const crosstalkScan = {
+    rates_per_us: xtRates,
+    cardRate_per_us: fieldValue(card, 'crosstalk_rate_per_us'),
+    tauPhys: round(tauPhys.xMin),
+    distances: XT_DISTANCES, modes: STAGE2_MODES, decoder: 'learned', readoutDrawsPerShot: XT_DRAWS, bootstrapB: BOOT_B,
+    seedRule: 'seed = 2500000 + 10000*d + 1000*logical + 10*tauIndex + draw (the same at every rate; hard and soft share it); bootstrap seed 2502 + 10*d + (soft ? 1 : 0)',
+    entries: xtEntries,
+    perRate: xtRates.map((rate) => ({ rate, interiorBelowTauPhys: xtEntries.some((e) => e.rate === rate && e.interiorBelowTauPhys) })),
+    nonExact: xtNonExact,
+    runtime_s: (Date.now() - tXt) / 1000,
+  };
 
   // The per-shot values stay in memory (about 2 MB as JSON); the seeds below reproduce them.
   const runtimeS = (Date.now() - t0) / 1000;
@@ -573,8 +705,11 @@ function stage2({ decoders, basis }) {
     x: { name: 'tau_us', values: taus },
     series,
     assignment,
+    budget,
+    crosstalkScan,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
+      tauPhysEmpirical: { xMin: round(tauPhysEmp.xMin), atEdge: tauPhysEmp.atEdge },
       tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
     },
     params: {
@@ -637,7 +772,19 @@ function stage2({ decoders, basis }) {
   console.log(`tau*_phys without pumping = ${fmt(tauPhysNoPump.xMin, 2)} us${edge(tauPhysNoPump)}`);
   console.log(`\nF2-ion: logical error by tau, r = ${STAGE2_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
   printF2Summary({ series, taus, tauLog, c2, r: STAGE2_R, xDigits: 2 });
-  console.log(`\nnon-exact matchings: ${nonExactTotal}`);
+  printBudget(budget, g);
+  console.log(`\nCrosstalk scan (C1, ion part): learned decoder, d = ${XT_DISTANCES.join(', ')}, R = ${XT_DRAWS}, tau*_phys = ${fmt(tauPhys.xMin, 2)} us, card rate ${g(crosstalkScan.cardRate_per_us)} /us (${crosstalkScan.runtime_s.toFixed(1)} s)`);
+  for (const rate of xtRates) {
+    const es = xtEntries.filter((e) => e.rate === rate);
+    const any = crosstalkScan.perRate.find((p) => p.rate === rate).interiorBelowTauPhys;
+    console.log(`  rate ${rate === 0 ? '0' : g(rate)} /us: interior tau*_log < tau*_phys ${any ? 'EXISTS' : 'none'}`);
+    for (const e of es) {
+      const t = e.tauLog;
+      const where = t.atEdge ? `at grid edge (tau ${t.xMin})` : `${fmt(t.xMin, 2)} us [${fmt(t.lo, 2)}, ${fmt(t.hi, 2)}]`;
+      console.log(`    d = ${e.d} ${e.mode.padEnd(4)}: tau*_log ${where}${e.interiorBelowTauPhys ? ' < tau*_phys' : ''}${e.interiorBelowTauPhysResolved ? ' (beyond bootstrap interval)' : ''}  pL ${e.pL.map((p) => fmt(p)).join(' ')}`);
+    }
+  }
+  console.log(`\nnon-exact matchings: ${nonExactTotal} (crosstalk scan: ${xtNonExact})`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
 
@@ -762,6 +909,9 @@ function stage3({ decoders, basis }) {
   // C2: soft at or below hard at every tau (pooled counts; intervals overlap = not resolved).
   const c2 = c2Table({ taus, distances, decoders, series });
 
+  // Budget: gate part from the learned rates of the d = 3, r = 3 banks of this basis.
+  const budget = errorBudget({ taus, readouts, empirical: assignment.empirical, basis, gateRates: pooledRates(byKey, 3, STAGE3_R) });
+
   const runtimeS = (Date.now() - t0) / 1000;
   const result = {
     schema: 's2s-results/1',
@@ -771,8 +921,10 @@ function stage3({ decoders, basis }) {
     x: { name: 'tau_us', values: taus },
     series,
     assignment,
+    budget,
     optima: {
       tauPhys: { xMin: round(tauPhys.xMin), atEdge: tauPhys.atEdge },
+      tauPhysEmpirical: { xMin: round(tauPhysEmp.xMin), atEdge: tauPhysEmp.atEdge },
       tauLog: tauLog.map(({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied }) => ({ d, mode, decoder, xMin, lo, hi, atEdge, fractionAtEdge, fractionTied })),
     },
     params: {
@@ -841,6 +993,7 @@ function stage3({ decoders, basis }) {
   console.log(`tau*_phys from the empirical curve = ${fmt(tauPhysEmp.xMin, 3)} us${edge(tauPhysEmp)}`);
   console.log(`\nF2-sc: logical error by tau, r = ${STAGE3_R}, basis ${basis}, L0 + L1 pooled, R = ${READOUT_DRAWS} draws per shot (n = ${series[0].n[0]} per point)`);
   printF2Summary({ series, taus, tauLog, c2, r: STAGE3_R, xDigits: 3 });
+  printBudget(budget, g);
   console.log(`\nnon-exact matchings: ${nonExactTotal}`);
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
@@ -1420,11 +1573,7 @@ function stageDem() {
   for (const gz of groups.filter((g) => g.basis === 'Z')) {
     const gx = groups.find((g) => g.basis === 'X' && g.d === gz.d && g.r === gz.r);
     if (!gx) continue;
-    const nz = gz.cal.nDetectors * gz.cal.nShots;
-    const nx = gx.cal.nDetectors * gx.cal.nShots;
-    const ratio = gx.cal.rate / gz.cal.rate;
-    const se = Math.sqrt((1 - gx.cal.rate) / (gx.cal.rate * nx) + (1 - gz.cal.rate) / (gz.cal.rate * nz));
-    ratioXoverZ.push({ d: gz.d, r: gz.r, ratio: round(ratio), lo: round(ratio * Math.exp(-1.96 * se)), hi: round(ratio * Math.exp(1.96 * se)), rateZ: round(gz.cal.rate), rateX: round(gx.cal.rate) });
+    ratioXoverZ.push({ d: gz.d, r: gz.r, ...o4Ratio(gz.cal, gx.cal) });
   }
 
   // V12b out of sample: rates (learned) and pGate (naive) from one logical state's bank decode
@@ -1603,10 +1752,16 @@ function main() {
   run({ decoders, basis: opts.basis ?? 'Z' });
 }
 
-try {
-  main();
-} catch (e) {
-  if (!(e instanceof UsageError)) throw e;
-  console.error(`sweep.mjs: ${e.message}\n${USAGE}`);
-  process.exit(1);
+// Run only as a script, so tests can import the exported helpers without starting a stage.
+const self = fileURLToPath(import.meta.url);
+const invoked = process.argv[1] ? resolve(process.argv[1]) : '';
+const isMain = process.platform === 'win32' ? self.toLowerCase() === invoked.toLowerCase() : self === invoked;
+if (isMain) {
+  try {
+    main();
+  } catch (e) {
+    if (!(e instanceof UsageError)) throw e;
+    console.error(`sweep.mjs: ${e.message}\n${USAGE}`);
+    process.exit(1);
+  }
 }
