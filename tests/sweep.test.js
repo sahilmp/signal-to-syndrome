@@ -593,3 +593,42 @@ test('applyOverrides: --set T2_us=25 on a copy; unknown keys refused; card check
   assert.doesNotThrow(() => createScReadout(applyOverrides(scCard, ['T2_us=100']).card, 0.5));
   assert.throws(() => createScReadout(applyOverrides(scCard, ['T2_us=100.5']).card, 0.5), /exceeds 2 \* T1_us/);
 });
+
+// ---- tools/sweep.mjs helpers (CC-A21): Stage holdout, V18 ----
+
+const { parseHeldoutName, holdoutTrainingFiles, holdoutTraining, v18Verdict } = await import('../tools/sweep.mjs');
+
+// Catches: fails if a held-out bank reaches ratesFromBanks or estimatePGate in Stage holdout:
+// the training files must be the original L0/L1 names (never an _h suffix), holdoutTraining must
+// pass only the banks it was given to ratesFromBanks and (through detectorArraysOf) to
+// estimatePGate, and it must refuse a held-out bank by name or by directory.
+test('holdout: nothing is learned from a held-out bank', () => {
+  assert.deepEqual(holdoutTrainingFiles(5, 3), ['rep_d5_r3_L0.json', 'rep_d5_r3_L1.json']);
+  for (const f of holdoutTrainingFiles(3, 3)) assert.equal(parseHeldoutName(f), null);
+  assert.deepEqual(parseHeldoutName('rep_d5_r3_L1_h4.json'), { d: 5, r: 3, L: 1, h: 4 });
+  const train = [0, 1].map((L) => ({ file: `rep_d3_r3_L${L}.json`, bank: cleanBank(3, 3, L, 10) }));
+  const seen = { rates: [], det: [] };
+  const deps = {
+    ratesFromBanks: (banks) => { seen.rates.push(...banks); return { classes: { space: 0.01, spaceBoundary: 0.01, time: 0.01, diag: 0.01 } }; },
+    detectorArraysOf: (bank) => { seen.det.push(bank); return []; },
+    estimatePGate: () => ({ p: 0.01 }),
+  };
+  const out = holdoutTraining(train, 3, 3, deps);
+  assert.equal(out.pGate, 0.01);
+  assert.deepEqual(seen.rates, train.map((b) => b.bank));
+  assert.deepEqual(seen.det, train.map((b) => b.bank));
+  const held = { file: 'rep_d3_r3_L0_h1.json', bank: cleanBank(3, 3, 0, 10) };
+  assert.throws(() => holdoutTraining([train[0], held], 3, 3, deps), /held-out bank rep_d3_r3_L0_h1\.json/);
+  assert.throws(() => holdoutTraining([{ file: 'data/banks/heldout/rep_d3_r3_L0.json', bank: train[0].bank }], 3, 3, deps), /held-out/);
+});
+
+// Catches: fails if V18 passes on clause 1 alone, if clause 2 uses overlapping intervals or the
+// d = 3 row, or if clause 1 is not required at every row. Boundary for clause 2: learned.hi
+// equal to naive.lo is not "beyond" (fail); 1e-5 below it is (pass).
+test('v18Verdict: the V12(b) two-clause rule; clause 1 alone is not a pass', () => {
+  const row = (d, nk, nlo, lk, lhi) => ({ d, naive: { k: nk, lo: nlo }, learned: { k: lk, hi: lhi } });
+  assert.deepEqual(v18Verdict([row(3, 10, 0.001, 9, 0.01), row(5, 20, 0.002, 9, 0.002)]), { clause1: true, clause2: false, verdict: 'fail' });
+  assert.deepEqual(v18Verdict([row(3, 10, 0.001, 9, 0.01), row(5, 20, 0.002, 9, 0.002 - 1e-5)]), { clause1: true, clause2: true, verdict: 'pass' });
+  assert.deepEqual(v18Verdict([row(3, 10, 0.001, 11, 0.01), row(5, 20, 0.002, 9, 0.001)]), { clause1: false, clause2: true, verdict: 'fail' });
+  assert.equal(v18Verdict([row(3, 10, 0.5, 1, 0.1)]).verdict, 'fail'); // no d = 5 row
+});

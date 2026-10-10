@@ -490,3 +490,25 @@ Near the optima: ion readout 4.8e-3, 5.7e-4, 9.3e-4 at 10, 20, 50 µs (idle ≤ 
 - A44/A45 Stage 2 rerun: ion d = 7 learned (100% tie): **UNRESOLVED**, as already stated there. The A48 file confirms it (`stage2_ion.json` learned d = 7 hard 54.8 [44.7, 70.7], soft 27.4 [22.4, 86.6], both 100% tied).
 - A48 Stage 2, X basis (`stage2_ion_x.json` → `optima.tauLog`): learned d = 5 hard 31.6 [27.4, 44.7] and soft 22.4 [22.4, 31.6], learned d = 7 hard 38.7 and soft 44.7, naive d = 5 hard 17.3 and naive d = 7 hard 54.8 are all ≥ 98% tied: **UNRESOLVED**.
 - v1 Stage 2 and Stage 3 tables: no row reaches 50% (unchanged).
+
+## V18 and F1 out of sample (A53b, CC-A21, Sun 11 Oct 00:43 IST)
+
+Source: `data/results/holdout.json` (`node tools/sweep.mjs --stage holdout`). Design: DECISIONS E11, written and committed (b231184) before any held-out bank existed. All 12 planned held-out banks were used (`params.banksUsed`: d5 r3 5 of 5 per logical state, d3 r3 1 of 1). Naive pGate and learned rates come only from the original `rep_d3_r3_L0/L1` and `rep_d5_r3_L0/L1` banks; a test (`tests/sweep.test.js`, "nothing is learned from a held-out bank") fails if a held-out bank reaches `ratesFromBanks` or `estimatePGate`.
+
+### V18: pass (`setting1`; flat ε = 0.02, hard, R = 1, both decoders on the same seed)
+
+| d, r (pooled L0 + L1) | n | naive pL [Wilson] (cluster) | learned pL [Wilson] (cluster) | k naive → learned | paired learned − naive |
+|---|---|---|---|---|---|
+| 3, 3 | 8000 | 0.00988 [0.00793, 0.01229] ([0.00743, 0.01200]) | 0.00813 [0.00638, 0.01034] ([0.00613, 0.01013]) | 79 → 65 | −0.00175 [−0.00319, −0.00038] |
+| 5, 3 | 40 000 | 0.00175 [0.00139, 0.00221] ([0.00135, 0.00211]) | 0.00093 [0.00067, 0.00127] ([0.00063, 0.00122]) | 70 → 37 | −0.00083 [−0.00123, −0.00050] |
+
+- **Verdict (the V12(b) two-clause rule, unchanged):** clause 1, learned ≤ naive at every (d, r): holds. Clause 2, learned below naive beyond the Wilson intervals at d = 5: holds (0.00127 < 0.00139; the margin is narrow, and the cluster intervals agree: 0.00122 < 0.00135). **V18 passes.**
+- **Paired (an addition, does not change the verdict):** learned − naive is below 0 beyond the paired interval at both distances, and in each of the four (d, L) rows at d = 5 and at d3 L0 (d3 L1: −0.0015 [−0.0038, +0.0008]).
+- **Consequences:** V18 replaces V12(b) next to every naive/learned comparison (team checklist 2.1); the SP5 cut is lifted (DECISIONS, Person A section, Sun 11 Oct 00:45); HANDOFF N11 to Person B.
+- **Changed from v2 (A45):** the in-sample V12(b) failed clause 2 because it had too few errors at d = 5 (13 → 7 and 20 → 9 in 8000 shots, E4); with 40 000 held-out shots the halving is resolved.
+
+### F1 out of sample (`setting2`; ion card, Z basis, Stage 2 τ grid, d = 3 and 5, hard and soft, R = 4)
+
+- Soft worse than hard beyond the paired cluster interval: **naive 13 of 26 points, learned 0 of 26** (`setting2.softWorseCount`). The naive points are d = 3 at τ = 5–500 µs and d = 5 at τ = 100, 200, 500 µs (`softWorsePoints`).
+- d = 3, τ = 20 µs (`series`, cluster intervals): naive soft 0.01019 [0.00794, 0.01233] against hard 0.00491 [0.00345, 0.00642], paired soft − hard +0.0053 [+0.0037, +0.0071]; learned soft 0.00381 [0.00256, 0.00513] against hard 0.00372 [0.00242, 0.00505], paired +0.0001 [−0.0003, +0.0005].
+- **F1 is now out of sample:** the in-sample pattern (naive soft loses, learned soft does not; "Finding F1" above) holds on banks from new simulator seeds, decoded with rates learned elsewhere. It is still post hoc (not pre-registered), and it is shown for the ion card only.

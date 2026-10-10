@@ -11,6 +11,9 @@
 //                                    budgetAtOptimum only.
 //   node tools/sweep.mjs --stage dem learned edge rates, out-of-sample check (V12b) and naive
 //                                    against learned decoding; writes data/results/dem_forte1.json
+//   node tools/sweep.mjs --stage holdout   V18 (learned against naive on the held-out banks in
+//                                    data/banks/heldout/, rates and pGate from the original banks only)
+//                                    and F1 out of sample; writes data/results/holdout.json
 //   node tools/sweep.mjs --diag      prints only the V9 fingerprint of data/banks/rep_d3_r3_L0.json
 //   node tools/sweep.mjs --diag --decoder learned   prints only the V9L fingerprint
 //
@@ -2220,9 +2223,246 @@ function stageDem() {
   console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
 }
 
+// ---- Stage holdout: V18 and F1 out of sample (CC-A21, DECISIONS E11) ----
+
+const HELDOUT_DIR = 'data/banks/heldout';
+const HOLDOUT_FILE = 'holdout.json';
+const HOLDOUT_D = [3, 5];
+const HOLDOUT_R = 3;
+const HOLDOUT_EPS = 0.02; // setting 1 = the V12(b) setting: flat epsilon, hard, R = 1
+const HOLDOUT_DRAWS_F1 = 4; // setting 2: R readout draws per quantum shot
+const HOLDOUT_PLANNED = { 3: 1, 5: 5 }; // held-out banks per (d, L) in the E11 design
+const HELDOUT_NAME = /^rep_d(\d+)_r(\d+)_L(\d)_h(\d+)\.json$/;
+// Seeds (both decoders share them; hard and soft share them in setting 2):
+const seedForHoldout1 = (d, L, h) => 6100000 + 10000 * d + 1000 * L + 10 * h;
+const seedForHoldout2 = (d, L, h, tauIndex, draw) => 6200000 + 100000 * h + 10000 * d + 1000 * L + 10 * tauIndex + draw;
+const HOLDOUT_CLUSTER_SEED = 6900000;
+
+// Held-out bank file name -> { d, r, L, h }, or null for any other name.
+export function parseHeldoutName(file) {
+  const m = HELDOUT_NAME.exec(file);
+  return m ? { d: Number(m[1]), r: Number(m[2]), L: Number(m[3]), h: Number(m[4]) } : null;
+}
+
+// Training files of (d, r): the original L0 and L1 banks in data/banks/, never a held-out name.
+export const holdoutTrainingFiles = (d, r) => [0, 1].map((L) => `rep_d${d}_r${r}_L${L}.json`);
+
+// Noise models for one (d, r) from the ORIGINAL banks only: naive pGate = estimatePGate of the
+// pooled L0 + L1 detectors, learned rates = ratesFromBanks(L0, L1). Throws if a held-out bank
+// (by file name or directory) is passed. deps is injectable so a test can watch what reaches
+// ratesFromBanks and estimatePGate.
+export function holdoutTraining(trainBanks, d, r, deps = { ratesFromBanks, estimatePGate, detectorArraysOf }) {
+  for (const { file } of trainBanks) {
+    if (parseHeldoutName(file.split(/[\\/]/).pop()) || /heldout/.test(file)) throw new Error(`holdoutTraining: held-out bank ${file} must never feed a rate`);
+  }
+  const banks = trainBanks.map((b) => b.bank);
+  const det = banks.flatMap((b) => deps.detectorArraysOf(b));
+  return { pGate: deps.estimatePGate(det, d, r).p, rates: deps.ratesFromBanks(banks).classes };
+}
+
+// Per-shot failure counts (0..draws) of one bank: seedOf(draw) seeds each pass over the shots.
+function failCountsOf(bank, shots, { readout, mode, noise, seedOf, draws }) {
+  const fails = new Uint8Array(shots.length);
+  let nonExact = 0;
+  for (let draw = 0; draw < draws; draw++) {
+    const rng = createRng(seedOf(draw));
+    for (let s = 0; s < shots.length; s++) {
+      const res = decodeShot({ shotBits: shots[s], layout: bank.layout, d: bank.d, r: bank.r, readout, mode, noise, basis: bank.basis ?? 'Z', rng, logical: bank.logical });
+      if (!res.exact) nonExact++;
+      fails[s] += res.logicalError;
+    }
+  }
+  return { fails, nonExact };
+}
+
+const concatU8 = (parts) => {
+  const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+};
+
+// k, n, Wilson and cluster interval of pooled failure counts (R draws per shot).
+function rateSummary(fails, R, seed) {
+  let k = 0;
+  for (const f of fails) k += f;
+  const n = fails.length * R;
+  const w = wilson(k, n);
+  const c = clusterBootstrapRate(fails, R, CLUSTER_B, createRng(seed));
+  return { k, n, pL: round(w.p), lo: round(w.lo), hi: round(w.hi), loCluster: round(c.lo), hiCluster: round(c.hi) };
+}
+
+const pairedSummary = (a, b, R, seed) => {
+  const p = pairedClusterDiff(a, b, R, CLUSTER_B, createRng(seed));
+  return { diff: round(p.diff), lo: round(p.lo), hi: round(p.hi) };
+};
+
+// V18: the V12(b) two-clause rule (team checklist Section 1.3) on rows pooled per (d, r):
+// clause 1 learned k <= naive k at every row; clause 2 learned below naive beyond the Wilson
+// intervals (learned.hi < naive.lo) at every d = 5 row. Clause 1 alone is not a pass.
+export function v18Verdict(pooled) {
+  const clause1 = pooled.every((row) => row.learned.k <= row.naive.k);
+  const d5 = pooled.filter((row) => row.d === 5);
+  const clause2 = d5.length > 0 && d5.every((row) => row.learned.hi < row.naive.lo);
+  return { clause1, clause2, verdict: clause1 && clause2 ? 'pass' : 'fail' };
+}
+
+function stageHoldout() {
+  const t0 = Date.now();
+  if (!existsSync(HELDOUT_DIR)) throw new UsageError(`${HELDOUT_DIR} not found: assemble the held-out banks first (team checklist A53b)`);
+  const heldout = readdirSync(HELDOUT_DIR).map((file) => ({ file, meta: parseHeldoutName(file) })).filter((x) => x.meta)
+    .map(({ file, meta }) => {
+      const bank = JSON.parse(readFileSync(join(HELDOUT_DIR, file), 'utf8'));
+      validateBank(bank);
+      if (bank.d !== meta.d || bank.r !== meta.r || bank.logical !== meta.L || (bank.basis ?? 'Z') !== 'Z') throw new Error(`${file}: d, r, logical or basis disagree with the file name`);
+      return { file, ...meta, bank, shots: expandShots(bank) };
+    })
+    .filter((b) => b.r === HOLDOUT_R && HOLDOUT_D.includes(b.d))
+    .sort((a, b) => a.d - b.d || a.L - b.L || a.h - b.h);
+  if (heldout.length === 0) throw new UsageError(`no held-out banks in ${HELDOUT_DIR}`);
+
+  // Training: the original banks only.
+  const training = new Map();
+  const trainedOn = [];
+  for (const d of HOLDOUT_D) {
+    const files = holdoutTrainingFiles(d, HOLDOUT_R);
+    trainedOn.push(...files);
+    training.set(d, holdoutTraining(files.map((file) => ({ file, bank: loadBank(file) })), d, HOLDOUT_R));
+  }
+  const noiseOf = (decoder, d) => noiseFor(decoder, training.get(d).pGate, training.get(d).rates);
+  let nonExact = 0;
+  const banksUsed = {};
+  for (const d of HOLDOUT_D) for (const L of [0, 1]) banksUsed[`d${d}_L${L}`] = { used: heldout.filter((b) => b.d === d && b.L === L).length, planned: HOLDOUT_PLANNED[d] };
+
+  // Setting 1 (V18): flat eps = 0.02, hard, R = 1, both decoders on the same seed per bank.
+  const flat = createFlatReadout({ epsilon: HOLDOUT_EPS });
+  const fail1 = new Map(); // "decoder,d,L" -> Uint8Array over the (d, L) banks in h order
+  for (const decoder of ['naive', 'learned']) {
+    for (const d of HOLDOUT_D) {
+      for (const L of [0, 1]) {
+        const parts = heldout.filter((b) => b.d === d && b.L === L).map((b) => {
+          const res = failCountsOf(b.bank, b.shots, { readout: flat, mode: 'hard', noise: noiseOf(decoder, d), seedOf: () => seedForHoldout1(d, L, b.h), draws: 1 });
+          nonExact += res.nonExact;
+          return res.fails;
+        });
+        fail1.set(`${decoder},${d},${L}`, concatU8(parts));
+      }
+    }
+  }
+  // Cluster seed per (d, L) (L = 2: pooled); the same for both decoders (common random numbers).
+  const cs = (d, L) => HOLDOUT_CLUSTER_SEED + 10000 * d + 1000 * L;
+  const rows = [];
+  for (const d of HOLDOUT_D) {
+    for (const L of [0, 1]) {
+      const nv = fail1.get(`naive,${d},${L}`);
+      const ln = fail1.get(`learned,${d},${L}`);
+      if (nv.length === 0) continue;
+      rows.push({ d, r: HOLDOUT_R, L, banks: heldout.filter((b) => b.d === d && b.L === L).length, naive: rateSummary(nv, 1, cs(d, L)), learned: rateSummary(ln, 1, cs(d, L)), paired: pairedSummary(ln, nv, 1, cs(d, L) + 10) });
+    }
+  }
+  const pooled = [];
+  for (const d of HOLDOUT_D) {
+    const nv = concatU8([0, 1].map((L) => fail1.get(`naive,${d},${L}`)));
+    const ln = concatU8([0, 1].map((L) => fail1.get(`learned,${d},${L}`)));
+    if (nv.length === 0) continue;
+    const row = { d, r: HOLDOUT_R, naive: rateSummary(nv, 1, cs(d, 2)), learned: rateSummary(ln, 1, cs(d, 2)), paired: pairedSummary(ln, nv, 1, cs(d, 2) + 10) };
+    row.learnedAtOrBelowNaive = row.learned.k <= row.naive.k;
+    row.learnedBelowBeyondIntervals = row.learned.hi < row.naive.lo;
+    pooled.push(row);
+  }
+  const V18 = v18Verdict(pooled);
+
+  // Setting 2 (F1 out of sample): ion card, Z basis, the Stage 2 tau grid, d = 3 and 5, hard and
+  // soft (shared draws), both decoders (shared seeds), R = 4, pooled over every held-out bank of d.
+  const ionCard = JSON.parse(readFileSync(ION_PARAMS, 'utf8'));
+  const taus = fieldValue(ionCard, 'tau_grid_us');
+  const readouts = taus.map((tau) => createIonReadout(ionCard, tau));
+  const series = [];
+  const paired2 = [];
+  const softWorseCount = { naive: 0, learned: 0 };
+  const softWorsePoints = { naive: [], learned: [] };
+  for (const decoder of ['naive', 'learned']) {
+    for (const d of HOLDOUT_D) {
+      const banksD = heldout.filter((b) => b.d === d);
+      const byMode = { hard: [], soft: [] };
+      taus.forEach((tau, t) => {
+        for (const mode of STAGE2_MODES) {
+          byMode[mode].push(concatU8(banksD.map((b) => {
+            const res = failCountsOf(b.bank, b.shots, { readout: readouts[t], mode, noise: noiseOf(decoder, d), seedOf: (draw) => seedForHoldout2(d, b.L, b.h, t, draw), draws: HOLDOUT_DRAWS_F1 });
+            nonExact += res.nonExact;
+            return res.fails;
+          })));
+        }
+      });
+      for (const mode of STAGE2_MODES) {
+        const sums = byMode[mode].map((f, t) => rateSummary(f, HOLDOUT_DRAWS_F1, HOLDOUT_CLUSTER_SEED + 500000 + 10000 * d + 1000 * modeIndex(mode) + t));
+        series.push({ d, r: HOLDOUT_R, mode, decoder, pL: sums.map((x) => x.pL), lo: sums.map((x) => x.lo), hi: sums.map((x) => x.hi), loCluster: sums.map((x) => x.loCluster), hiCluster: sums.map((x) => x.hiCluster), n: sums.map((x) => x.n) });
+      }
+      taus.forEach((x, t) => {
+        const p = pairedSummary(byMode.soft[t], byMode.hard[t], HOLDOUT_DRAWS_F1, HOLDOUT_CLUSTER_SEED + 600000 + 10000 * d + t);
+        const softWorse = p.lo > 0;
+        if (softWorse) {
+          softWorseCount[decoder]++;
+          softWorsePoints[decoder].push({ d, x });
+        }
+        paired2.push({ kind: 'softMinusHard', decoder, d, x, ...p, softWorseBeyondInterval: softWorse });
+      });
+    }
+  }
+
+  const runtimeS = (Date.now() - t0) / 1000;
+  const result = {
+    schema: 's2s-results/1',
+    stage: 'holdout',
+    trainedOn,
+    heldout: heldout.map((b) => ({ file: b.file, d: b.d, L: b.L, h: b.h, seed: b.bank.sampler_seed ?? null, shots: b.shots.length, job_id: b.bank.job_id ?? 'unknown' })),
+    setting1: { readout: 'flat', epsilon: HOLDOUT_EPS, mode: 'hard', readoutDrawsPerShot: 1, rows, pooled, V18 },
+    setting2: { platform: ION, basis: 'Z', x: { name: 'tau_us', values: taus }, distances: HOLDOUT_D, readoutDrawsPerShot: HOLDOUT_DRAWS_F1, series, paired: paired2, softWorseCount, softWorsePoints, pointsPerDecoder: taus.length * HOLDOUT_D.length },
+    params: {
+      banksUsed,
+      banksUsedNote: Object.values(banksUsed).every((b) => b.used === b.planned) ? 'all planned held-out banks used (DECISIONS E11)' : 'fewer held-out banks than planned (DECISIONS E11)',
+      training: 'naive pGate = estimatePGate of the original L0 + L1 banks pooled; learned rates = ratesFromBanks(original L0, L1); no held-out bank feeds a rate',
+      learnedRates: Object.fromEntries(HOLDOUT_D.map((d) => [`d${d}_r${HOLDOUT_R}`, roundObj(training.get(d).rates)])),
+      pGate: Object.fromEntries(HOLDOUT_D.map((d) => [`d${d}_r${HOLDOUT_R}`, round(training.get(d).pGate)])),
+      card: ionCard,
+      V18rule: 'V12(b) two-clause rule (team checklist Section 1.3) on the pooled rows: clause 1 learned k <= naive k at every (d, r); clause 2 learned.hi < naive.lo (Wilson) at d = 5. The paired difference learned - naive is reported beside it and does not change the verdict',
+      intervals: 'Wilson 95% (lo, hi); cluster bootstrap over quantum shots, B = 500 (loCluster, hiCluster); paired cluster bootstrap (paired)',
+    },
+    provenance: {
+      tool: 'tools/sweep.mjs --stage holdout',
+      commit: gitCommit(),
+      date: new Date().toISOString(),
+      node: process.version,
+      params: ION_PARAMS,
+      seedRule: 'setting 1: seed = 6100000 + 10000*d + 1000*L + 10*h (both decoders); setting 2: seed = 6200000 + 100000*h + 10000*d + 1000*L + 10*tauIndex + draw (both decoders, hard and soft); cluster seeds from 6900000',
+      nonExact,
+      runtime_s: runtimeS,
+    },
+  };
+  const out = join(RESULTS_DIR, HOLDOUT_FILE);
+  writeResult(out, result);
+
+  const w3 = (o) => `${fmt(o.pL)} [${fmt(o.lo)}, ${fmt(o.hi)}] cluster [${fmt(o.loCluster)}, ${fmt(o.hiCluster)}] (k ${o.k} of ${o.n})`;
+  console.log(`Stage holdout: ${heldout.length} held-out banks; trained on ${trainedOn.join(', ')}`);
+  for (const [key, b] of Object.entries(banksUsed)) console.log(`  ${key}: ${b.used} of ${b.planned} planned`);
+  console.log(`\nSetting 1 (V18): flat eps ${HOLDOUT_EPS}, hard, R = 1`);
+  for (const r of rows) console.log(`  d = ${r.d} L${r.L} (${r.banks} banks): naive ${w3(r.naive)}\n                  learned ${w3(r.learned)}  paired ${r.paired.diff.toExponential(2)} [${r.paired.lo.toExponential(2)}, ${r.paired.hi.toExponential(2)}]`);
+  console.log('  pooled L0 + L1:');
+  for (const r of pooled) console.log(`  d = ${r.d}: naive ${w3(r.naive)}\n         learned ${w3(r.learned)}  paired ${r.paired.diff.toExponential(2)} [${r.paired.lo.toExponential(2)}, ${r.paired.hi.toExponential(2)}]  ${r.learnedBelowBeyondIntervals ? 'learned below beyond intervals' : r.learnedAtOrBelowNaive ? 'learned <= naive' : 'learned ABOVE naive'}`);
+  console.log(`V18: clause 1 ${V18.clause1 ? 'holds' : 'FAILS'}, clause 2 ${V18.clause2 ? 'holds' : 'FAILS'} -> ${V18.verdict.toUpperCase()}`);
+  console.log(`\nSetting 2 (F1 out of sample): ion card, Z, R = ${HOLDOUT_DRAWS_F1}; soft worse than hard beyond the paired interval: naive ${softWorseCount.naive} of ${taus.length * HOLDOUT_D.length}, learned ${softWorseCount.learned} of ${taus.length * HOLDOUT_D.length}`);
+  for (const s of series) console.log(`  ${s.decoder.padEnd(7)} d = ${s.d} ${s.mode.padEnd(4)}: ${s.pL.map((p) => fmt(p)).join(' ')}`);
+  console.log(`  tau grid: ${taus.join(' ')}`);
+  console.log(`\nnon-exact matchings: ${nonExact}`);
+  console.log(`wrote ${out} (runtime ${runtimeS.toFixed(1)} s)`);
+}
+
 const USAGE = 'usage: node tools/sweep.mjs --stage 1 | 2 | 3 | 4 [--decoder naive | learned | both] [--basis Z | X]\n'
   + '       stages 1-3: [--out <file>]; stages 2-3: [--set key=value ...]; stage 3: [--dense] (--set and --dense need --out)\n'
-  + '       node tools/sweep.mjs --stage dem\n'
+  + '       node tools/sweep.mjs --stage dem | holdout\n'
   + '       node tools/sweep.mjs --diag [--decoder naive | learned | both]';
 
 function parseArgs(argv) {
@@ -2240,8 +2480,9 @@ function parseArgs(argv) {
   if (opts.decoder !== null && !['naive', 'learned', 'both'].includes(opts.decoder)) throw new UsageError(`--decoder must be naive, learned or both, got ${opts.decoder}`);
   if (opts.basis !== null && !['Z', 'X'].includes(opts.basis)) throw new UsageError(`--basis must be Z or X, got ${opts.basis}`);
   if (opts.diag === (opts.stage !== null)) throw new UsageError('give exactly one of --stage or --diag');
-  if (opts.stage !== null && !['1', '2', '3', '4', 'dem'].includes(opts.stage)) throw new UsageError(`unknown stage ${opts.stage}`);
+  if (opts.stage !== null && !['1', '2', '3', '4', 'dem', 'holdout'].includes(opts.stage)) throw new UsageError(`unknown stage ${opts.stage}`);
   if (opts.diag && opts.basis !== null) throw new UsageError(`--diag reads ${DIAG_BANK} (Z basis) only; drop --basis`);
+  if (opts.stage === 'holdout' && (opts.decoder !== null || opts.basis !== null)) throw new UsageError('--stage holdout always runs both decoders on the Z-basis held-out banks; drop --decoder and --basis');
   if (opts.stage === 'dem' && (opts.decoder !== null || opts.basis !== null)) throw new UsageError('--stage dem always runs both decoders on every available basis; drop --decoder and --basis');
   if (opts.out !== null && !['1', '2', '3'].includes(opts.stage)) throw new UsageError('--out is available for --stage 1, 2 and 3 only');
   if (opts.set.length && !['2', '3'].includes(opts.stage)) throw new UsageError('--set overrides the ion or superconducting card: --stage 2 or 3 only');
@@ -2264,6 +2505,10 @@ function main() {
     } else {
       console.log(diagnostic(bank, { decoder }));
     }
+    return;
+  }
+  if (opts.stage === 'holdout') {
+    stageHoldout();
     return;
   }
   if (opts.stage === 'dem') {
