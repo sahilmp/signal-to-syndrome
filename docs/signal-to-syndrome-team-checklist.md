@@ -726,12 +726,12 @@ Run `npm test`, `node tools/sweep.mjs --stage 4`, `node tools/sweep.mjs --stage 
 ```
 
 **Pass:** tests pass; both files written.
-- [ ] Done
+- [x] Done
 
 ### A51 · TERMINAL · VERIFY · GIT · Sat 22:00 — Check Stage 4 (provisional) and hand over
 
 **Do:** hand-check V15 for one point per arm; read every conclusion; make sure no automated verdict contradicts your reading without a note. Commit `src\core\metrics.js tests\metrics.test.js tools\sweep.mjs params\cycle.json data\results DECISIONS.md`, push, send `HANDOFF N7` with the words "provisional: format final, numbers replaced at A53c".
-- [ ] Done
+- [x] Done
 
 ### A52 · CLAUDE CODE · TERMINAL · Sat 23:00 — CC-A19: cluster and paired statistics, `shiftDelta`, dense grid, C6 variant; start the overnight runs
 

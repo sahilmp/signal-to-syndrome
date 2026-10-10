@@ -401,13 +401,13 @@ node tools/sweep.mjs --stage 4 --basis X
 ```
 
 **Pass:** tests pass; both Stage 4 files written with `framing`, `tradeoff`, `budgetAtOptimum`, sensitivity `effect` and `conclusions` C1–C6, O4.
-- [ ] Done
+- [x] Done
 
 ### A51 · A · Sat 22:00 — VERIFY V15 (provisional); hand over N7
 
 **Do:** hand-check one trade-off point per arm: rounds per second = 10⁶ / T_cyc(µs), with T_cyc = layers × t₂q + τ + t_reset; error per round = ½[1 − (1 − 2p_L)^(1/r)]. Compare with `stage4_comparison.json`. Push; send `HANDOFF N7` marked "provisional: format final, numbers replaced at A53c".
 **Pass:** both points agree to 3 significant figures.
-- [ ] Done
+- [x] Done
 
 ---
 
