@@ -209,3 +209,44 @@ test('comparisonSentence: factor, worse case and zero errors', () => {
   assert.match(comparisonSentence(row(10, 20)), /: 2 times more logical errors\./);
   assert.match(comparisonSentence(row(5, 0)), /no logical error in 1000 shots/);
 });
+
+// ---- CC-B21 item 3: the soft-against-hard reversal leads the numbers of step 3 ----
+import { reversalNumbers, reversalText, reversalClause, REVERSAL } from '../src/ui/learnnoise.js';
+import stage2v2 from '../data/results/stage2_ion_v2b.json' with { type: 'json' };
+
+// Catches: fails if the first number of step 3 is not the trapped-ion d = 3, tau = 20 µs soft
+// minus hard difference for both decoders, if it is read from the in-sample file while the
+// held-out one is present (or is not labelled "in sample" when it falls back), or if a decoder's
+// row is taken from another d, tau, decoder or comparison kind. Values read from the files.
+test('step 3: the reversal comes from holdout setting2, else from stage2v2 labelled in sample', () => {
+  assert.deepEqual(REVERSAL, { d: 3, tau: 20 });
+  const row = (paired, decoder) => paired.find((p) => p.kind === 'softMinusHard' && p.decoder === decoder && p.d === 3 && p.x === 20);
+  const held = reversalNumbers(holdout, stage2v2);
+  assert.equal(held.inSample, false);
+  for (const dec of ['naive', 'learned']) {
+    const r = row(holdout.setting2.paired, dec);
+    assert.deepEqual(held[dec], { diff: r.diff, lo: r.lo, hi: r.hi });
+  }
+  const fallback = reversalNumbers(null, stage2v2);
+  assert.equal(fallback.inSample, true);
+  for (const dec of ['naive', 'learned']) {
+    const r = row(stage2v2.paired, dec);
+    assert.deepEqual(fallback[dec], { diff: r.diff, lo: r.lo, hi: r.hi });
+  }
+  assert.match(reversalText(fallback).label, /^In sample \(rates learned from the same stored shots\)/);
+  assert.match(reversalText(held).label, /^Held-out circuits/);
+  assert.equal(reversalNumbers(null, null), null);
+});
+
+// Catches: fails if the reversal is worded from the point estimates rather than the intervals,
+// or the two numbers are put on different powers of ten. On the held-out data the naive
+// difference is resolved above 0 and the learned one includes 0 (the reversal); an interval
+// ending exactly at 0 includes 0, one moved past it does not.
+test('step 3: the reversal text, both numbers on the naive power of ten', () => {
+  const t = reversalText(reversalNumbers(holdout, stage2v2));
+  assert.equal(t.naive, 'Naive decoder: +5.28×10⁻³ [3.73, 7.11]×10⁻³');
+  assert.equal(t.learned, 'Learned decoder: +0.0938×10⁻³ [−0.281, 0.5]×10⁻³');
+  assert.match(t.sentence, /^With the naive decoder soft decoding loses the bit more often than hard decoding, beyond the 95% interval; with the learned decoder soft and hard decoding cannot be told apart/);
+  assert.match(reversalClause({ diff: -1e-4, lo: -2e-4, hi: 0 }), /cannot be told apart/);
+  assert.match(reversalClause({ diff: -1e-4, lo: -2e-4, hi: -1e-12 }), /less often than hard decoding, beyond/);
+});

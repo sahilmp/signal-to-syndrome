@@ -14,26 +14,41 @@ const MAX_BYTES = 1_900_000; // D5: main.js + index.html
 const FORBIDDEN = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'import('];
 const ALLOWED_HOSTS = ['qollab.xyz', 'ionq.com', 'docs.ionq.com', 'arxiv.org', 'doi.org', 'github.com'];
 const ATTRIBUTION = 'This effort is supported by Qollab & IonQ.';
+// CC-B21 (U3 rows 29-31): levels 1-4 decode with the learned decoder, whose rates come from
+// demForte1 (the classes of the bank of the same d, r and basis), and Levels 3-4 read their
+// curves from stage2v2 / stage3v2 (the v2b and dense-grid files), not the v1 stage2 / stage3.
 const NEEDS = {
-  level1: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1'],
-  level2: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1'],
-  ion: ['createIonReadout', 'stage2', 'paramsIon'],
-  superconducting: ['createScReadout', 'findMinimum', 'stage3', 'paramsSc'],
+  level1: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1', 'demForte1'],
+  level2: ['decodeShot', 'runPoint', 'diagnostic', 'createFlatReadout', 'bankD3R1', 'bankD3R3', 'stage1', 'demForte1'],
+  ion: ['createIonReadout', 'decodeShot', 'runPoint', 'bankD3R3', 'stage2v2', 'paramsIon', 'demForte1'],
+  superconducting: ['createScReadout', 'findMinimum', 'decodeShot', 'runPoint', 'bankD3R3', 'stage3v2', 'paramsSc', 'demForte1'],
   level5: ['findMinimum', 'stage2', 'stage3', 'stage4', 'paramsIon', 'paramsSc', 'paramsCycle'],
   liveRun: [],
   // v2 flags (team checklist Appendix U3 rows 13-28, U7). buildGraph and decode are Person B's
   // own modules, imported from src/core directly, so they need no bridge line.
   hero: ['findMinimum', 'stage2v2', 'stage3v2'],
   uxV2: ['stage1v2', 'stage2v2', 'stage3v2', 'demForte1'],
-  learnNoise: ['demForte1'],
-  // stage4x: Level 5 v2 in the phase-flip memory (B49, U7.9).
-  phaseFlip: ['stage1x', 'stage2x', 'stage3x', 'stage4x'],
+  // holdout: the held-out test and the reversal (step 3); stage2v2: the reversal's in-sample fallback.
+  learnNoise: ['demForte1', 'holdout', 'stage2v2'],
+  // stage4x: Level 5 v2 in the phase-flip memory (B49, U7.9); bankXD3R3: Level 3's phase-flip
+  // batch (A53 review item 14), decoded with demForte1's X-basis rates.
+  phaseFlip: ['stage1x', 'stage2x', 'stage3x', 'stage4x', 'bankXD3R3', 'demForte1'],
   crosstalk: ['stage2v2', 'paramsIonV2'],
   level5v2: ['findMinimum', 'stage2v2', 'stage3v2', 'stage4v2', 'paramsIonV2', 'paramsScV2', 'paramsCycleV2'],
   sandbox: ['demForte1'],
   tour: ['stage2v2', 'stage3v2', 'demForte1', 'stage4v2'],
   curated: ['curatedShots'],
 };
+// Results files the bridges may point at (data/results, Person A's data; CC-B21 item 7). Each
+// bridge export under data/results/ must be one of these, exist, and carry schema s2s-results/1.
+// The 2.1 files: stage2_ion_v2b.json and stage2_ion_x_v2b.json (U3 row 29), the dense-grid
+// superconducting files (row 29 deviation agreed with Person A) and holdout.json (row 30).
+const RESULTS_FILES = [
+  'stage1_flat.json', 'stage1_flat_x.json',
+  'stage2_ion.json', 'stage2_ion_x.json', 'stage2_ion_v2b.json', 'stage2_ion_x_v2b.json',
+  'stage3_sc.json', 'stage3_sc_x.json', 'stage3_sc_dense.json', 'stage3_sc_x_dense.json',
+  'stage4_comparison.json', 'stage4_comparison_x.json', 'dem_forte1.json', 'holdout.json',
+];
 // Visible text (team checklist U7.3): forbidden in the built index.html and in every string
 // literal of src/ui rendered as text, except inside the Diagnostics panel (src/ui/diag.js and
 // the <details class="diagnostics"> block). Enforced (FAIL) once the text cut is on (uxV2);
@@ -149,6 +164,22 @@ for (const [feature, on] of Object.entries(FEATURES)) {
     const ok = src !== undefined && !src.path.includes('stubs/') && !src.path.includes('fixtures/');
     row(`feature ${feature}: ${name} not from stubs/ or fixtures/`, ok, src ? `${src.bridge} -> ${src.path}` : 'not exported by either bridge');
   }
+}
+
+// Results files behind the bridges: known, present and in the results format.
+for (const [name, { bridge, path }] of sources) {
+  const m = /(?:^|\/)data\/results\/([^/]+)$/.exec(path);
+  if (!m) continue;
+  const file = p('data', 'results', m[1]);
+  let schema = null;
+  try {
+    schema = JSON.parse(readFileSync(file, 'utf8')).schema ?? null;
+  } catch {
+    schema = null;
+  }
+  const known = RESULTS_FILES.includes(m[1]);
+  row(`results file for ${name} known and valid`, known && schema === 's2s-results/1',
+    `${bridge} -> data/results/${m[1]}${known ? '' : ' (not in RESULTS_FILES)'}${schema === 's2s-results/1' ? '' : `, schema ${schema ?? 'missing or unreadable'}`}`);
 }
 
 // 7. Live-run import line (CLAUDE.md rule 3): only with liveRun on, and then exactly as the

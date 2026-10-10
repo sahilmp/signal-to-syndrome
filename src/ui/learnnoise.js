@@ -1,15 +1,18 @@
 // "Learn the noise" (team checklist Appendix U7.6): three steps. 1. Inject a fault on a d = 3
 // circuit timeline and see which detectors light. 2. Ask the naive decoder to explain the
 // diagonal pair: it needs two edges. 3. The p_ij heatmap of the forte-1 banks, the space-time
-// lattice with edge thickness proportional to p, and a naive / learned graph toggle with the
-// logical error from decoderComparison. Graphs and matching come from graph.js and
-// matching.js; edge rates from demForte1 (dem.js classes, bridge_data.js).
+// lattice with edge thickness proportional to p, and a naive / learned graph toggle. Below the
+// held-out test, the first number is the soft-against-hard reversal on the trapped ion (holdout
+// setting2, CC-B21 item 3); the second is the logical error from decoderComparison. Graphs and
+// matching come from graph.js and matching.js; edge rates from demForte1 (dem.js classes,
+// bridge_data.js).
 
-import { demForte1, holdout } from './bridge_data.js';
+import { demForte1, holdout, stage2v2 } from './bridge_data.js';
 import { buildGraph, weightFromP } from '../core/graph.js';
 import { decode } from '../core/matching.js';
 import {
   svgEl, formatNumber, createHeatmap, goalLine, explainMore, takeawayCard, isNarrow, onNarrowChange,
+  formatChange, isResolvedChange,
 } from './charts.js';
 import { FEATURES } from './features.js';
 
@@ -127,6 +130,48 @@ export function heldOutText(h) {
     + `Logical errors, ${parts.join('; ')}.`;
 }
 export const IN_SAMPLE = 'In sample (rates learned from the same stored shots): ';
+
+// The soft-against-hard reversal (finding F1; CC-B21 item 3): on the trapped ion, d = 3,
+// tau = 20 µs (the bit-flip memory), soft minus hard logical error for the naive and the learned
+// decoder, from the paired differences of holdout.json -> setting2 (held-out circuits, rates
+// learned from the original stored shots only) when present, otherwise from stage2v2 -> paired
+// (in sample). Returns { inSample, d, tau, naive: { diff, lo, hi }, learned: { … } } or null.
+export const REVERSAL = { d: 3, tau: 20 };
+export function reversalNumbers(h = holdout, stage2 = stage2v2, { d = REVERSAL.d, tau = REVERSAL.tau } = {}) {
+  const pick = (paired) => {
+    const row = (decoder) => (paired || []).find((p) => p.kind === 'softMinusHard' && p.decoder === decoder && p.d === d && p.x === tau);
+    const naive = row('naive');
+    const learned = row('learned');
+    return naive && learned ? { naive, learned } : null;
+  };
+  const s2 = h?.setting2;
+  const held = s2 && (s2.platform ?? 'trapped-ion') === 'trapped-ion' && (s2.basis ?? 'Z') === 'Z' ? pick(s2.paired) : null;
+  const rows = held ?? pick(stage2?.paired);
+  if (!rows) return null;
+  const strip = ({ diff, lo, hi }) => ({ diff, lo, hi });
+  return { inSample: !held, d, tau, naive: strip(rows.naive), learned: strip(rows.learned) };
+}
+// What one soft-minus-hard difference says, from its 95% interval.
+export function reversalClause(c) {
+  if (isResolvedChange(c.lo, c.hi)) return c.lo > 0 ? 'soft decoding loses the bit more often than hard decoding, beyond the 95% interval'
+    : 'soft decoding loses the bit less often than hard decoding, beyond the 95% interval';
+  return 'soft and hard decoding cannot be told apart (the 95% interval includes 0)';
+}
+// The two numbers on one power of ten (the naive difference's), and the sentence under them.
+export function reversalText(rv) {
+  const exp = Math.floor(Math.log10(Math.abs(rv.naive.diff) || 1));
+  const num = (c) => formatChange(c.diff, c.lo, c.hi, { exp });
+  const where = `trapped ion, d = ${rv.d}, τ = ${rv.tau} µs`;
+  return {
+    label: rv.inSample
+      ? `In sample (rates learned from the same stored shots): soft minus hard logical error, ${where}`
+      : `Held-out circuits (rates learned from the original stored shots only): soft minus hard logical error, ${where}`,
+    naive: `Naive decoder: ${num(rv.naive)}`,
+    learned: `Learned decoder: ${num(rv.learned)}`,
+    sentence: `With the naive decoder ${reversalClause(rv.naive)}; with the learned decoder ${reversalClause(rv.learned)}. `
+      + 'Above 0, using the readouts\' confidence costs bits. Intervals: paired 95% intervals, resampling quantum shots.',
+  };
+}
 
 // "naive → learned" sentence with the factor; no factor when the learned decoder made no error.
 export function comparisonSentence(row) {
@@ -549,6 +594,13 @@ export function mountLearnNoise(container) {
   latticeCol.append(el('div', { class: 'control-row' }), latticeBox, latticeText);
   latticeCol.firstChild.appendChild(toggle);
 
+  // The held-out test comes first; below it the first number, the soft-against-hard reversal
+  // (CC-B21 item 3), then the second, the in-sample comparison of the two graphs.
+  const heldOut = el('p', { class: 'status' });
+  s3.appendChild(heldOut);
+  const reversal = el('div', { class: 'ln-reversal', 'aria-live': 'polite' });
+  s3.appendChild(reversal);
+
   const armRow = el('div', { class: 'control-row' });
   const armLabel = el('label', { for: 'ln-arm' }, 'Readout model: ');
   const armSel = el('select', { id: 'ln-arm' });
@@ -567,9 +619,6 @@ export function mountLearnNoise(container) {
   });
   xSel.addEventListener('change', () => { xIx = Number(xSel.value); renderStep3(); });
 
-  // The held-out test comes first; the in-sample comparison below it is labelled as such.
-  const heldOut = el('p', { class: 'status' });
-  s3.appendChild(heldOut);
   const result = el('div', { 'aria-live': 'polite' });
   s3.appendChild(result);
   const smallPrint = el('p', { class: 'intro', style: 'font-size: var(--fs-s)' });
@@ -648,6 +697,18 @@ export function mountLearnNoise(container) {
     }
     const held = heldOutText(holdout);
     heldOut.textContent = !held ? '' : basis === 'X' ? `${held} (Run in the bit-flip memory.)` : held;
+    const rv = reversalNumbers();
+    if (!rv) reversal.replaceChildren();
+    else {
+      const t = reversalText(rv);
+      const bigStyle = 'font-size: var(--fs-xxl); font-weight: 700; margin: var(--sp-2) 0 0';
+      reversal.replaceChildren(
+        el('p', { class: 'intro' }, `${t.label}${basis === 'X' ? ' (bit-flip memory)' : ''}:`),
+        el('p', { style: bigStyle }, t.naive),
+        el('p', { style: bigStyle }, t.learned),
+        el('p', { class: 'status' }, t.sentence),
+      );
+    }
     const oos = outOfSampleFor(dem, { d, r, basis });
     const po = dem.params?.outOfSample || {};
     smallPrint.textContent = oos.length

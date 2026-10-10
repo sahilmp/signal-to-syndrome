@@ -7,7 +7,7 @@ import {
 import { weightFromP } from '../src/core/graph.js';
 import { FEATURES } from '../src/ui/features.js';
 import {
-  PLATFORMS, resultsFor, budgetFor, currentBasis, setBasis, memoryTag, BASES, mountLevel3, naiveResults,
+  PLATFORMS, resultsFor, budgetFor, currentBasis, setBasis, memoryTag, BASES, mountLevel3, headlineResults,
 } from '../src/ui/level3.js';
 import { HERO_PLATFORMS, heroResults, mountHero } from '../src/ui/hero.js';
 import { level5Source, SRC_V2, mountLevel5, tradeoffOptions, budgetOptions } from '../src/ui/level5.js';
@@ -264,7 +264,9 @@ test('the phase-flip memory swaps every results source to its *_x counterpart', 
     assert.equal(heroResults(p, 'X'), xFiles[p.id]);
   }
   for (const p of PLATFORMS) {
-    assert.deepEqual(resultsFor(p, 'X'), naiveResults(xFiles[p.id]), `${p.id} curves`);
+    assert.deepEqual(resultsFor(p, 'X'), headlineResults(xFiles[p.id]), `${p.id} curves`);
+    // CC-B21 item 1 (U3 row 31): Levels 3-4 show the learned decoder (was naiveResults while the SP5 cut held).
+    assert.ok(resultsFor(p, 'X').series.every((s) => s.decoder === 'learned'), `${p.id} learned curves`);
     assert.equal(budgetFor(p, 'X'), xFiles[p.id], `${p.id} budget`);
     assert.equal(budgetFor(p, 'Z'), zFiles[p.id]);
     assert.notDeepEqual(resultsFor(p, 'X').series.map((s) => s.pL), resultsFor(p, 'Z').series.map((s) => s.pL));

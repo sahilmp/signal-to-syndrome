@@ -25,11 +25,12 @@ import {
 } from './bridge_data.js';
 import {
   createChart, createStackedBars, createTornado, SERIES_STYLES, TOKENS, tokenStyle, goalLine, explainMore, takeawayCard,
+  intervalOf, intervalCaption, formatChange, isResolvedChange,
 } from './charts.js';
 import { FEATURES } from './features.js';
 import {
   cardValue, physicalOptimum, PLATFORMS as LEVEL3_PLATFORMS, MIN_ERRORS_RESOLVED, errorsAtMinimum, isResolved, formatCount,
-  naiveResults, BASES, basisOn, currentBasis, onBasisChange, memoryTag,
+  naiveResults, headlineResults, decoderLabel, LEARNED_LABEL, BASES, basisOn, currentBasis, onBasisChange, memoryTag, formatTau,
 } from './level3.js';
 
 export const CAPTION = 'Both readout models are classical models with literature parameters, applied to the same IonQ-simulated circuit noise. '
@@ -46,15 +47,9 @@ export const physOf = (p) => physicalOptimum(p.results, {
 });
 
 // Stage 4 v2 reports the learned decoder (CC-A15). The per-µs curves and the "not resolved"
-// rule take the same decoder from the stage 2 and 3 files when they hold it; a file without
-// learned series (the v1 stage 3 file) keeps its naive series.
-export function headlineResults(results) {
-  if (!(results.series || []).some((s) => s.decoder === 'learned')) return naiveResults(results);
-  const learned = (o) => o.decoder === 'learned';
-  const out = { ...results, series: results.series.filter(learned) };
-  if (results.optima) out.optima = { ...results.optima, tauLog: (results.optima.tauLog || []).filter(learned) };
-  return out;
-}
+// rule take the same decoder from the stage 2 and 3 files (headlineResults, level3.js, shared
+// with Levels 2-4 and the hero since U3 row 31); a file without learned series keeps its naive ones.
+export { headlineResults };
 export const PLATFORMS_V2 = [
   { ...PLATFORMS[0], results: headlineResults(stage2v2), params: paramsIonV2 },
   { ...PLATFORMS[1], results: headlineResults(stage3v2), params: paramsScV2 },
@@ -251,14 +246,21 @@ export function chartOptions(p, mode, metric, src = SRC_V1) {
     const e = perRoundFromTotal(pL, r);
     return metric === 'perRound' ? e : e / cycleTimeUs(p.id, tau, d, src.paramsCycle);
   };
-  const series = res.series.filter((s) => s.mode === mode).sort((a, b) => a.d - b.d).map((s) => ({
-    name: `d = ${s.d}, r = ${s.r}`,
-    x: xs,
-    y: s.pL.map((v, i) => conv(v, s.r, xs[i], s.d)),
-    lo: s.lo ? s.lo.map((v, i) => conv(v, s.r, xs[i], s.d)) : undefined,
-    hi: s.hi ? s.hi.map((v, i) => conv(v, s.r, xs[i], s.d)) : undefined,
-    ...(ux ? tokenStyle({ d: s.d, mode, platform: p.id, endLabel: `d = ${s.d}` }) : {}),
-  }));
+  // Intervals: the cluster bounds when the results carry them, else Wilson (CC-B21 item 2),
+  // converted with the same formula as the values.
+  const kinds = [];
+  const series = res.series.filter((s) => s.mode === mode).sort((a, b) => a.d - b.d).map((s) => {
+    const iv = intervalOf(s);
+    kinds.push({ what: 'Curves', kind: iv.kind });
+    return {
+      name: `d = ${s.d}, r = ${s.r}`,
+      x: xs,
+      y: s.pL.map((v, i) => conv(v, s.r, xs[i], s.d)),
+      lo: iv.lo ? iv.lo.map((v, i) => conv(v, s.r, xs[i], s.d)) : undefined,
+      hi: iv.hi ? iv.hi.map((v, i) => conv(v, s.r, xs[i], s.d)) : undefined,
+      ...(ux ? tokenStyle({ d: s.d, mode, platform: p.id, endLabel: `d = ${s.d}` }) : {}),
+    };
+  });
   const vlines = [];
   const phys = physOf(p);
   if (phys && !phys.atEdge && Number.isFinite(phys.xMin)) vlines.push({ x: phys.xMin, label: 'τ_phys' });
@@ -274,15 +276,19 @@ export function chartOptions(p, mode, metric, src = SRC_V1) {
     const st = ux ? { color: TOKENS.d[t.d] ?? 'var(--hard)', shape: TOKENS.shape[p.id] ?? 'circle' }
       : SERIES_STYLES[Math.max(0, seriesDs.indexOf(t.d)) % SERIES_STYLES.length];
     const note = !t.atEdge && !isResolved(res, t.d, mode) ? ' (not resolved)' : '';
-    points.push({ name: `Stage 4, d = ${t.d}${note}`, x: t.xMin, y: v.value, lo: v.lo, hi: v.hi, shape: st.shape, color: st.color });
+    const iv = intervalOf(v);
+    kinds.push({ what: 'Stage 4 points', kind: iv.kind });
+    points.push({ name: `Stage 4, d = ${t.d}${note}`, x: t.xMin, y: v.value, lo: iv.lo, hi: iv.hi, shape: st.shape, color: st.color });
   }
   const metricLabel = METRICS.find((m) => m.id === metric).label.toLowerCase();
   const fixture = res.fixture || stage4.fixture ? ' — placeholder data' : '';
+  // v2 names the decoder (the learned one carries its out-of-sample label, U3 row 31).
+  const dec = src.v2 ? `, ${decoderLabel(res)}` : '';
   return {
-    title: `${p.label}: logical error ${metricLabel}, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${fixture}`,
+    title: `${p.label}: logical error ${metricLabel}, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${dec}${fixture}`,
     xLabel: ux ? `readout time τ (${p.tauName.toLowerCase()}, µs)` : `${p.tauName} τ (µs)`,
     yLabel: METRICS.find((m) => m.id === metric).yLabel,
-    series, points, vlines,
+    series, points, vlines, intervals: intervalCaption(kinds),
     logX: true, logY: true, yFloor: metric === 'perRound' ? 1e-8 : 1e-12, width: 460, height: 340,
   };
 }
@@ -324,7 +330,64 @@ function comparisonTable(src = SRC_V1) {
   return wrap;
 }
 
+// v2 sensitivity table: the rows' own numbers (the final rows carry no verdicts): error per
+// round at d = 3, hard, on the owning arm with its cluster interval, tau*_log there, and the
+// paired change against the baseline; rows without an effect say why.
+function sensitivityTableV2(src) {
+  const { stage4 } = src;
+  const table = el('table', { class: 'l5-table' });
+  table.appendChild(el('caption', {}, `Sensitivity: each parameter scaled by 0.5 and by 2 in turn${stage4.fixture ? ' (placeholder data)' : ''}`));
+  const head = table.createTHead().insertRow();
+  for (const h of ['Platform', 'Parameter', 'Scale', 'Error per round (d = 3, hard) [95% interval, resampling quantum shots]', 'Best readout time τ*_log (d = 3, hard)', 'Paired change against the baseline']) head.appendChild(th(h));
+  const body = table.createTBody();
+  const perRound = (row, arm) => {
+    const v = row?.effect?.perRound_d3_hard?.[arm];
+    const c = row?.effectCluster?.perRound_d3_hard?.[arm];
+    return Number.isFinite(v) ? [...num(sig3(v)), ...intervalParts(c?.loCluster, c?.hiCluster)] : ['—'];
+  };
+  const tauLog = (row, arm) => {
+    const t = row?.effect?.tauLog_d3_hard?.[arm];
+    return Number.isFinite(t) ? tauParts(t) : ['—'];
+  };
+  const base = stage4.sensitivityBaseline;
+  if (base) {
+    for (const p of src.platforms) {
+      const tr = body.insertRow();
+      tr.className = 'l5-baseline';
+      tr.appendChild(th(`Baseline, ${p.label.toLowerCase()}`, 'row'));
+      tr.insertCell().textContent = 'card values, same statistics and seeds';
+      tr.insertCell().textContent = '× 1';
+      appendParts(tr.insertCell(), perRound(base, p.id));
+      appendParts(tr.insertCell(), tauLog(base, p.id));
+      tr.insertCell().textContent = '—';
+    }
+  }
+  const notRun = new Map(notRunRows(src).map((n) => [`${n.platform}|${n.parameter}|${n.scale}`, n.status]));
+  for (const row of stage4.sensitivity || []) {
+    const tr = body.insertRow();
+    tr.appendChild(th(ownerLabel(src, row.platform), 'row'));
+    tr.insertCell().textContent = paramName(row.parameter);
+    tr.insertCell().textContent = `× ${row.scale}`;
+    const skipped = notRun.get(`${row.platform}|${row.parameter}|${row.scale}`);
+    if (skipped) {
+      for (let i = 0; i < 3; i++) tr.insertCell().textContent = skipped;
+      continue;
+    }
+    appendParts(tr.insertCell(), perRound(row, row.platform));
+    appendParts(tr.insertCell(), tauLog(row, row.platform));
+    tr.insertCell().textContent = pairedCell(row.pairedVsBaseline);
+  }
+  if (!(stage4.sensitivity || []).length) body.insertRow().insertCell().textContent = 'No sensitivity rows in the stage 4 results.';
+  const wrap = el('div', { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-label': 'Sensitivity table' });
+  wrap.appendChild(table);
+  const box = el('div');
+  const note = el('p', { class: 'hint' }, stage4.sensitivityNote || SENSITIVITY_NOTE_V2);
+  box.append(FEATURES.uxV2 === true ? explainMore([note]) : note, wrap);
+  return box;
+}
+
 function sensitivityTable(src = SRC_V1) {
+  if (src.v2) return sensitivityTableV2(src);
   const { stage4 } = src;
   const table = el('table', { class: 'l5-table' });
   table.appendChild(el('caption', {}, `Sensitivity: each parameter scaled by 0.5 and by 2 in turn; does each hypothesis hold, flip or stay undetermined?${stage4.fixture ? ' (placeholder data)' : ''}`));
@@ -372,6 +435,9 @@ export function sensitivityCounts(rows, c) {
   const parts = [...counts].sort((a, b) => b[1] - a[1]).map(([v, n]) => `${v} ${n}`);
   return rows.length ? `${parts.join(', ')} (of ${rows.length})` : '—';
 }
+// The "Sensitivity rows" column of the v2 verdict table: the counts when some sensitivity row
+// carries the conclusion, "—" when none does (the final rows carry no verdicts; CC-A22).
+export const sensitivityColumn = (rows, id) => ((rows || []).some((s) => id in s) ? sensitivityCounts(rows, id) : '—');
 
 // The four hypotheses with the full-statistics verdict beside the automated stage-4 one.
 // In v2 the statements and verdicts come from the results' conclusions (C1–C6, O4), not
@@ -389,9 +455,10 @@ function verdictTable(src = SRC_V1) {
       const tr = body.insertRow();
       tr.appendChild(th(r.id, 'row'));
       tr.insertCell().textContent = r.statement || '—';
-      tr.insertCell().appendChild(el('strong', {}, r.badge.text));
+      // The badge's word, or the grey label (observations, outcomes fixed by construction).
+      tr.insertCell().appendChild(el('strong', {}, r.badge ? r.badge.text : r.label.text));
       tr.insertCell().textContent = r.automated === undefined ? '—' : String(r.automated);
-      tr.insertCell().textContent = rows.some((s) => r.id in s) ? sensitivityCounts(rows, r.id) : '—';
+      tr.insertCell().textContent = sensitivityColumn(rows, r.id);
     }
     const wrap = el('div', { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-label': 'Hypotheses verdicts' });
     wrap.appendChild(table);
@@ -609,6 +676,7 @@ export function roundsPerSecondAt(curve, tau) {
 export function tradeoffOptions(mode, src = SRC_V2) {
   const series = [];
   const points = [];
+  const kinds = [];
   for (const p of src.platforms) {
     const P = src.stage4.platforms?.[p.id];
     const tr = P?.tradeoff || {};
@@ -618,9 +686,12 @@ export function tradeoffOptions(mode, src = SRC_V2) {
       if (!c?.tau?.length) continue;
       const order = c.tau.map((_, i) => i).sort((a, b) => c.tau[a] - c.tau[b]);
       const pick = (arr) => (Array.isArray(arr) ? order.map((i) => arr[i]) : undefined);
+      // Cluster bounds when the curve carries them, else Wilson (CC-B21 item 2).
+      const civ = intervalOf(c);
+      kinds.push({ what: 'Curves', kind: civ.kind });
       series.push({
         name: `${p.label}, d = ${d}`, arm: p.id, d,
-        tau: pick(c.tau), x: pick(c.roundsPerSecond), y: pick(c.perRound), lo: pick(c.lo), hi: pick(c.hi),
+        tau: pick(c.tau), x: pick(c.roundsPerSecond), y: pick(c.perRound), lo: pick(civ.lo), hi: pick(civ.hi),
         // No end label: the last point (longest tau) is the curve's left end, where the labels
         // of the three distances overprint; the legend names each curve.
         ...tokenStyle({ d, mode, platform: p.id }),
@@ -630,16 +701,20 @@ export function tradeoffOptions(mode, src = SRC_V2) {
       const x = roundsPerSecondAt(c, t?.xMin);
       if (!t || !v || !Number.isFinite(x)) continue;
       const note = !t.atEdge && !isResolved(p.results, d, mode) ? ', not resolved' : '';
+      const piv = intervalOf(v);
+      kinds.push({ what: 'Best readout times', kind: piv.kind });
       points.push({
         name: `${p.label}, d = ${d}: τ*_log = ${numText(sig3(t.xMin))} µs${note}`, arm: p.id, d, tau: t.xMin,
-        x, y: v.value, lo: v.lo, hi: v.hi, shape: TOKENS.shape[p.id] ?? 'circle', color: TOKENS.d[d] ?? 'var(--hard)', filled: true,
+        x, y: v.value, lo: piv.lo, hi: piv.hi, shape: TOKENS.shape[p.id] ?? 'circle', color: TOKENS.d[d] ?? 'var(--hard)', filled: true,
       });
     }
   }
+  // The curves are Stage 4's headline decoder: the learned one carries its out-of-sample label.
+  const learned = src.stage4.decoder === 'learned';
   return {
-    title: `Speed against accuracy, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${src.stage4.fixture ? ' — placeholder data' : ''}`,
+    title: `Speed against accuracy, ${mode} decoding${memoryTag(src.basis ?? 'Z')}${learned ? `, ${LEARNED_LABEL}` : ''}${src.stage4.fixture ? ' — placeholder data' : ''}`,
     xLabel: 'Rounds per second', yLabel: 'Logical error per round',
-    series, points, logX: true, logY: true, yFloor: 1e-8,
+    series, points, intervals: intervalCaption(kinds), logX: true, logY: true, yFloor: 1e-8,
     extra: { key: 'tau', label: 'Readout time τ (µs)' },
   };
 }
@@ -672,55 +747,147 @@ export function budgetOptions(src = SRC_V2) {
 }
 
 // Hypothesis scoreboard: C1–C6 and O4 in this order (then any other conclusion in the
-// results), each with its plain sentence, a badge in words and an icon, and the statement
-// and note for the expander.
+// results), each with its plain sentence (the statement when plain is empty) and the statement,
+// note and deviations for the expander. A conclusion's type comes from its ID prefix (the
+// checklist's structural rule): "C…" is a hypothesis, "O…" an observation.
+// - A hypothesis shows a verdict badge (icon and word): held, refuted, undetermined or not
+//   applicable. With informative: false its outcome is fixed by construction (C3), so it shows
+//   no badge, only the grey label "outcome fixed by construction".
+// - An observation shows the neutral label "measurement" and no badge, whatever its stored
+//   verdict (O4 keeps "undetermined" in the file).
 export const CONCLUSION_ORDER = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'O4'];
 const BADGES = {
   held: { icon: '✓', text: 'held' },
   refuted: { icon: '✗', text: 'refuted' },
   undetermined: { icon: '?', text: 'undetermined' },
+  'not applicable': { icon: '∅', text: 'not applicable' },
 };
 export function badgeOf(verdict) {
   if (verdict === undefined) return { icon: '–', text: 'not in the results yet', cls: 'missing' };
   const b = BADGES[verdict];
-  return b ? { ...b, cls: verdict } : { icon: '!', text: `unknown (${verdict})`, cls: 'unknown' };
+  return b ? { ...b, cls: verdict.replace(/\s+/g, '-') } : { icon: '!', text: `unknown (${verdict})`, cls: 'unknown' };
 }
+export const conclusionKind = (id) => (/^O/.test(id) ? 'observation' : /^C/.test(id) ? 'hypothesis' : 'other');
+export const MEASUREMENT_LABEL = { text: 'measurement', cls: 'measurement' };
+export const FIXED_LABEL = { text: 'outcome fixed by construction', cls: 'fixed' };
 export function scoreboardRows(src = SRC_V2) {
   const c = src.stage4.conclusions || {};
   const ids = [...CONCLUSION_ORDER, ...Object.keys(c).filter((id) => !CONCLUSION_ORDER.includes(id))];
   return ids.map((id) => {
+    const present = id in c;
     const x = c[id] || {};
     const plain = typeof x.plain === 'string' && x.plain.trim() !== '' ? x.plain : (x.statement ?? '');
+    const kind = conclusionKind(id);
+    // badge: the verdict badge, or null; label: the grey label shown instead, or null.
+    let badge = badgeOf(x.verdict);
+    let label = null;
+    if (present && kind === 'observation') { badge = null; label = MEASUREMENT_LABEL; }
+    else if (present && kind === 'hypothesis' && x.informative === false) { badge = null; label = FIXED_LABEL; }
     return {
-      id, plain, statement: x.statement ?? '', note: x.note ?? '', verdict: x.verdict, automated: x.automated, badge: badgeOf(x.verdict),
+      id, kind, plain, statement: x.statement ?? '', note: x.note ?? '', deviations: Array.isArray(x.deviations) ? x.deviations : [],
+      verdict: x.verdict, automated: x.automated, informative: x.informative, badge, label,
     };
   });
 }
+// What a row shows in place of a verdict, in words (the badge or the label).
+export const rowMark = (r) => (r.badge ? `${r.badge.icon} ${r.badge.text}` : r.label.text);
 
 // Badge colours only add emphasis; the icon and the word carry the meaning.
 const BADGE_STYLE = {
   held: 'background:#e3f1e6;color:#1b5e20;border-color:#1b5e20',
   refuted: 'background:#fbe4e2;color:#8e1c12;border-color:#8e1c12',
   undetermined: 'background:#eef0f3;color:#3c4450;border-color:#3c4450',
+  'not-applicable': 'background:#ffffff;color:#3c4450;border-color:#3c4450;border-style:dashed',
   unknown: 'background:#eef0f3;color:#3c4450;border-color:#3c4450',
   missing: 'background:#eef0f3;color:#3c4450;border-color:#3c4450',
 };
+// The grey labels: plain text in a neutral colour, no border, so they never read as a verdict.
+const LABEL_STYLE = 'display:inline-block;margin-right:8px;padding:1px 8px;border-radius:10px;background:#eef0f3;color:#3c4450;font-style:italic';
 function scoreboard(src) {
   const list = el('ul', { class: 'l5-scoreboard', style: 'list-style:none;padding:0;margin:0' });
   for (const r of scoreboardRows(src)) {
     const li = el('li', { class: 'l5-score-row', style: 'padding:8px 0;border-bottom:1px solid #c4c8cf' });
     const line = el('p', { style: 'margin:0' });
-    const badge = el('span', {
-      class: `l5-badge l5-badge-${r.badge.cls}`,
-      style: `display:inline-block;min-width:9ch;margin-right:8px;padding:1px 8px;border:1px solid;border-radius:10px;font-weight:600;${BADGE_STYLE[r.badge.cls]}`,
-    });
-    badge.append(el('span', { 'aria-hidden': 'true' }, `${r.badge.icon} `), r.badge.text);
-    line.append(el('strong', {}, `${r.id} `), badge, r.plain || '—');
+    let mark;
+    if (r.badge) {
+      mark = el('span', {
+        class: `l5-badge l5-badge-${r.badge.cls}`,
+        style: `display:inline-block;min-width:9ch;margin-right:8px;padding:1px 8px;border:1px solid;border-radius:10px;font-weight:600;${BADGE_STYLE[r.badge.cls]}`,
+      });
+      mark.append(el('span', { 'aria-hidden': 'true' }, `${r.badge.icon} `), r.badge.text);
+    } else {
+      mark = el('span', { class: `l5-label l5-label-${r.label.cls}`, style: LABEL_STYLE }, r.label.text);
+    }
+    line.append(el('strong', {}, `${r.id} `), mark, r.plain || '—');
     li.appendChild(line);
     const more = [];
     if (r.statement) more.push(el('p', {}, `Statement: ${r.statement}`));
     if (r.note) more.push(el('p', { class: 'hint' }, `Note: ${r.note}`));
+    if (r.deviations.length) {
+      const ul = el('ul', { class: 'hint' });
+      for (const d of r.deviations) ul.appendChild(el('li', {}, d));
+      more.push(el('p', { class: 'hint' }, 'Deviations from the pre-registered reporting:'), ul);
+    }
     if (more.length) li.appendChild(explainMore(more, `Details of ${r.id}`));
+    list.appendChild(li);
+  }
+  return list;
+}
+
+// Findings (stage4.findings), shown above the scoreboard, F1 first: each statement, and the
+// numbers the file gives with it, as sentences (findingLines).
+export function findingRows(src = SRC_V2) {
+  const fs = Array.isArray(src.stage4.findings) ? src.stage4.findings.slice() : [];
+  const key = (id) => (id === 'F1' ? '' : String(id));
+  fs.sort((a, b) => key(a.id).localeCompare(key(b.id), 'en', { numeric: true }));
+  return fs.map((f) => ({ id: f.id, statement: f.statement ?? '', lines: findingLines(f.numbers) }));
+}
+// Sentences for the number blocks Stage 4 writes (finding F1: soft worse than hard beyond the
+// intervals, per decoder, out of sample and in sample, and the d = 3, tau = 20 µs example).
+// Unknown blocks are left out.
+export function findingLines(n) {
+  if (!n || typeof n !== 'object') return [];
+  const out = [];
+  const oos = n.outOfSample;
+  if (oos?.softWorseCount && Number.isFinite(oos.pointsPerDecoder)) {
+    const c = oos.softWorseCount;
+    out.push(`Held-out circuits: soft decoding worse than hard beyond the 95% intervals at ${c.naive} of ${oos.pointsPerDecoder} points with the naive decoder `
+      + `and ${c.learned} of ${oos.pointsPerDecoder} with the learned decoder.`);
+  }
+  for (const [k, ex] of Object.entries(oos || {})) {
+    const m = /^example_d(\d+)_tau([\d.]+)$/.exec(k);
+    const pn = ex?.naive?.pairedSoftMinusHard;
+    const pl = ex?.learned?.pairedSoftMinusHard;
+    if (!m || !pn || !pl) continue;
+    const exp = Math.floor(Math.log10(Math.abs(pn.diff) || 1));
+    out.push(`At d = ${m[1]}, τ = ${formatTau(Number(m[2]))}, soft minus hard: naive decoder ${formatChange(pn.diff, pn.lo, pn.hi, { exp })}, `
+      + `learned decoder ${formatChange(pl.diff, pl.lo, pl.hi, { exp })} (paired 95% intervals, resampling quantum shots).`);
+  }
+  // In sample, per decoder over both memories (keys "Z naive", "X learned", …); the memories are
+  // not named, so the line reads the same in either memory of the page.
+  const ins = n.inSample;
+  if (ins && typeof ins === 'object') {
+    const by = new Map();
+    for (const [k, v] of Object.entries(ins)) {
+      if (!Number.isFinite(v?.wilson) || !Number.isFinite(v?.points)) continue;
+      const dec = k.split(' ')[1] ?? k;
+      if (!by.has(dec)) by.set(dec, { wilson: 0, points: 0 });
+      by.get(dec).wilson += v.wilson;
+      by.get(dec).points += v.points;
+    }
+    const parts = [...by].map(([dec, v]) => `${dec} decoder ${v.wilson} of ${v.points}`);
+    if (parts.length) out.push(`In sample (rates learned from the same stored shots), points with soft decoding worse than hard beyond the 95% intervals, both memories together: ${parts.join(', ')}.`);
+  }
+  return out;
+}
+function findingsList(src) {
+  const rows = findingRows(src);
+  if (!rows.length) return null;
+  const list = el('ul', { class: 'l5-findings', style: 'list-style:none;padding:0;margin:0' });
+  for (const f of rows) {
+    const li = el('li', { class: 'l5-finding', style: 'padding:8px 0;border-bottom:1px solid #c4c8cf' });
+    li.appendChild(el('p', { style: 'margin:0' }, '')).append(el('strong', {}, `${f.id} `), f.statement);
+    for (const t of f.lines) li.appendChild(el('p', { class: 'hint', style: 'margin:4px 0 0' }, t));
     list.appendChild(li);
   }
   return list;
@@ -762,7 +929,9 @@ export function tornadoRows(src = SRC_V2) {
       if (!Number.isFinite(value)) continue;
       const b = Number(base[p.id]);
       const baseline = Number.isFinite(b) ? b : 0;
-      groups.get(key).bars.push({ arm: p.id, armLabel: p.label, scale: row.scale, value, baseline, change: value - baseline });
+      groups.get(key).bars.push({
+        arm: p.id, armLabel: p.label, scale: row.scale, value, baseline, change: value - baseline, paired: row.pairedVsBaseline ?? null,
+      });
     }
   }
   const rows = [...groups.values()].filter((g) => g.bars.length);
@@ -772,9 +941,10 @@ export function tornadoRows(src = SRC_V2) {
   }
   return rows.sort((a, b) => b.maxAbs - a.maxAbs || a.label.localeCompare(b.label));
 }
-// Sensitivity rows without an effect (A53 review item 7: two superconducting rows were dropped
-// silently). The reason is the row's own note, else the T2 <= 2 T1 rule (CLAUDE.md, Idle errors)
-// checked on the arm's card with the scaled value, else "not run".
+// Sensitivity rows without an effect (A53 review item 7: such rows were dropped silently). The
+// reason is the row's own note, else the T2 <= 2 T1 rule (CLAUDE.md, Idle errors) checked on the
+// arm's card with the scaled value ("T2 would exceed 2·T1"), else none. `status` is the cell
+// text of the tornado's values table, `text` the line in the list under the chart.
 const T_PAIRS = { T1_us: ['T1_us', 'T2_us'], T2_us: ['T1_us', 'T2_us'], T1_idle_us: ['T1_idle_us', 'T2_idle_us'], T2_idle_us: ['T1_idle_us', 'T2_idle_us'] };
 export function notRunRows(src = SRC_V2) {
   const cards = { 'trapped-ion': src.paramsIon, superconducting: src.paramsSc };
@@ -789,16 +959,27 @@ export function notRunRows(src = SRC_V2) {
       let t2 = Number(cardValue(card[pair[1]]));
       if (row.parameter === pair[0]) t1 *= row.scale;
       else t2 *= row.scale;
-      if (Number.isFinite(t1) && Number.isFinite(t2) && t2 > 2 * t1) {
-        reason = `would break T2 ≤ 2·T1 (T2 = ${Number(t2.toPrecision(3))} µs, 2·T1 = ${Number((2 * t1).toPrecision(3))} µs)`;
-      }
+      if (Number.isFinite(t1) && Number.isFinite(t2) && t2 > 2 * t1) reason = 'T2 would exceed 2·T1';
     }
+    const status = `not run${reason ? ` (${reason})` : ''}`;
     out.push({
-      platform: row.platform, parameter: row.parameter, scale: row.scale,
-      text: `${ownerLabel(src, row.platform)}: ${paramName(row.parameter)} × ${row.scale}: not run${reason ? `: ${reason}` : ''}.`,
+      platform: row.platform, parameter: row.parameter, scale: row.scale, status,
+      label: `${ownerLabel(src, row.platform)}: ${paramName(row.parameter)}`, armLabel: ownerLabel(src, row.platform),
+      text: `${ownerLabel(src, row.platform)}: ${paramName(row.parameter)} × ${row.scale}: ${status}.`,
     });
   }
   return out;
+}
+// The paired change of pL against the baseline (pairedVsBaseline: d = 3, hard, at the
+// baseline's tau*_log, on the same shots and seeds), for the tornado's values table. Resolved only
+// when its 95% interval excludes 0 strictly (isResolvedChange): "+5.69×10⁻³ [4.19, 7.19]×10⁻³ at
+// τ = 0.7 µs, d = 3, hard"; otherwise "not resolved (interval includes 0)".
+export const NOT_RESOLVED_CHANGE = 'not resolved (interval includes 0)';
+export function pairedCell(pv) {
+  if (!pv || ![pv.diff, pv.lo, pv.hi].every(Number.isFinite)) return '—';
+  if (!isResolvedChange(pv.lo, pv.hi)) return NOT_RESOLVED_CHANGE;
+  const where = [Number.isFinite(pv.tau_us) ? `τ = ${formatTau(pv.tau_us)}` : null, Number.isFinite(pv.d) ? `d = ${pv.d}` : null, pv.mode ?? null].filter(Boolean);
+  return `${formatChange(pv.diff, pv.lo, pv.hi)}${where.length ? ` at ${where.join(', ')}` : ''}`;
 }
 const ARM_COLOR = { 'trapped-ion': 'var(--ion)', superconducting: 'var(--sc)' };
 export function tornadoOptions(src = SRC_V2) {
@@ -816,8 +997,13 @@ export function tornadoOptions(src = SRC_V2) {
       { name: `${p.label}, × 2 (filled)`, color: ARM_COLOR[p.id] ?? 'var(--hard)', filled: true },
     ]),
     table: {
-      columns: ['Parameter', 'Arm', 'Scale', 'Error per round, scaled', 'Error per round, baseline', valueLabel],
-      rows: rows.flatMap((r) => r.bars.map((b) => [r.label, b.armLabel, `× ${b.scale}`, b.value, b.baseline, b.change])),
+      columns: ['Parameter', 'Arm', 'Scale', 'Error per round, scaled', 'Error per round, baseline', valueLabel,
+        'Paired change of the logical error against the baseline (d = 3, hard, at the baseline’s best readout time)'],
+      rows: [
+        ...rows.flatMap((r) => r.bars.map((b) => [r.label, b.armLabel, `× ${b.scale}`, b.value, b.baseline, b.change, pairedCell(b.paired)])),
+        ...notRunRows(src).map((n) => [n.label, n.armLabel, `× ${n.scale}`, n.status, '—', '—', n.status]),
+      ],
+      caption: 'Paired change: 95% interval, resampling quantum shots; a change counts only when its interval excludes 0.',
     },
   };
 }
@@ -951,19 +1137,28 @@ function mountLevel5v2(container) {
 
   container.appendChild(el('h3', {}, 'Scoreboard'));
   for (const n of [provisionalBanner(zSrc.stage4), xNote('scoreboard')]) if (n) container.appendChild(n);
+  // The findings (F1 first) above the hypotheses (CC-B21 item 5).
+  const findings = findingsList(zSrc);
+  if (findings) container.append(el('h4', {}, 'Findings'), findings, el('h4', {}, 'Hypotheses and observations'));
   container.appendChild(scoreboard(zSrc));
 
   container.appendChild(el('h3', {}, 'Which parameters matter'));
   for (const n of [provisionalBanner(zSrc.stage4), xNote('sensitivity')]) if (n) container.appendChild(n);
-  container.appendChild(safeChart(createTornado, () => tornadoOptions(zSrc), 'sensitivity chart').root);
-  const notRun = notRunRows(zSrc);
-  if (notRun.length) {
-    const ul = el('ul', { class: 'l5-not-run hint' });
-    for (const r of notRun) ul.appendChild(el('li', {}, r.text));
-    container.append(el('p', { class: 'hint' }, 'Rows not in the chart:'), ul);
+  const sensNote = zSrc.stage4.sensitivityNote || SENSITIVITY_NOTE_V2;
+  if (zSrc.stage4.sensitivity === null) {
+    // No sensitivity run: no chart and no "not run" list, only the file's note.
+    container.appendChild(el('p', { class: 'hint l5-sensitivity-note' }, sensNote));
+  } else {
+    container.appendChild(safeChart(createTornado, () => tornadoOptions(zSrc), 'sensitivity chart').root);
+    const notRun = notRunRows(zSrc);
+    if (notRun.length) {
+      const ul = el('ul', { class: 'l5-not-run hint' });
+      for (const r of notRun) ul.appendChild(el('li', {}, r.text));
+      container.append(el('p', { class: 'hint' }, 'Rows not in the chart:'), ul);
+    }
+    container.appendChild(hint(`${sensNote} Each bar is the change from the baseline row, on the arm the parameter belongs to; `
+      + 'parameters are sorted by their largest change.'));
   }
-  container.appendChild(hint(`${SENSITIVITY_NOTE_V2} Each bar is the change from the baseline row, on the arm the parameter belongs to; `
-    + 'parameters are sorted by their largest change.'));
 
   if (ux) {
     container.appendChild(takeawayCard('at the same gate noise, the readout model sets both how fast the code can run '

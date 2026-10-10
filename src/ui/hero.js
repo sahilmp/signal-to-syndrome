@@ -2,11 +2,12 @@
 // should you listen to a qubit?" One readout-time slider that snaps to the platform's grid
 // points, a trapped ion / superconducting toggle, and one chart on a shared log tau axis with
 // the readout error (simulated assignment error) and the logical error (d = 3, hard decoding;
-// the decoder HERO_DECODER on both arms, naive while the SP5 cut holds), each with a dot at the chosen
+// the decoder HERO_DECODER on both arms: the learned one since the SP5 cut was lifted), each with a dot at the chosen
 // tau. The interval between tau*_log and tau*_phys (empirical) is shaded, and a live sentence
 // says where the chosen tau sits relative to the two optima. "Go deeper" opens Level 3.
 //
-// Data: stage2v2 (trapped ion) and stage3v2 (superconducting) from bridge_data.js. Every
+// Data: stage2v2 (trapped ion, v2b) and stage3v2 (superconducting, dense grid) from
+// bridge_data.js, the files the final Stage 4 uses, so the hero's tau*_log equals Level 5's. Every
 // number shown comes from those results: x.values, assignment.empirical (lo, hi), the d = 3
 // hard series, optima.tauPhysEmpirical (else findMinimum on assignment.empirical, log x) and
 // the matching optima.tauLog entry. The v1 stage-3 file has no decoder field and no
@@ -15,8 +16,10 @@
 
 import { stage2v2, stage3v2, stage2x, stage3x } from './bridge_data.js';
 import { findMinimum } from './bridge_core.js';
-import { createChart, TOKENS } from './charts.js';
-import { formatTau, currentBasis, onBasisChange, memoryTag } from './level3.js';
+import { createChart, TOKENS, intervalOf, intervalCaption } from './charts.js';
+import {
+  formatTau, currentBasis, onBasisChange, memoryTag, LEARNED_LABEL,
+} from './level3.js';
 
 export const HERO_PLATFORMS = [
   { id: 'trapped-ion', label: 'Trapped ion', results: stage2v2, resultsX: stage2x },
@@ -35,15 +38,18 @@ export const REVERSE_LABEL = 'the code still gains from listening past the best 
 // A series without a decoder field predates the learned decoder, so it is the naive one.
 const isNaive = (o) => o.decoder === undefined || o.decoder === 'naive';
 
-// The one decoder the hero shows, on both arms (team checklist U3 row 14a). "naive" while the
-// SP5 cut rule is in force: V12(b) failed (DECISIONS E4). Set to null (learned when the
-// results contain it) only after a decision recorded in DECISIONS lifts the cut.
-export const HERO_DECODER = 'naive';
+// The one decoder the hero shows, on both arms (team checklist U3 rows 14a and 31). null: the
+// learned series when the results contain it (else naive). The SP5 cut rule had set it to
+// "naive" after V12(b) failed (DECISIONS E4); DECISIONS, Person A, records "SP5 cut lifted
+// (V18 passed)" (Sun 11 Oct; data/results/holdout.json, setting1), so U3 row 31 sets it to null.
+export const HERO_DECODER = null;
 
-// The two curves: { tau, decoder, readout: { y, lo, hi }, logical: { y, lo, hi, n } }.
+// The two curves: { tau, decoder, readout: { y, lo, hi }, logical: { y, lo, hi, interval } }.
 // Logical: the d = 3 hard series of `decoder` ("naive" or "learned"); with decoder null, the
 // learned series when the results contain it, else the naive one. A requested learned
 // series that is missing falls back to naive (the returned decoder says which was used).
+// Its interval is the cluster interval when the series carries one, else Wilson (interval:
+// "cluster" or "wilson"; CC-B21 item 2). The readout error's interval is Wilson.
 export function heroCurves(results, decoder = null) {
   const tau = results?.x?.values;
   if (!Array.isArray(tau) || tau.length === 0) throw new Error('the results have no readout-time grid');
@@ -56,11 +62,12 @@ export function heroCurves(results, decoder = null) {
   if (!a || !Array.isArray(a.empirical) || a.empirical.length !== tau.length) {
     throw new Error('the results have no simulated assignment error on the grid');
   }
+  const iv = intervalOf(s);
   return {
     tau,
     decoder: learned ? 'learned' : 'naive',
     readout: { y: a.empirical, lo: a.lo, hi: a.hi },
-    logical: { y: s.pL, lo: s.lo, hi: s.hi },
+    logical: { y: s.pL, lo: iv.lo, hi: iv.hi, interval: iv.kind },
   };
 }
 
@@ -241,6 +248,9 @@ export function mountHero(container, { goDeeper = null } = {}) {
     live.textContent = liveSentence(tau, band);
 
     const shape = TOKENS.shape[p.id];
+    // The learned decoder's results carry the out-of-sample label (U3 row 31).
+    const decoderName = curves.decoder === 'learned' ? LEARNED_LABEL : 'naive decoder';
+    const { interval, ...logical } = curves.logical;
     const vlines = [];
     if (optima.tauLog && !optima.tauLog.atEdge) vlines.push({ x: optima.tauLog.xMin, label: 'τ*_log' });
     if (!optima.tauPhys.atEdge) vlines.push({ x: optima.tauPhys.xMin, label: 'τ*_phys' });
@@ -255,10 +265,11 @@ export function mountHero(container, { goDeeper = null } = {}) {
           color: TOKENS.readout.color, dash: TOKENS.readout.dash, shape, endLabel: 'readout',
         },
         {
-          name: `logical error (chance the stored bit is lost), d = 3, hard decoding, ${curves.decoder} decoder`, x: curves.tau, ...curves.logical,
+          name: `logical error (chance the stored bit is lost), d = 3, hard decoding, ${decoderName}`, x: curves.tau, ...logical,
           color: TOKENS.d[3], dash: null, shape, endLabel: 'logical',
         },
       ],
+      intervals: intervalCaption([{ what: 'Logical error', kind: interval }, { what: 'Readout error', kind: 'wilson' }]),
       points: [
         { name: `readout error at τ = ${formatTau(tau)}`, x: tau, y: curves.readout.y[idx], color: TOKENS.readout.color, shape, filled: true },
         { name: `logical error at τ = ${formatTau(tau)}`, x: tau, y: curves.logical.y[idx], color: TOKENS.d[3], shape, filled: true },

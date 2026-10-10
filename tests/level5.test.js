@@ -109,26 +109,22 @@ test('sensitivityCounts: exact text for fixed rows', () => {
   assert.equal(sensitivityCounts([], 'C1'), '—');
 });
 
-// Catches: fails if the verdict table miscounts the real sensitivity rows: every count in
-// the text equals the number of rows with that verdict, they add up to the row count, and
-// no verdict present in the file is left out (counts read from the file, so a re-run of
-// Person A's sweep does not break the test).
+// CC-B21 item 5 (changed because the Stage 4 file became final: its sensitivity rows carry no
+// C1-C4 verdicts, DECISIONS, Person A, CC-A22). Catches: fails if the "Sensitivity rows" column
+// of the verdict table shows anything but "—" for a conclusion that no row carries (it used to
+// count "undefined" verdicts), or if it stops counting when rows do carry one. On the real file:
+// every conclusion gives "—", and the rows carry none of C1-C6, O4. Non-vacuous: the same
+// function on rows that carry C1 gives the exact counts.
 test('sensitivityCounts on the real sweep', () => {
   const rows = stage4.sensitivity;
   assert.ok(rows.length > 0);
-  for (const c of ['C1', 'C3']) {
-    const text = sensitivityCounts(rows, c);
-    const m = text.match(/^(.*) \(of (\d+)\)$/);
-    assert.ok(m, text);
-    assert.equal(Number(m[2]), rows.length);
-    const shown = new Map(m[1].split(', ').map((p) => {
-      const [v, n] = p.split(' ');
-      return [v, Number(n)];
-    }));
-    const want = new Map();
-    for (const r of rows) want.set(r[c], (want.get(r[c]) || 0) + 1);
-    assert.deepEqual(shown, want);
+  for (const id of CONCLUSION_ORDER) {
+    assert.ok(rows.every((r) => !(id in r)), `a final sensitivity row carries ${id}`);
+    assert.equal(sensitivityColumn(rows, id), '—', id);
   }
+  const withC1 = rows.map((r, i) => ({ ...r, C1: i === 0 ? 'refuted' : 'held' }));
+  assert.equal(sensitivityColumn(withC1, 'C1'), `held ${rows.length - 1}, refuted 1 (of ${rows.length})`);
+  assert.equal(sensitivityColumn(withC1, 'C2'), '—');
 });
 
 // ---- Level 5 v2 (U7.7) ----
@@ -136,7 +132,9 @@ test('sensitivityCounts on the real sweep', () => {
 import {
   tradeoffOptions, scoreboardRows, tornadoRows, tornadoOptions, budgetOptions, gateLayers, roundsPerSecondAt, mountLevel5,
   SRC_V2, PLATFORMS_V2, CONCLUSION_ORDER, notRunRows, PROVISIONAL_TEXT, BASIS_NOTES,
+  sensitivityColumn, rowMark, pairedCell, findingRows, NOT_RESOLVED_CHANGE,
 } from '../src/ui/level5.js';
+import { isResolvedChange, formatChange } from '../src/ui/charts.js';
 import { FEATURES } from '../src/ui/features.js';
 import { stage4v2 } from '../src/ui/bridge_data.js';
 
@@ -281,18 +279,67 @@ test('gateLayers: number, "2*(d-1)", and anything else throws', () => {
   assert.throws(() => gateLayers({ value: 'd+1' }, 5), /unknown gate-layer expression/);
 });
 
-// Catches: fails if the scoreboard drops, reorders or duplicates a conclusion, or shows the
-// wrong badge (e.g. "held" for a refuted hypothesis, or colour without the word and icon).
+// CC-B21 item 5 (changed because the Stage 4 file became final, with the verdict "not
+// applicable", informative: false and observation rows; DECISIONS, Person A, CC-A22). Catches:
+// fails if the scoreboard drops, reorders or duplicates a conclusion; shows the wrong badge
+// (e.g. "held" for a refuted hypothesis, or colour without the word and icon); shows "?
+// undetermined" for C6's "not applicable"; gives C3 (informative: false) a verdict badge instead
+// of the grey "outcome fixed by construction"; or gives an observation (an ID starting with "O")
+// a verdict badge instead of the neutral "measurement" label, whatever its stored verdict (O4
+// keeps "undetermined"). The type is read from the ID prefix: a synthetic "O9" with verdict
+// "held" is a measurement too, and the same verdict on "C9" is a badge. Each row shows plain.
 test('scoreboard: one row per conclusion, C1–C6 then O4, with the right badge', () => {
   const rows = scoreboardRows();
   assert.deepEqual(rows.map((r) => r.id), CONCLUSION_ORDER);
-  const want = { held: '✓ held', refuted: '✗ refuted', undetermined: '? undetermined' };
+  const want = {
+    C1: '✗ refuted', C2: '✓ held', C3: 'outcome fixed by construction', C4: '? undetermined', C5: '✓ held',
+    C6: '∅ not applicable', O4: 'measurement',
+  };
   for (const r of rows) {
-    assert.equal(r.verdict, stage4v2.conclusions[r.id].verdict);
-    assert.equal(`${r.badge.icon} ${r.badge.text}`, want[r.verdict]);
-    assert.equal(r.statement, stage4v2.conclusions[r.id].statement);
-    assert.equal(r.note, stage4v2.conclusions[r.id].note);
+    const c = stage4v2.conclusions[r.id];
+    assert.equal(r.verdict, c.verdict);
+    assert.equal(rowMark(r), want[r.id], r.id);
+    assert.equal(r.statement, c.statement);
+    assert.equal(r.note, c.note);
+    assert.equal(r.plain, c.plain, `${r.id} shows plain`);
+    assert.deepEqual(r.deviations, c.deviations);
   }
+  assert.equal(stage4v2.conclusions.C3.informative, false);
+  assert.equal(stage4v2.conclusions.O4.verdict, 'undetermined');
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  assert.equal(byId.C3.badge, null);
+  assert.equal(byId.O4.badge, null);
+  assert.equal(byId.C6.badge.cls, 'not-applicable');
+  // The ID prefix decides, not the verdict or the note.
+  const synth = scoreboardRows(synthSrc({
+    conclusions: {
+      O9: { statement: 'S', verdict: 'held', plain: 'P', informative: true },
+      C9: { statement: 'S', verdict: 'held', plain: 'P', informative: true },
+    },
+  }));
+  assert.equal(rowMark(synth.find((r) => r.id === 'O9')), 'measurement');
+  assert.equal(rowMark(synth.find((r) => r.id === 'C9')), '✓ held');
+});
+
+// CC-B21 item 5. Catches: fails if the scoreboard rows in the page lose the grey labels or the
+// badge words (C3, O4, C6), or if the findings are not shown above the scoreboard with F1 first.
+test('Level 5 v2: findings above the scoreboard, F1 first, and the labels in the page', () => {
+  const root = mountWith(true);
+  const all = [...walk(root)];
+  const findings = all.find((n) => hasClass(n, 'l5-findings'));
+  const board = all.find((n) => hasClass(n, 'l5-scoreboard'));
+  assert.ok(findings && board);
+  assert.ok(all.indexOf(findings) < all.indexOf(board), 'findings below the scoreboard');
+  const first = findings.childNodes[0].textContent;
+  assert.ok(first.startsWith(`F1 ${stage4v2.findings.find((f) => f.id === 'F1').statement}`), first);
+  assert.match(first, /13 of 26 points with the naive decoder and 0 of 26 with the learned decoder/);
+  const rowText = (id) => all.filter((n) => hasClass(n, 'l5-score-row')).map((n) => n.childNodes[0].textContent).find((t) => t.startsWith(`${id} `));
+  assert.match(rowText('C3'), /^C3 outcome fixed by construction/);
+  assert.match(rowText('O4'), /^O4 measurement/);
+  assert.match(rowText('C6'), /^C6 ∅ not applicable/);
+  // F1 first even when the file lists another finding before it.
+  const f = findingRows(synthSrc({ findings: [{ id: 'F2', statement: 'b' }, { id: 'F1', statement: 'a' }] }));
+  assert.deepEqual(f.map((x) => x.id), ['F1', 'F2']);
 });
 
 // Catches: fails if an unexpected verdict word (the v1 "holds") is shown as a known badge, a
@@ -328,28 +375,97 @@ test('tornado: parameters sorted by largest absolute change from the baseline', 
   assert.deepEqual(opts.groups.map((g) => g.label), rows.map((r) => r.label));
 });
 
-// A53 review item 7. Catches: fails if a bar of the arm that does not own the parameter is
-// drawn on the real data (those bars are zero by construction, e.g. "Superconducting: χ ->
-// Trapped ion, change 0"), or if the raw card key is the visible name.
+// A53 review item 7; CC-B21 item 5 (changed because the Stage 4 file became final: its six rows
+// are γ dark→bright, η and T1, so the χ/2π row checked before no longer exists). Catches: fails
+// if a bar of the arm that does not own the parameter is drawn on the real data (those bars are
+// zero by construction), if the raw card key is the visible name, or if a final row is missing
+// or drawn twice: exactly the five rows with an effect, as three parameters on their own arms.
 test('tornado on the real data: only the owning arm, readable names', () => {
   const rows = tornadoRows();
   for (const r of rows) {
     assert.ok(r.bars.length > 0 && r.bars.every((b) => b.arm === r.platform), `${r.label}: ${r.bars.map((b) => b.arm)}`);
   }
-  assert.ok(rows.some((r) => r.label === 'Superconducting: dispersive shift χ/2π'));
+  assert.deepEqual(rows.map((r) => r.label).sort(), [
+    'Superconducting: T1', 'Superconducting: measurement efficiency η', 'Trapped ion: dark-to-bright leak rate',
+  ]);
+  assert.deepEqual(rows.flatMap((r) => r.bars.map((b) => `${r.parameter} ${b.scale}`)).sort(),
+    ['T1_us 2', 'eta 0.5', 'eta 2', 'gamma_dark_to_bright_per_us 0.5', 'gamma_dark_to_bright_per_us 2']);
+  assert.ok(rows.some((r) => r.label === 'Superconducting: measurement efficiency η'));
   assert.ok(!rows.some((r) => /_per_us|_MHz|_us$/.test(r.label)), 'raw parameter key shown');
 });
 
-// A53 review item 7. Catches: fails if the two superconducting rows without an effect (T1 × 0.5,
-// T2 × 2) disappear silently or get the wrong reason: T1 = 25 µs gives 2·T1 = 50 < T2 = 77, and
-// T2 = 154 > 2·T1 = 100. Non-vacuous: T2 × 0.5 (38.5 ≤ 100) has an effect and is not listed.
+// A53 review item 7; CC-B21 item 5 (changed because the Stage 4 file became final: only
+// superconducting T1 × 0.5 is not run, and the wording is now "not run (T2 would exceed 2·T1)").
+// Catches: fails if the row without an effect disappears silently or gets the wrong reason
+// (T1 = 25 µs gives 2·T1 = 50 < T2 = 77), or if it is missing from the tornado's values table.
+// Non-vacuous: T1 × 2 (2·T1 = 200 ≥ 77) has an effect and is not listed.
 test('notRunRows: the rows that would break T2 ≤ 2·T1 are listed with the reason', () => {
   const rows = notRunRows();
-  assert.deepEqual(rows.map((r) => r.text), [
-    'Superconducting: T1 × 0.5: not run: would break T2 ≤ 2·T1 (T2 = 77 µs, 2·T1 = 50 µs).',
-    'Superconducting: T2 × 2: not run: would break T2 ≤ 2·T1 (T2 = 154 µs, 2·T1 = 100 µs).',
-  ]);
-  assert.ok(stage4v2.sensitivity.some((r) => r.parameter === 'T2_us' && r.scale === 0.5 && r.effect));
+  assert.deepEqual(rows.map((r) => r.text), ['Superconducting: T1 × 0.5: not run (T2 would exceed 2·T1).']);
+  assert.ok(stage4v2.sensitivity.some((r) => r.parameter === 'T1_us' && r.scale === 2 && r.effect));
+  const tableRows = tornadoOptions().table.rows.filter((r) => r.includes('not run (T2 would exceed 2·T1)'));
+  assert.equal(tableRows.length, 1);
+  assert.deepEqual(tableRows[0].slice(0, 3), ['Superconducting: T1', 'Superconducting', '× 0.5']);
+});
+
+// CC-B21 item 5. Catches: fails if a paired change whose 95% interval touches 0 is shown as
+// resolved (the rule is strict: lo > 0 or hi < 0), or the cell text loses its sign, interval,
+// power of ten or tau. Boundary: [−1.9×10⁻⁴, 0] is not resolved; the same interval moved one
+// step past 0 is (1e-12 for the rule itself, one shot in 32 000 for the cell text).
+test('pairedCell: resolved only when the interval excludes 0 strictly', () => {
+  assert.equal(isResolvedChange(-1.9e-4, 0), false);
+  assert.equal(isResolvedChange(-1.9e-4, -1e-12), true);
+  assert.equal(isResolvedChange(0, 2e-4), false);
+  assert.equal(isResolvedChange(1e-12, 2e-4), true);
+  const base = { tau_us: 20, d: 3, mode: 'hard', diff: -6.25e-5 };
+  assert.equal(pairedCell({ ...base, lo: -1.875e-4, hi: 0 }), NOT_RESOLVED_CHANGE);
+  // The same interval moved one step (3.125×10⁻⁵, one shot in 32 000) below 0: resolved.
+  assert.equal(pairedCell({ ...base, diff: -9.375e-5, lo: -2.1875e-4, hi: -3.125e-5 }), '−9.38×10⁻⁵ [−21.9, −3.13]×10⁻⁵ at τ = 20 µs, d = 3, hard');
+  assert.equal(pairedCell({ tau_us: 0.7, d: 3, mode: 'hard', diff: 0.0056875, lo: 0.0041875, hi: 0.0071875 }),
+    '+5.69×10⁻³ [4.19, 7.19]×10⁻³ at τ = 0.7 µs, d = 3, hard');
+  assert.equal(formatChange(-0.000625, -0.0010625, -0.0003125), '−6.25×10⁻⁴ [−10.6, −3.13]×10⁻⁴');
+});
+
+// CC-B21 item 5. Catches: fails if the tornado's values table misses the paired change against
+// the baseline, or resolves a row whose interval includes 0. On the final file exactly three rows
+// are resolved, all superconducting: η × 0.5 (+), η × 2 (−) and T1 × 2 (−); ion γ × 0.5 (interval
+// ending at 0) and γ × 2 are not.
+test('tornado values table: paired change against the baseline, three rows resolved', () => {
+  const t = tornadoOptions().table;
+  const col = t.columns.length - 1;
+  assert.match(t.columns[col], /^Paired change/);
+  const cell = (label, scale) => t.rows.find((r) => r[0] === label && r[2] === `× ${scale}`)[col];
+  assert.equal(cell('Superconducting: measurement efficiency η', 0.5), '+5.69×10⁻³ [4.19, 7.19]×10⁻³ at τ = 0.7 µs, d = 3, hard');
+  assert.equal(cell('Superconducting: measurement efficiency η', 2), '−6.25×10⁻⁴ [−10.6, −3.13]×10⁻⁴ at τ = 0.7 µs, d = 3, hard');
+  assert.equal(cell('Superconducting: T1', 2), '−2.44×10⁻³ [−3.81, −1.06]×10⁻³ at τ = 0.7 µs, d = 3, hard');
+  assert.equal(cell('Trapped ion: dark-to-bright leak rate', 0.5), NOT_RESOLVED_CHANGE);
+  assert.equal(cell('Trapped ion: dark-to-bright leak rate', 2), NOT_RESOLVED_CHANGE);
+  const resolved = t.rows.filter((r) => / at τ = /.test(r[col]));
+  assert.deepEqual(resolved.map((r) => r[1]), ['Superconducting', 'Superconducting', 'Superconducting']);
+  assert.ok(/resampling quantum shots/.test(t.caption));
+});
+
+// CC-B21 item 5. Catches: fails if a Stage 4 file with sensitivity null still draws the tornado
+// or the "not run" list, or hides the file's sensitivityNote. Non-vacuous: the real file draws
+// the tornado and the list.
+test('Level 5 v2: sensitivity null hides the tornado and shows sensitivityNote', () => {
+  const tornadoTitle = (root) => [...walk(root)].some((n) => n.localName === 'figcaption' && /^Which parameters matter/.test(n.textContent));
+  const real = mountWith(true);
+  assert.ok(tornadoTitle(real));
+  assert.ok([...walk(real)].some((n) => hasClass(n, 'l5-not-run')));
+  const saved = { sensitivity: stage4v2.sensitivity, note: stage4v2.sensitivityNote };
+  stage4v2.sensitivity = null;
+  stage4v2.sensitivityNote = 'No sensitivity run in this file.';
+  try {
+    const root = mountWith(true);
+    assert.equal(tornadoTitle(root), false);
+    assert.equal([...walk(root)].some((n) => hasClass(n, 'l5-not-run')), false);
+    const note = [...walk(root)].find((n) => hasClass(n, 'l5-sensitivity-note'));
+    assert.equal(note?.textContent, 'No sensitivity run in this file.');
+  } finally {
+    stage4v2.sensitivity = saved.sensitivity;
+    stage4v2.sensitivityNote = saved.note;
+  }
 });
 
 // A53 review item 13. Catches: fails if the budget legend names "Crosstalk" plainly although
@@ -362,20 +478,21 @@ test('budget bars: the crosstalk segment says it is trapped ion only', () => {
   assert.equal(xt.value, 0);
 });
 
-// A53 review item 1 (blocking). Catches: fails if Level 5 v2 shows the provisional Stage 4
-// verdicts without a visible banner at the top, above the scoreboard and above the tornado chart
-// (and inside "Data"), or if the banner stays once the file is final. Non-vacuous: the same
-// mount with provisional false has no banner.
+// A53 review item 1 (blocking); CC-B21 item 5 (changed because the Stage 4 file became final,
+// provisional: false; the banners are now checked on a synthetic provisional file). Catches:
+// fails if Level 5 v2 shows provisional Stage 4 verdicts without a visible banner at the top,
+// above the scoreboard and above the tornado chart (and inside "Data"), or if any banner shows
+// on the real final file.
 test('Level 5 v2: provisional banner while stage4.provisional is true, none when final', () => {
-  assert.equal(stage4v2.provisional, true);
   const banners = (root) => [...walk(root)].filter((n) => hasClass(n, 'l5-provisional'));
-  const on = banners(mountWith(true));
-  assert.equal(on.length, 4);
-  for (const b of on) assert.equal(b.textContent, `⚠ ${PROVISIONAL_TEXT}`);
+  assert.equal(stage4v2.provisional, false);
+  assert.equal(banners(mountWith(true)).length, 0);
   const saved = stage4v2.provisional;
-  stage4v2.provisional = false;
+  stage4v2.provisional = true;
   try {
-    assert.equal(banners(mountWith(true)).length, 0);
+    const on = banners(mountWith(true));
+    assert.equal(on.length, 4);
+    for (const b of on) assert.equal(b.textContent, `⚠ ${PROVISIONAL_TEXT}`);
   } finally {
     stage4v2.provisional = saved;
   }
@@ -441,4 +558,37 @@ test('Level 5 v2: the old tables are inside the "Data" expander; v1 unchanged', 
   assert.equal([...walk(v1)].find((n) => n.localName === 'h2').textContent, 'Level 5: Two platforms');
   assert.equal([...walk(v2)].find((n) => n.localName === 'h2').textContent, 'Level 5: Two readout models, same gates');
   assert.equal(SRC_V2.stage4, stage4v2);
+});
+
+// ---- CC-B21 items 1 and 2: decoder label and intervals on the Level 5 charts ----
+import { LEARNED_LABEL } from '../src/ui/level3.js';
+
+// Catches: fails if the per-µs chart draws the Wilson bounds while the results carry cluster
+// bounds (in both the curves and the Stage 4 points, which carry loCluster/hiCluster), if the
+// trade-off chart does the same, if a caption does not say which interval it shows, or if the
+// learned decoder's results lose their out-of-sample label in the chart titles.
+test('Level 5 v2 charts: cluster intervals and the learned label', () => {
+  const p = PLATFORMS_V2.find((q) => q.id === 'superconducting');
+  const o = chartOptions(p, 'hard', 'perRound', SRC_V2);
+  const s3 = p.results.series.find((s) => s.mode === 'hard' && s.d === 3);
+  const i = 5;
+  assert.ok(Math.abs(o.series[0].lo[i] - 0.5 * (1 - (1 - 2 * s3.loCluster[i]) ** (1 / s3.r))) < 1e-15);
+  assert.notEqual(s3.loCluster[i], s3.lo[i]);
+  const v = stage4v2.platforms.superconducting.perRound.hard.find((u) => u.d === 3);
+  const pt = o.points.find((q) => q.name.startsWith('Stage 4, d = 3'));
+  assert.deepEqual([pt.lo, pt.hi], [v.loCluster, v.hiCluster]);
+  assert.equal(o.intervals, 'Lower and upper bounds: 95% interval, resampling quantum shots.');
+  assert.ok(o.title.endsWith(LEARNED_LABEL), o.title);
+  const t = tradeoffOptions('hard');
+  const c = stage4v2.platforms.superconducting.tradeoff[3].hard;
+  const ts = t.series.find((s) => s.arm === 'superconducting' && s.d === 3);
+  assert.equal(ts.lo[ts.tau.indexOf(c.tau[0])], c.loCluster[0]);
+  const tp = t.points.find((q) => q.arm === 'superconducting' && q.d === 3);
+  assert.deepEqual([tp.lo, tp.hi], [v.loCluster, v.hiCluster]);
+  assert.equal(t.intervals, 'Lower and upper bounds: 95% interval, resampling quantum shots.');
+  assert.ok(t.title.includes(LEARNED_LABEL));
+  // The v1 level (flag off): its curves (v1 files) carry no cluster bounds, its Stage 4 points
+  // do, and the caption names each.
+  assert.equal(chartOptions(PLATFORMS[0], 'hard', 'perRound').intervals,
+    'Curves: 95% Wilson interval. Stage 4 points: 95% interval, resampling quantum shots.');
 });

@@ -201,6 +201,55 @@ export function formatNumber(v) {
   return v.toExponential(2).replace('e', '×10^').replace('^+', '^');
 }
 
+// Intervals of a logical-error series or point (CC-B21 item 2): the cluster bounds
+// (loCluster/hiCluster, a bootstrap over quantum shots; DECISIONS E14) when the results carry
+// them, otherwise the Wilson lo/hi. Works on arrays (a series) and on numbers (a point).
+// Returns { lo, hi, kind } with kind "cluster" or "wilson".
+export const INTERVAL_TEXT = {
+  cluster: '95% interval, resampling quantum shots',
+  wilson: '95% Wilson interval',
+};
+export function intervalOf(o) {
+  const both = (a, b) => (Array.isArray(a) && Array.isArray(b)) || (Number.isFinite(a) && Number.isFinite(b));
+  if (o && both(o.loCluster, o.hiCluster)) return { lo: o.loCluster, hi: o.hiCluster, kind: 'cluster' };
+  return { lo: o?.lo, hi: o?.hi, kind: 'wilson' };
+}
+// Caption of a values table saying which interval its bounds are: parts [{ what, kind }]. One
+// kind for every part gives the phrase alone; mixed kinds name each part ("Curves: …").
+export function intervalCaption(parts) {
+  const ps = parts.filter((x) => x && INTERVAL_TEXT[x.kind]);
+  if (!ps.length) return null;
+  const kinds = [...new Set(ps.map((x) => x.kind))];
+  if (kinds.length === 1) return `Lower and upper bounds: ${INTERVAL_TEXT[kinds[0]]}.`;
+  const seen = new Set();
+  return ps.filter((x) => (seen.has(x.what) ? false : seen.add(x.what))).map((x) => `${x.what}: ${INTERVAL_TEXT[x.kind]}.`).join(' ');
+}
+// A signed change with its 95% interval in one power of ten (CC-B21 item 5):
+// "+5.69×10⁻³ [4.19, 7.19]×10⁻³". Three significant figures for each number; the power of ten
+// is the change's own unless `exp` is given (to put several changes on one scale).
+export function formatChange(diff, lo, hi, { exp = null } = {}) {
+  if (![diff, lo, hi].every(Number.isFinite)) return '—';
+  const e = exp ?? (diff === 0 ? Math.floor(Math.log10(Math.max(Math.abs(lo), Math.abs(hi)) || 1)) : Math.floor(Math.log10(Math.abs(diff))));
+  const m = (v) => {
+    const t = Number((v / 10 ** e).toPrecision(3));
+    return t === 0 ? '0' : String(t).replace('-', '−');
+  };
+  const sign = diff > 0 ? '+' : '';
+  return `${sign}${m(diff)}×10${superscript(e)} [${m(lo)}, ${m(hi)}]×10${superscript(e)}`;
+}
+// A change is resolved only when its 95% interval excludes 0 strictly; an interval with an end
+// exactly at 0 includes 0.
+export const isResolvedChange = (lo, hi) => (Number.isFinite(lo) && lo > 0) || (Number.isFinite(hi) && hi < 0);
+
+// A <caption> for a values table, or nothing.
+function tableCaption(table, text) {
+  if (!text) return;
+  const c = document.createElement('caption');
+  c.className = 'interval-note';
+  c.textContent = text;
+  table.appendChild(c);
+}
+
 function formatTick(v, log) {
   if (log) {
     const e = Math.round(Math.log10(v));
@@ -228,6 +277,7 @@ function makeScale(lo, hi, a, b, log) {
 // bands: [{ x0, x1, label }] shaded x intervals, drawn behind everything else
 // extra: { key, label } adds a column to the values table: series[key][i] and points[key]
 // (e.g. the readout time of each point on a trade-off curve)
+// intervals: caption of the values table saying which interval the bounds are (intervalCaption)
 // Returns { root, update(opts) } where root is a <figure> holding the SVG and its table.
 export function createChart(opts) {
   const id = `chart${++chartCounter}`;
@@ -415,8 +465,9 @@ export function createChart(opts) {
   return { root, update: render };
 }
 
-function valuesTable({ xLabel, yLabel, series = [], points = [], vlines = [], bands = [], extra = null }) {
+function valuesTable({ xLabel, yLabel, series = [], points = [], vlines = [], bands = [], extra = null, intervals = null }) {
   const table = document.createElement('table');
+  tableCaption(table, intervals);
   const head = table.createTHead().insertRow();
   for (const h of ['Series', ...(extra ? [extra.label] : []), xLabel, yLabel, 'Lower bound', 'Upper bound']) {
     const th = document.createElement('th');
@@ -688,9 +739,10 @@ function figureShell(prefix) {
   return { id, root, figcaption, holder, legendHolder, tableHolder };
 }
 
-// Values table from column names and rows; numbers through formatNumber.
-function rowsTable(columns, rows) {
+// Values table from column names and rows (and an optional caption); numbers through formatNumber.
+function rowsTable(columns, rows, caption = null) {
   const t = document.createElement('table');
+  tableCaption(t, caption);
   const head = t.createTHead().insertRow();
   for (const h of columns) {
     const th = document.createElement('th');
@@ -777,8 +829,8 @@ export function createStackedBars(opts) {
 // Tornado chart: horizontal bars of a signed change around a zero line, in groups (one group
 // per parameter, drawn in the order given; the caller sorts them).
 // opts: { title, valueLabel, groups: [{ label, bars: [{ label, value, color, filled = true }] }],
-// legend: [{ name, color, filled }], table: { columns, rows } (values table; default: group,
-// bar, value) }. Every bar is named in text beside it, so colour and fill are never the only cue.
+// legend: [{ name, color, filled }], table: { columns, rows, caption? } (values table; default:
+// group, bar, value) }. Every bar is named in text beside it, so colour and fill are never the only cue.
 export function createTornado(opts) {
   const shell = figureShell('tornado');
   let current = opts;
@@ -839,7 +891,7 @@ export function createTornado(opts) {
     shell.holder.replaceChildren(svg);
     shell.legendHolder.replaceChildren(...(legend.length ? [htmlLegend(legend.map((e) => ({ name: e.name, ...squareKey(e.color, e.filled !== false) })))] : []));
     const t = table ?? { columns: ['Parameter', 'Bar', valueLabel], rows: groups.flatMap((g) => g.bars.map((b) => [g.label, b.label, b.value])) };
-    shell.tableHolder.replaceChildren(scrollBox(rowsTable(t.columns, t.rows), `Values of the chart: ${title}`));
+    shell.tableHolder.replaceChildren(scrollBox(rowsTable(t.columns, t.rows, t.caption), `Values of the chart: ${title}`));
   }
   render(opts);
   onNarrowChange(() => render({}));

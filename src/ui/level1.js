@@ -6,7 +6,7 @@
 // answer highlights the flipped data qubit and the checks it lit, with one sentence of reason.
 
 import { decodeShot, createFlatReadout } from './bridge_core.js';
-import { bankD3R1 } from './bridge_data.js';
+import { bankD3R1, demForte1 } from './bridge_data.js';
 import { createRng } from '../core/rng.js';
 import { expandShots, split } from '../core/bank.js';
 import { computeDetectors } from '../core/detectors.js';
@@ -14,8 +14,21 @@ import { buildGraph } from '../core/graph.js';
 import { FEATURES } from './features.js';
 import { goalLine, explainMore, takeawayCard, prefersReducedMotion } from './charts.js';
 
-// Gate-error estimate passed to decodeShot for the edge weights (mode "hard").
+// Gate-error estimate of the naive decoder (one rate for every edge). The levels decode with
+// the learned decoder (learnedNoise below); P_GATE stays for the live-run panel's comparison.
 export const P_GATE = 0.01;
+
+// The decoder of every level (team checklist U3 rows 14 and 31): the learned decoder, with the
+// edge-class rates of the forte-1 banks of the same d, r and basis (demForte1, the classes
+// level 4's curated examples also use). Lifted from the naive decoder after the held-out check
+// passed (DECISIONS, Person A, "SP5 cut lifted (V18 passed)"; data/results/holdout.json).
+// Returns the `noise` argument of decodeShot and runPoint; throws when no bank matches.
+export function learnedNoise(bank, dem = demForte1) {
+  const basis = bank?.basis ?? 'Z';
+  const b = (dem?.banks || []).find((x) => x.d === bank?.d && x.r === bank?.r && (x.basis ?? 'Z') === basis);
+  if (!b?.classes) throw new Error(`no learned edge rates for d = ${bank?.d}, r = ${bank?.r}, basis ${basis}`);
+  return { model: 'learned', rates: b.classes };
+}
 const SEED = 20261010;
 const SHOTS_PER_GAME = 10;
 
@@ -85,11 +98,20 @@ export function litShotPool(bank) {
 
 // Human-readable list of what the decoder's matching corrects (1-based labels). With
 // oneRound (the U7.4 wording) a wrong check reading is "check j misfired", without rounds.
+// A diagonal edge (learned graph) is a flip of its data qubit between that qubit's two checks
+// of one round (CLAUDE.md, Decoding graph); it counts as a data-qubit correction.
 export function describeCorrections(graph, paths, { oneRound = false } = {}) {
   const items = [];
   for (const p of paths) {
     for (const id of p.edges) {
       const e = graph.edges[id];
+      if (e.kind === 'diag') {
+        items.push({
+          kind: 'data', index: e.dataQubit,
+          text: `flip of data qubit ${e.dataQubit + 1} between its two checks${oneRound && graph.r === 1 ? '' : ` in round ${e.round + 1}`}`,
+        });
+        continue;
+      }
       items.push(e.kind === 'space'
         ? { kind: 'data', index: e.dataQubit, text: `flip of data qubit ${e.dataQubit + 1}${graph.r > 1 ? (e.layer < graph.r ? ` before round ${e.layer + 1}` : ' before the final readout') : ''}` }
         : { kind: 'check', index: e.check, text: oneRound && graph.r === 1 ? `check ${e.check + 1} misfired` : `wrong reading of check ${e.check + 1} in round ${e.round + 1}` });
@@ -111,7 +133,9 @@ function el(tag, attrs = {}, text = null) {
 export function mountLevel1(container) {
   const bank = bankD3R1;
   const { d, r } = bank;
-  const graph = buildGraph(d, r);
+  // The learned graph: its paths can use the diagonal edges.
+  const graph = buildGraph(d, r, { diagonal: true });
+  const noise = learnedNoise(bank);
   const { shots, pool } = litShotPool(bank);
 
   const drawRng = createRng(SEED);
@@ -246,7 +270,7 @@ export function mountLevel1(container) {
     }
     const index = pool[drawRng.int(pool.length)];
     const readout = createFlatReadout({ epsilon });
-    const res = decodeShot({ shotBits: shots[index], layout: bank.layout, d, r, readout, mode: 'hard', pGate: P_GATE, rng: readoutRng });
+    const res = decodeShot({ shotBits: shots[index], layout: bank.layout, d, r, readout, mode: 'hard', noise, rng: readoutRng });
     current = { index, res };
     answered = false;
     shotNo++;

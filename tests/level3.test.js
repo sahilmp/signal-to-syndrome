@@ -5,6 +5,8 @@ import {
   crosstalkRows, crosstalkShift, crosstalkNote,
 } from '../src/ui/level3.js';
 import { bankD3R3, bankXD3R3 } from '../src/ui/bridge_data.js';
+import { tauGrid } from '../src/ui/level3.js';
+import stage3dense from '../data/results/stage3_sc_dense.json' with { type: 'json' };
 import stage2v2 from '../data/results/stage2_ion.json' with { type: 'json' };
 import { budgetAt } from '../src/ui/budget.js';
 import { spreadLabels } from '../src/ui/charts.js';
@@ -80,12 +82,40 @@ test('optimaInfo: ion tau_phys is the simulated optimum, no model line', () => {
   assert.notEqual(ION.results.optima.tauPhysEmpirical.xMin, ION.results.optima.tauPhys.xMin);
   assert.equal(info.lines[0], 'Physical optimum τ_phys (lowest simulated assignment error): 23 µs.');
   assert.ok(!info.lines.some((l) => l.includes('ring-up')));
-  // The superconducting arm: the simulated value, 0.906 µs to 3 significant figures (located on
-  // assignment.empirical, as stored in tauPhysEmpirical), with the model's beside it.
+  // The superconducting arm: the simulated value, 0.910 µs to 3 significant figures (located on
+  // assignment.empirical, as stored in tauPhysEmpirical), with the model's beside it. Changed by
+  // CC-B21 item 1: Level 3 now reads the dense-grid file that the final Stage 4 uses (agreed
+  // with Person A), where the simulated optimum is 0.910 µs (0.906 µs on the standard grid) and
+  // the model's 0.577 µs (0.587 µs); the standard-grid value must no longer appear.
   const sc = optimaInfo(SC.results, 'hard', [3], { physFromEmpirical: true });
   assert.equal(formatTau(physLine(sc).x), formatTau(SC.results.optima.tauPhysEmpirical.xMin));
-  assert.equal(formatTau(physLine(sc).x), '0.906 µs');
-  assert.match(sc.lines[1], /ignores resonator ring-up, is 0\.587 µs/);
+  assert.equal(formatTau(physLine(sc).x), '0.91 µs');
+  assert.notEqual(formatTau(physLine(sc).x), '0.906 µs');
+  assert.match(sc.lines[1], /ignores resonator ring-up, is 0\.577 µs/);
+});
+
+// CC-B21 item 1. Catches: fails if Level 3 reads the v1 or standard-grid files, the naive
+// decoder, or a slider grid point that has no results or no error budget in the files it now
+// reads (the card's tau_grid_us on the dense superconducting grid and the v2b ion grid), in
+// either memory. Non-vacuous: the dense grid is larger than the card's grid.
+test('Level 3 curves: learned decoder from the Stage 4 files; every slider point has results and budget', () => {
+  for (const p of PLATFORMS) {
+    for (const basis of ['Z', 'X']) {
+      const res = basis === 'X' ? p.resultsX : p.results;
+      const bud = basis === 'X' ? p.budgetResultsX : p.budgetResults;
+      assert.ok(res.series.length > 0 && res.series.every((s) => s.decoder === 'learned'), `${p.id} ${basis} learned only`);
+      assert.ok(res.optima.tauLog.every((t) => t.decoder === 'learned'));
+      for (const tau of tauGrid(p)) {
+        const i = res.x.values.findIndex((x) => Math.abs(x - tau) <= 1e-9 * Math.max(1, tau));
+        assert.ok(i >= 0, `${p.id} ${basis}: no results at ${tau}`);
+        assert.ok(res.series.every((s) => Number.isFinite(s.pL[i])), `${p.id} ${basis}: missing pL at ${tau}`);
+        assert.ok(budgetAt(bud, tau), `${p.id} ${basis}: no budget at ${tau}`);
+      }
+    }
+  }
+  assert.equal(SC.results.x.values.length, 27);
+  assert.ok(tauGrid(SC).length < SC.results.x.values.length);
+  assert.equal(SC.results.provenance, stage3dense.provenance);
 });
 
 // A53 review item 11. Catches: fails if the crosstalk scan loses its reduced-statistics caveat
@@ -103,12 +133,16 @@ test('batch banks: the X bank is the phase-flip d = 3, r = 3 bank', () => {
   assert.equal(bankD3R3.basis ?? 'Z', 'Z');
 });
 
-// Catches: fails if the ion d = 7 hard optimum (3 errors of 32 000 at its lowest point)
-// is still presented as an optimum with a marker (A28 item 5), or if d = 3 and 5 lose theirs.
-test('optimaInfo: ion d = 7 not resolved and not drawn; d = 3 and 5 drawn', () => {
+// Catches: fails if an ion optimum with fewer than 10 logical errors at its lowest point is
+// still presented as an optimum with a marker (A28 item 5), or if d = 3 loses its marker.
+// Changed by CC-B21 item 1: Level 3 now shows the learned decoder, whose ion d = 5 curve has 7
+// and d = 7 curve 0 errors of 32 000 at their lowest points (the naive d = 7 had 3), so only
+// d = 3 is drawn; the rule itself is unchanged and the test is at least as strict.
+test('optimaInfo: ion optima under 10 errors not resolved and not drawn (learned: d = 5, 7); d = 3 drawn', () => {
   const info = optimaInfo(ION.results, 'hard', [3, 5, 7]);
-  assert.deepEqual(info.vlines.map((v) => v.label), ['τ_phys', 'τ_log d3', 'τ_log d5']);
-  assert.match(info.lines[3], /d = 7 \(hard\): not resolved\. The lowest point has only 3 logical errors/);
+  assert.deepEqual(info.vlines.map((v) => v.label), ['τ_phys', 'τ_log d3']);
+  assert.match(info.lines[2], /d = 5 \(hard\): not resolved\. The lowest point has only 7 logical errors/);
+  assert.match(info.lines[3], /d = 7 \(hard\): not resolved\. The lowest point has only 0 logical errors/);
 });
 
 // Catches: fails if readout times go back to six significant figures (A28 item 6).
@@ -148,9 +182,12 @@ test('distanceMarkers: only the chosen d has a tau_log marker', () => {
     const labels = distanceMarkers(res, d, 10).map((v) => v.label);
     assert.deepEqual(labels, ['τ = 10 µs', 'τ_phys', `τ_log d${d}`]);
   }
-  // On the real ion results as well: one tau_log marker, the chosen one.
-  const real = distanceMarkers(ION.results, 5, 20).filter((v) => v.label.includes('τ_log'));
-  assert.deepEqual(real.map((v) => v.label), ['τ_log d5']);
+  // On the real ion results as well: one tau_log marker, the chosen one. Changed by CC-B21 item
+  // 1: on the learned results the ion d = 5 optimum is not resolved (7 errors), so d = 3 is the
+  // chosen d here, and the chosen d = 5 shows no tau_log marker at all.
+  const real = distanceMarkers(ION.results, 3, 20).filter((v) => v.label.includes('τ_log'));
+  assert.deepEqual(real.map((v) => v.label), ['τ_log d3']);
+  assert.deepEqual(distanceMarkers(ION.results, 5, 20).filter((v) => v.label.includes('τ_log')), []);
 });
 
 // Catches: fails if a band boundary is off: ratio exactly 1.1 is "spot on" and 1.1 + 0.001
@@ -266,4 +303,44 @@ test('crosstalkRows: the real ion scan has one row per rate and (d, mode)', () =
   assert.equal(rows.length, scan.rates_per_us.length * 4);
   assert.equal(rows.filter((r) => r.rate.includes('measured lower bound')).length, 4);
   assert.ok(rows.every((r) => r.shift === 'yes' || r.shift === 'not resolved'));
+});
+
+// ---- CC-B21 item 2: intervals of logical-error charts ----
+import { intervalOf, intervalCaption, INTERVAL_TEXT } from '../src/ui/charts.js';
+import { LEARNED_LABEL, decoderLabel, headlineResults } from '../src/ui/level3.js';
+import { stage2v2 as bridge2, stage2x as bridge2x, stage3v2 as bridge3, stage3x as bridge3x } from '../src/ui/bridge_data.js';
+import v2b from '../data/results/stage2_ion_v2b.json' with { type: 'json' };
+import v2bx from '../data/results/stage2_ion_x_v2b.json' with { type: 'json' };
+import denseX from '../data/results/stage3_sc_x_dense.json' with { type: 'json' };
+
+// Catches: fails if a chart keeps the Wilson bounds when the series carries cluster bounds, takes
+// cluster bounds from only one end, or loses its Wilson bounds when there are none; and if the
+// values-table caption does not name the interval, or names one kind for a mixed chart.
+test('intervalOf and intervalCaption: cluster when present, else Wilson, said in the caption', () => {
+  const s = { lo: [1], hi: [2], loCluster: [0.5], hiCluster: [3] };
+  assert.deepEqual(intervalOf(s), { lo: [0.5], hi: [3], kind: 'cluster' });
+  assert.deepEqual(intervalOf({ lo: [1], hi: [2], loCluster: [0.5] }), { lo: [1], hi: [2], kind: 'wilson' });
+  assert.deepEqual(intervalOf({ value: 1, lo: 0.9, hi: 1.1, loCluster: 0.8, hiCluster: 1.2 }), { lo: 0.8, hi: 1.2, kind: 'cluster' });
+  assert.deepEqual(intervalOf({ lo: 0.9, hi: 1.1 }), { lo: 0.9, hi: 1.1, kind: 'wilson' });
+  assert.equal(INTERVAL_TEXT.cluster, '95% interval, resampling quantum shots');
+  assert.equal(INTERVAL_TEXT.wilson, '95% Wilson interval');
+  assert.equal(intervalCaption([{ what: 'Curves', kind: 'cluster' }, { what: 'Curves', kind: 'cluster' }]),
+    'Lower and upper bounds: 95% interval, resampling quantum shots.');
+  assert.equal(intervalCaption([{ what: 'Curves', kind: 'cluster' }, { what: 'Batch point', kind: 'wilson' }]),
+    'Curves: 95% interval, resampling quantum shots. Batch point: 95% Wilson interval.');
+  assert.equal(intervalCaption([]), null);
+});
+
+// CC-B21 item 1. Catches: fails if a bridge still points at the standard-grid or v1 files
+// (U3 row 29 and the dense-grid deviation agreed with Person A), or if the learned results lose
+// their out-of-sample label (U3 row 31) or a naive-only file is labelled learned.
+test('bridges: v2b ion files and dense superconducting files; the learned label', () => {
+  assert.equal(bridge2.provenance, v2b.provenance);
+  assert.equal(bridge2x.provenance, v2bx.provenance);
+  assert.equal(bridge3.provenance, stage3dense.provenance);
+  assert.equal(bridge3x.provenance, denseX.provenance);
+  assert.equal(LEARNED_LABEL, 'learned decoder (checked out of sample on held-out circuits)');
+  assert.equal(decoderLabel(headlineResults(bridge2)), LEARNED_LABEL);
+  assert.equal(decoderLabel(headlineResults({ x: { values: [1] }, series: [{ d: 3, mode: 'hard', decoder: 'naive' }] })), 'naive decoder');
+  assert.ok(!/V18|CC-|N7b|SP5/.test(LEARNED_LABEL));
 });

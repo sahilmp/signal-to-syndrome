@@ -11,16 +11,20 @@ export { stage1, stage2, stage3, stage4, bankD3R1, bankD3R3, paramsIon, paramsSc
 
 // v2 (team checklist Appendix U3): fixtures until the switch rows 13, 17, 18 and 22.
 // Row 13 (SP5): demForte1 and stage1v2-stage3v2 are real results.
-// Rows 17, 18, 22 (SP6): v2 params, X-basis results (stage3v2 is now the rerun with both
-// decoders) and the provisional Stage 4 v2 (numbers replaced at A53c, not quoted).
+// Rows 17, 18, 22 (SP6): v2 params, X-basis results and Stage 4 v2.
+// Row 29 (revision 2.1, N12): stage2v2 and stage2x are the v2b files (the same pL values plus
+// cluster intervals, paired and shiftDelta). Deviation agreed with Person A (Sun 11 Oct, after
+// CC-A22): stage3v2 and stage3x are the dense-grid files, which the final Stage 4 and the C1
+// verdict use, instead of the standard-grid ones, so every superconducting value on the page
+// is the one Stage 4 quotes. Row 32 (N7b): stage4v2 keeps its path; the file is final.
 import demForte1 from '../../data/results/dem_forte1.json' with { type: 'json' };
 import stage1v2 from '../../data/results/stage1_flat.json' with { type: 'json' };
-import stage2v2 from '../../data/results/stage2_ion.json' with { type: 'json' };
-import stage3v2 from '../../data/results/stage3_sc.json' with { type: 'json' };
+import stage2v2 from '../../data/results/stage2_ion_v2b.json' with { type: 'json' };
+import stage3v2 from '../../data/results/stage3_sc_dense.json' with { type: 'json' };
 import stage4v2 from '../../data/results/stage4_comparison.json' with { type: 'json' };
 import stage1x from '../../data/results/stage1_flat_x.json' with { type: 'json' };
-import stage2x from '../../data/results/stage2_ion_x.json' with { type: 'json' };
-import stage3x from '../../data/results/stage3_sc_x.json' with { type: 'json' };
+import stage2x from '../../data/results/stage2_ion_x_v2b.json' with { type: 'json' };
+import stage3x from '../../data/results/stage3_sc_x_dense.json' with { type: 'json' };
 // B49 (U7.9): Level 5 v2 in the phase-flip memory.
 import stage4x from '../../data/results/stage4_comparison_x.json' with { type: 'json' };
 import paramsIonV2 from '../../params/ion.json' with { type: 'json' };

@@ -211,3 +211,33 @@ test('describeCorrections: one-round wording "check j misfired"', () => {
   const [old] = describeCorrections(g, [{ a: 0, b: 'B', edges: [time.id] }]);
   assert.equal(old.text, 'wrong reading of check 2 in round 1');
 });
+
+// ---- CC-B21 item 1: the learned decoder in levels 1-4 (U3 rows 14 and 31) ----
+import { learnedNoise } from '../src/ui/level1.js';
+import { bankD3R1, bankD3R3, bankXD3R3, demForte1 } from '../src/ui/bridge_data.js';
+
+// Catches: fails if a level decodes with the naive model, or with the learned rates of another
+// bank (another d, r or basis): the noise must be { model: "learned", rates } with exactly the
+// dem_forte1.json classes of the bank's own d, r and basis. Non-vacuous: the Z and X classes of
+// d = 3, r = 3 differ, and a bank with no rates throws instead of falling back silently.
+test('learnedNoise: the dem_forte1 classes of the bank of the same d, r and basis', () => {
+  const cls = (d, r, basis) => demForte1.banks.find((b) => b.d === d && b.r === r && b.basis === basis).classes;
+  assert.deepEqual(learnedNoise(bankD3R1), { model: 'learned', rates: cls(3, 1, 'Z') });
+  assert.deepEqual(learnedNoise(bankD3R3), { model: 'learned', rates: cls(3, 3, 'Z') });
+  assert.deepEqual(learnedNoise(bankXD3R3), { model: 'learned', rates: cls(3, 3, 'X') });
+  assert.notDeepEqual(cls(3, 3, 'Z'), cls(3, 3, 'X'));
+  assert.throws(() => learnedNoise({ d: 9, r: 3 }), /no learned edge rates for d = 9, r = 3, basis Z/);
+});
+
+// Catches: fails if a learned matching through a diagonal edge is described as a wrong check
+// reading ("check null") or dropped: it is a flip of its data qubit between its two checks, a
+// data-qubit correction (so Level 1 marks that qubit as the decoder's pick).
+test('describeCorrections: a diagonal edge is a data-qubit flip between its two checks', () => {
+  const g = buildGraph(3, 3, { diagonal: true });
+  const diag = g.edges.find((e) => e.kind === 'diag' && e.round === 1);
+  const [c] = describeCorrections(g, [{ a: 0, b: 1, edges: [diag.id] }]);
+  assert.deepEqual(c, { kind: 'data', index: 1, text: 'flip of data qubit 2 between its two checks in round 2' });
+  const g1 = buildGraph(3, 1, { diagonal: true });
+  const d1 = g1.edges.find((e) => e.kind === 'diag');
+  assert.equal(describeCorrections(g1, [{ a: 0, b: 1, edges: [d1.id] }], { oneRound: true })[0].text, 'flip of data qubit 2 between its two checks');
+});

@@ -11,18 +11,18 @@
 
 import { createIonReadout, createScReadout, runPoint, findMinimum } from './bridge_core.js';
 import {
-  bankD3R3, bankXD3R3, stage2, stage3, stage2v2, stage3v2, stage2x, stage3x, paramsIon, paramsSc,
+  bankD3R3, bankXD3R3, stage2v2, stage3v2, stage2x, stage3x, paramsIon, paramsSc,
 } from './bridge_data.js';
 import { FEATURES } from './features.js';
 import { createRng } from '../core/rng.js';
 import { expandShots } from '../core/bank.js';
 import {
   createChart, svgEl, formatNumber, SERIES_STYLES, isNarrow, onNarrowChange, htmlLegend, scrollBox, drawVlineLabels,
-  TOKENS, tokenStyle, goalLine, explainMore, takeawayCard, createStackedBars,
+  TOKENS, tokenStyle, goalLine, explainMore, takeawayCard, createStackedBars, intervalOf, intervalCaption,
 } from './charts.js';
 import { budgetAt, budgetBarOptions, budgetSentence } from './budget.js';
 import { drawIqView } from './iqview.js';
-import { P_GATE } from './level1.js';
+import { learnedNoise } from './level1.js';
 import { sampleBank } from './level2.js';
 
 const SEED = 20261012;
@@ -34,29 +34,49 @@ const BATCH_SHOTS = 200;
 export const cardValue = (p) => (p !== null && typeof p === 'object' && !Array.isArray(p) && 'value' in p ? p.value : p);
 
 // A results file reduced to the naive decoder: series and optima.tauLog entries without a
-// decoder field (written before the learned decoder) or with decoder "naive". Levels 2 to 5
-// show the naive decoder until B44 switches them to the learned one (CC-A12 added learned
-// series to the same files, which would otherwise draw every curve and marker twice).
+// decoder field (written before the learned decoder) or with decoder "naive". Kept for files
+// without learned series (headlineResults falls back to it) and for the v1 Level 5.
 export function naiveResults(results) {
   const naive = (o) => o.decoder === undefined || o.decoder === 'naive';
   const out = { ...results, series: (results.series || []).filter(naive) };
   if (results.optima) out.optima = { ...results.optima, tauLog: (results.optima.tauLog || []).filter(naive) };
   return out;
 }
+// A results file reduced to the decoder the page shows (team checklist U3 rows 14 and 31, after
+// "SP5 cut lifted (V18 passed)" in DECISIONS): the learned series and tauLog entries when the
+// file has them, otherwise the naive ones; Stage 4 v2 reports the same decoder. Each file
+// carries both decoders, which would otherwise draw every curve and marker twice.
+export function headlineResults(results) {
+  if (!(results.series || []).some((s) => s.decoder === 'learned')) return naiveResults(results);
+  const learned = (o) => o.decoder === 'learned';
+  const out = { ...results, series: results.series.filter(learned) };
+  if (results.optima) out.optima = { ...results.optima, tauLog: (results.optima.tauLog || []).filter(learned) };
+  return out;
+}
+// Label of the learned decoder's results wherever they are shown (chart titles and legends of
+// the hero and Levels 2-5). Out of sample: the held-out check V18 passed (DECISIONS, Person A,
+// "SP5 cut lifted (V18 passed)"; data/results/holdout.json, setting1).
+export const LEARNED_LABEL = 'learned decoder (checked out of sample on held-out circuits)';
+// The decoder label of a results file as headlineResults reduced it.
+export const decoderLabel = (results) => ((results?.series || []).some((s) => s.decoder === 'learned') ? LEARNED_LABEL : 'naive decoder');
 
-// The readout platforms of levels 3 and 4, each behind its FEATURES flag. physFromEmpirical:
+// The readout platforms of levels 3 and 4, each behind its FEATURES flag. The curves are the
+// learned decoder's (headlineResults) from the files Stage 4 uses: stage2v2 (v2b) for the ion,
+// stage3v2 (the dense grid) for the superconducting qubit, so Levels 3-5 and the hero quote the
+// same optima (CC-B21 item 1). The slider stays on the card's tau_grid_us; every grid point is
+// a point of both results files (tests/level3.test.js). physFromEmpirical:
 // the belief model's tauPhys (results.optima) is not the simulated one, because the belief
 // model ignores resonator ring-up (DECISIONS, A28 item 2), so tau_phys is located on
 // assignment.empirical instead and the belief value is quoted beside it.
 export const PLATFORMS = [
   {
-    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: naiveResults(stage2), stage: 2, budgetResults: stage2v2,
-    resultsX: naiveResults(stage2x), budgetResultsX: stage2x,
+    id: 'trapped-ion', flag: 'ion', label: 'Trapped ion', params: paramsIon, results: headlineResults(stage2v2), stage: 2, budgetResults: stage2v2,
+    resultsX: headlineResults(stage2x), budgetResultsX: stage2x,
     create: createIonReadout, tauName: 'Detection time',
   },
   {
-    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: naiveResults(stage3), stage: 3, budgetResults: stage3v2,
-    resultsX: naiveResults(stage3x), budgetResultsX: stage3x,
+    id: 'superconducting', flag: 'superconducting', label: 'Superconducting', params: paramsSc, results: headlineResults(stage3v2), stage: 3, budgetResults: stage3v2,
+    resultsX: headlineResults(stage3x), budgetResultsX: stage3x,
     create: createScReadout, tauName: 'Integration time', physFromEmpirical: true,
   },
 ];
@@ -668,16 +688,20 @@ export function mountLevel3(container) {
     const mem = memoryTag(basis);
     const hard = res.series.filter((s) => s.mode === 'hard').sort((a, b) => a.d - b.d);
     optima = optimaInfo(res, 'hard', hard.map((s) => s.d), { physFromEmpirical: p.physFromEmpirical });
+    // Intervals: the cluster bounds when the results carry them, else Wilson (CC-B21 item 2).
+    const ivs = hard.map((s) => intervalOf(s));
+    const dec = decoderLabel(res);
     chartBase = {
-      title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${mem}${res.fixture ? ' — placeholder data' : ''}`,
+      title: `Logical error against ${p.tauName.toLowerCase()} (${tag}, hard decoding)${mem}, ${dec}${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${p.tauName} τ (µs)`, yLabel: 'Logical error probability',
-      series: hard.map((s) => ({
-        name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi,
+      series: hard.map((s, i) => ({
+        name: `d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: ivs[i].lo, hi: ivs[i].hi,
         ...(ux ? tokenStyle({ d: s.d, mode: 'hard', platform: p.id, endLabel: `d = ${s.d}` }) : {}),
       })),
+      intervals: intervalCaption([...ivs.map((v) => ({ what: 'Curves', kind: v.kind })), { what: 'Batch point', kind: 'wilson' }]),
       logX: true, logY: true, yFloor: 1e-7,
       ...(ux ? {
-        title: `Logical error against readout time (${p.label.toLowerCase()}, hard decoding)${mem}${res.fixture ? ' — placeholder data' : ''}`,
+        title: `Logical error against readout time (${p.label.toLowerCase()}, hard decoding)${mem}, ${dec}${res.fixture ? ' — placeholder data' : ''}`,
         xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
       } : {}),
     };
@@ -704,6 +728,7 @@ export function mountLevel3(container) {
           color: TOKENS.readout.color, shape: TOKENS.shape[p.id], dash: TOKENS.readout.dash, endLabel: 'simulated',
         },
       ],
+      intervals: intervalCaption([{ what: 'Simulated readout error', kind: 'wilson' }]),
     } : a ? {
       title: `Assignment error against integration time (${tag})${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: 'Integration time τ (µs)', yLabel: 'Assignment error', logX: true, logY: true, yFloor: 1e-6,
@@ -819,10 +844,11 @@ export function mountLevel3(container) {
     const basis = currentBasis();
     const bank = batchBanks[basis];
     if (!bank) return;
-    const pt = runPoint({ bank, readout: plat.create(plat.params, tau), mode: 'hard', pGate: P_GATE, seed: SEED + 2, maxShots: BATCH_SHOTS });
+    // The learned decoder with the rates of the bank's own d, r and basis (U3 rows 14 and 31).
+    const pt = runPoint({ bank, readout: plat.create(plat.params, tau), mode: 'hard', noise: learnedNoise(bank), seed: SEED + 2, maxShots: BATCH_SHOTS });
     const w = pt.wilson;
     const mem = basisOn() ? `${BASES[basis].memory}, ` : '';
-    const text = `Batch at τ = ${formatTau(tau)} (${plat.label.toLowerCase()}, ${mem}d = 3, r = 3, ${pt.n} shots, hard decoding): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
+    const text = `Batch at τ = ${formatTau(tau)} (${plat.label.toLowerCase()}, ${mem}d = 3, r = 3, ${pt.n} shots, hard decoding, learned decoder): ${pt.k} logical error${pt.k === 1 ? '' : 's'}, `
       + `p = ${formatNumber(w.p)} (95% interval ${formatNumber(w.lo)} to ${formatNumber(w.hi)}).${pt.nonExact ? ` ${pt.nonExact} matchings were not exact.` : ''}`;
     platState(plat).batch = { tau, basis, pt, text };
     render();

@@ -17,13 +17,13 @@ import { createRng } from '../core/rng.js';
 import { expandShots, bitsFromKey } from '../core/bank.js';
 import { buildGraph, pFromLlr, xorP } from '../core/graph.js';
 import {
-  createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard,
+  createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard, intervalOf, intervalCaption,
 } from './charts.js';
 import { FEATURES } from './features.js';
-import { describeCorrections, P_GATE } from './level1.js';
+import { describeCorrections, P_GATE, learnedNoise } from './level1.js';
 import {
   tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
-  currentBasis, onBasisChange, resultsFor, memoryTag, setPlatform,
+  currentBasis, onBasisChange, resultsFor, memoryTag, setPlatform, decoderLabel,
 } from './level3.js';
 import { mountLiveRun } from './liverun.js';
 
@@ -196,7 +196,10 @@ export function mountLevel4(container) {
   positions.set(plat.id, idx);
   let source = { bank: bankD3R3, label: 'stored IonQ simulator bank' };
   let shots = expandShots(source.bank);
-  let graph = buildGraph(source.bank.d, source.bank.r);
+  // The learned decoder (U3 rows 14 and 31): the graph with diagonal edges and the rates of the
+  // bank's own d, r and basis; a fresh live-run bank gets its own.
+  let graph = buildGraph(source.bank.d, source.bank.r, { diagonal: true });
+  let noise = learnedNoise(source.bank);
   let drawRng = createRng(SEED);
   let current = null; // { index, seed } or, for a curated example, { curated: { rec, kind, pos } }
   const curatedGraph = buildGraph(3, 3, { diagonal: true });
@@ -296,18 +299,22 @@ export function mountLevel4(container) {
   const chartOpts = () => {
     const res = resultsFor(plat);
     const mem = memoryTag();
+    const dec = decoderLabel(res);
+    // Intervals: the cluster bounds when the results carry them, else Wilson (CC-B21 item 2).
+    const shown = res.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1));
+    const ivs = shown.map((s) => intervalOf(s));
     return {
-      title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${mem}${res.fixture ? ' — placeholder data' : ''}`,
+      title: `Hard against soft decoding: logical error against ${plat.tauName.toLowerCase()} (stage ${plat.stage}, ${plat.label.toLowerCase()}, d = ${dSel})${mem}, ${dec}${res.fixture ? ' — placeholder data' : ''}`,
       xLabel: `${plat.tauName} τ (µs)`, yLabel: 'Logical error probability',
-      series: res.series.filter((s) => s.d === dSel).sort((a, b) => (a.mode === b.mode ? 0 : a.mode === 'hard' ? -1 : 1))
-        .map((s) => ({
-          name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: s.lo, hi: s.hi,
-          ...(ux ? tokenStyle({ d: s.d, mode: s.mode, platform: plat.id, endLabel: s.mode }) : {}),
-        })),
+      series: shown.map((s, i) => ({
+        name: `${s.mode === 'hard' ? 'Hard' : 'Soft'}, d = ${s.d}, r = ${s.r}`, x: res.x.values, y: s.pL, lo: ivs[i].lo, hi: ivs[i].hi,
+        ...(ux ? tokenStyle({ d: s.d, mode: s.mode, platform: plat.id, endLabel: s.mode }) : {}),
+      })),
+      intervals: intervalCaption(ivs.map((v) => ({ what: 'Curves', kind: v.kind }))),
       logX: true, logY: true, yFloor: 1e-7,
       vlines: [{ x: grid[idx], label: `τ = ${formatTau(grid[idx])}` }],
       ...(ux ? {
-        title: `Hard against soft decoding: logical error against readout time (${plat.label.toLowerCase()}, d = ${dSel})${mem}${res.fixture ? ' — placeholder data' : ''}`,
+        title: `Hard against soft decoding: logical error against readout time (${plat.label.toLowerCase()}, d = ${dSel})${mem}, ${dec}${res.fixture ? ' — placeholder data' : ''}`,
         xLabel: 'readout time τ (µs)', yLabel: 'logical error (chance the stored bit is lost)',
       } : {}),
     };
@@ -338,7 +345,7 @@ export function mountLevel4(container) {
     const readout = plat.create(plat.params, tau);
     if (current.curated) return decodeCurated(curatedShots, current.curated.rec, readout);
     const { bank } = source;
-    const args = { shotBits: shots[current.index], layout: bank.layout, d: bank.d, r: bank.r, readout, pGate: P_GATE };
+    const args = { shotBits: shots[current.index], layout: bank.layout, d: bank.d, r: bank.r, readout, basis: bank.basis ?? 'Z', noise };
     // The same seed for both modes, so both decoders see identical readings.
     const hard = decodeShot({ ...args, mode: 'hard', rng: createRng(current.seed) });
     const soft = decodeShot({ ...args, mode: 'soft', rng: createRng(current.seed) });
@@ -493,7 +500,8 @@ export function mountLevel4(container) {
     onBank(bank, labelText) {
       source = { bank, label: labelText };
       shots = expandShots(bank);
-      graph = buildGraph(bank.d, bank.r);
+      graph = buildGraph(bank.d, bank.r, { diagonal: true });
+      noise = learnedNoise(bank);
       drawRng = createRng(bank.sampler_seed || SEED);
       renderSource();
       resetTally();

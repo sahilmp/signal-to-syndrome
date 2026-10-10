@@ -10,11 +10,11 @@ import { bankD3R3, stage1 } from './bridge_data.js';
 import { createRng } from '../core/rng.js';
 import { buildGraph } from '../core/graph.js';
 import {
-  createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard,
+  createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard, intervalOf, intervalCaption,
 } from './charts.js';
 import { FEATURES } from './features.js';
-import { naiveResults } from './level3.js';
-import { litShotPool, describeCorrections, P_GATE } from './level1.js';
+import { headlineResults, decoderLabel } from './level3.js';
+import { litShotPool, describeCorrections, learnedNoise } from './level1.js';
 import { mountSandbox } from './sandbox.js';
 
 const SEED = 20261011;
@@ -125,7 +125,9 @@ function drawGrid(graph, res) {
 export function mountLevel2(container) {
   const bank = bankD3R3;
   const { d, r } = bank;
-  const graph = buildGraph(d, r);
+  // The learned decoder (U3 rows 14 and 31): its graph has the diagonal edges its paths can use.
+  const graph = buildGraph(d, r, { diagonal: true });
+  const noise = learnedNoise(bank);
   const { shots, pool } = litShotPool(bank);
   // Seeded shuffle of the lit shots, so previous and next step through a fixed order.
   const order = pool.slice();
@@ -182,21 +184,25 @@ export function mountLevel2(container) {
   const live = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(live);
 
-  const series = naiveResults(stage1).series
-    .filter((s) => s.mode === 'hard' && [3, 5, 7].includes(s.d))
-    .sort((a, b) => a.d - b.d)
-    .map((s) => ({
-      name: `d = ${s.d}, r = ${s.r}`, x: stage1.x.values, y: s.pL, lo: s.lo, hi: s.hi,
-      ...(ux ? tokenStyle({ d: s.d, mode: 'hard', endLabel: `d = ${s.d}` }) : {}),
-    }));
+  // The learned decoder's curves (headlineResults), with the cluster intervals when the file
+  // carries them, else Wilson (CC-B21 item 2); the live estimate is a Wilson interval.
+  const res1 = headlineResults(stage1);
+  const hard1 = res1.series.filter((s) => s.mode === 'hard' && [3, 5, 7].includes(s.d)).sort((a, b) => a.d - b.d);
+  const ivs = hard1.map((s) => intervalOf(s));
+  const series = hard1.map((s, i) => ({
+    name: `d = ${s.d}, r = ${s.r}`, x: res1.x.values, y: s.pL, lo: ivs[i].lo, hi: ivs[i].hi,
+    ...(ux ? tokenStyle({ d: s.d, mode: 'hard', endLabel: `d = ${s.d}` }) : {}),
+  }));
+  const intervals = intervalCaption([...ivs.map((v) => ({ what: 'Curves', kind: v.kind })), { what: 'Live estimate', kind: 'wilson' }]);
+  const dec = decoderLabel(res1);
   const chartBase = ux ? {
-    title: 'Logical error against readout error (flat readout model)',
+    title: `Logical error against readout error (flat readout model), ${dec}`,
     xLabel: 'readout error ε (chance one measurement is wrong)', yLabel: 'logical error (chance the stored bit is lost)',
-    series, logY: true, yFloor: 1e-7,
+    series, intervals, logY: true, yFloor: 1e-7,
   } : {
-    title: 'Logical error against readout error (stage 1, flat readout)',
+    title: `Logical error against readout error (stage 1, flat readout), ${dec}`,
     xLabel: 'Readout error ε', yLabel: 'Logical error probability',
-    series, logY: true, yFloor: 1e-7,
+    series, intervals, logY: true, yFloor: 1e-7,
   };
   const chart = createChart({ ...chartBase, vlines: [{ x: epsilon, label: `ε = ${epsilon.toFixed(3)}` }] });
   container.appendChild(chart.root);
@@ -218,7 +224,7 @@ export function mountLevel2(container) {
     // Each shot has its own readout seed, so a shot redraws identically when revisited.
     const res = decodeShot({
       shotBits: shots[idx], layout: bank.layout, d, r,
-      readout: createFlatReadout({ epsilon }), mode: 'hard', pGate: P_GATE, rng: createRng(SEED + 1000 + idx),
+      readout: createFlatReadout({ epsilon }), mode: 'hard', noise, rng: createRng(SEED + 1000 + idx),
     });
     const { svg, corrections } = drawGrid(graph, res);
     gridBox.replaceChildren(svg);
@@ -230,7 +236,7 @@ export function mountLevel2(container) {
 
   function renderEstimate() {
     const readout = createFlatReadout({ epsilon });
-    const pt = runPoint({ bank: liveBank, readout, mode: 'hard', pGate: P_GATE, seed: SEED + 3, maxShots: LIVE_SHOTS });
+    const pt = runPoint({ bank: liveBank, readout, mode: 'hard', noise, seed: SEED + 3, maxShots: LIVE_SHOTS });
     const w = pt.wilson;
     live.textContent = `Live estimate at ε = ${epsilon.toFixed(3)} (d = 3, r = 3, ${pt.n} stored shots): ${pt.k} logical errors, `
       + `p = ${formatNumber(w.p)} (95% interval ${formatNumber(w.lo)} to ${formatNumber(w.hi)}).`;

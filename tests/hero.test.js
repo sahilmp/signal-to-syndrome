@@ -5,6 +5,7 @@ import {
   BAND_LABEL, COINCIDE_LABEL, REVERSE_LABEL, TOO_SHORT, HERO_DECODER, HERO_PLATFORMS,
 } from '../src/ui/hero.js';
 import { findMinimum } from '../src/core/optimum.js';
+import { stage4v2 as stage4 } from '../src/ui/bridge_data.js';
 // A v1-format superconducting Stage 3 file (no decoder field, no tauPhysEmpirical). The real
 // data/results/stage3_sc.json is a v2 file since Person A's A48 rerun (handoff N6).
 import stage3v1 from '../data/fixtures/stage3_sc.json' with { type: 'json' };
@@ -195,26 +196,63 @@ test('v2 file without a learned series: explicit naive series', () => {
   assert.equal(heroOptima(naiveOnly, c.decoder).tauLog.xMin, 3);
 });
 
-// SP5 cut rule (U3 row 14a; DECISIONS E4: V12(b) failed). Catches: fails if the hero still
-// picks the learned curve when the results contain one while the cut holds, if an explicit
-// "naive" request returns the learned series or the learned tau_log, or if an unknown decoder
-// name is accepted silently. Non-vacuous: the same results with decoder null give "learned".
-test('SP5 cut: HERO_DECODER is naive and heroCurves(results, "naive") ignores the learned series', () => {
-  assert.equal(HERO_DECODER, 'naive');
+// Replaces the test "SP5 cut: HERO_DECODER is naive …", because the decision changed: DECISIONS
+// (Person A) records "SP5 cut lifted (V18 passed)", so U3 row 31 sets HERO_DECODER to null
+// (CC-B21 item 4). Catches: fails if the hero still defaults to the naive decoder after the
+// lift, if the default does not pick the learned series and the learned tau_log when the results
+// contain them, if an explicit "naive" request no longer returns the naive series and tau_log,
+// or if an unknown decoder name is accepted silently. Non-vacuous: the synthetic results hold
+// both decoders with different curves and optima (learned 2 µs, naive 3 µs).
+test('SP5 cut lifted: HERO_DECODER is null (learned); an explicit "naive" request still returns naive', () => {
+  assert.equal(HERO_DECODER, null);
   const c = heroCurves(results, HERO_DECODER);
-  assert.equal(c.decoder, 'naive');
-  assert.deepEqual(c.logical.y, results.series[0].pL);
-  assert.equal(heroOptima(results, c.decoder).tauLog.xMin, 3);
-  assert.equal(heroCurves(results, null).decoder, 'learned');
-  assert.equal(heroCurves(results, 'learned').decoder, 'learned');
+  assert.equal(c.decoder, 'learned');
+  assert.deepEqual(c.logical.y, results.series[1].pL);
+  assert.equal(heroOptima(results, c.decoder).tauLog.xMin, 2);
+  const n = heroCurves(results, 'naive');
+  assert.equal(n.decoder, 'naive');
+  assert.deepEqual(n.logical.y, results.series[0].pL);
+  assert.equal(heroOptima(results, n.decoder).tauLog.xMin, 3);
   assert.throws(() => heroCurves(results, 'other'), /unknown decoder/);
 });
 
-// Catches: fails if the two arms of the real hero data end up on different decoders (the
-// trapped-ion results contain a learned series, the v1 superconducting file does not), which
-// the K2 gate forbids ("the hero uses the same decoder on both arms").
-test('SP5 cut: both hero arms use the same decoder on the real results', () => {
-  const decoders = HERO_PLATFORMS.map((p) => heroCurves(p.results, HERO_DECODER).decoder);
-  assert.deepEqual(decoders, ['naive', 'naive']);
-  assert.ok(HERO_PLATFORMS[0].results.series.some((s) => s.decoder === 'learned'), 'ion results contain a learned series');
+// Replaces the test "SP5 cut: both hero arms use the same decoder …", because the decision
+// changed (see above; CC-B21 item 4). Catches: fails if the two arms of the real hero data end
+// up on different decoders (the K2 gate: the same decoder on both arms), if either arm is not on
+// the learned decoder, or if the hero's tau*_log differs from Stage 4's (ion 23.0 µs,
+// superconducting 0.710 µs, d = 3, hard) or its superconducting tau*_phys from 0.910 µs (the
+// dense grid's simulated optimum; the standard-grid 0.906 µs would fail). Values compared to
+// three significant figures, as the page shows them.
+test('SP5 cut lifted: both hero arms use the learned decoder and Stage 4\'s optima', () => {
+  const s3 = (v) => Number(v.toPrecision(3));
+  const got = HERO_PLATFORMS.map((p) => {
+    const c = heroCurves(p.results, HERO_DECODER);
+    return { id: p.id, decoder: c.decoder, o: heroOptima(p.results, c.decoder) };
+  });
+  assert.deepEqual(got.map((g) => g.decoder), ['learned', 'learned']);
+  for (const g of got) {
+    const s4 = stage4.platforms[g.id].tauLog.hard.find((t) => t.d === 3);
+    assert.equal(s3(g.o.tauLog.xMin), s3(s4.xMin), `${g.id} tau*_log`);
+  }
+  assert.equal(s3(got[0].o.tauLog.xMin), 23.0);
+  assert.equal(s3(got[1].o.tauLog.xMin), 0.71);
+  assert.equal(s3(got[1].o.tauPhys.xMin), 0.91);
+  assert.equal(s3(got[1].o.tauPhys.xMin), s3(stage4.platforms.superconducting.tauPhys.empirical.xMin));
+});
+
+// CC-B21 item 2. Catches: fails if the hero's logical-error bars are the Wilson ones when the
+// series carries cluster intervals, or if a series without them loses its Wilson bars.
+test('curves: cluster interval when the series has one, Wilson otherwise', () => {
+  const withCluster = {
+    ...results,
+    series: results.series.map((s) => (s.decoder === 'learned' && s.d === 3
+      ? { ...s, lo: [0, 0, 0, 0, 0, 0], hi: [1, 1, 1, 1, 1, 1], loCluster: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1], hiCluster: [0.9, 0.9, 0.9, 0.9, 0.9, 0.9] }
+      : { ...s, lo: [0, 0, 0, 0, 0, 0], hi: [1, 1, 1, 1, 1, 1] })),
+  };
+  const c = heroCurves(withCluster);
+  assert.equal(c.logical.interval, 'cluster');
+  assert.deepEqual([c.logical.lo[0], c.logical.hi[0]], [0.1, 0.9]);
+  const n = heroCurves(withCluster, 'naive');
+  assert.equal(n.logical.interval, 'wilson');
+  assert.deepEqual([n.logical.lo[0], n.logical.hi[0]], [0, 1]);
 });
