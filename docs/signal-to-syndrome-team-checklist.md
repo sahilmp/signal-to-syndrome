@@ -891,7 +891,7 @@ Keep Person A's sections under 2500 words in total. In the report, list every nu
 ```
 
 **Pass:** every number has a source comment; nothing contradicts `notes_results.md`; F1–F3 come before the hypothesis table.
-- [ ] Done
+- [x] Done
 
 ### A55 · EDITOR · Sun 10:15 — Edit the page; plain-language verdicts
 

@@ -539,7 +539,7 @@ npm run check
 
 **Do:** team checklist A54 prompt (CC-A16, revision 2.1).
 **Pass:** every number in A's sections has a source comment; F1–F3 come before the hypothesis table; no internal step codes in visible text.
-- [ ] Done
+- [x] Done
 
 ### B50a · B · Sun 09:30 — CC-B21: cluster intervals, F1, hero decoder, Level 5 final
 
