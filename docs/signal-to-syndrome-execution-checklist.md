@@ -4,10 +4,10 @@ Every step of the v2 upgrade in the order it happens, across both people, with e
 
 | | |
 |---|---|
-| Version | 2.0, Sat 10 Oct 2026, written inside the build window |
+| Version | 2.1, Sat 10 Oct 2026, about 20:00 IST, revised inside the build window after A48. Steps up to A48 and B46 are unchanged; everything after is re-planned from Sat 20:00 (team checklist Section 1.5 says what changed and why) |
 | Build window | Sat 10 Oct 04:30 IST → Mon 12 Oct 04:30 IST (Fri 9 Oct 19:00 ET → Sun 11 Oct 19:00 ET) |
 | Starting point | Tag `sp4`; tests 176/176; release check 75/75 after a clean rebuild; V9 `53933f98` |
-| Companion | `signal-to-syndrome-team-checklist.md` (v2) holds the scope, hypotheses, contract amendments, results formats, interface specification and **every Claude Code prompt** (CC-A10–CC-A16, CC-B11–CC-B19). Step IDs here are the same as there. This file does not repeat the prompts, so they exist in one place only |
+| Companion | `signal-to-syndrome-team-checklist.md` (v2) holds the scope, hypotheses, contract amendments, results formats, interface specification and **every Claude Code prompt** (CC-A10–CC-A23, CC-B11–CC-B21). Step IDs here are the same as there. This file does not repeat the prompts, so they exist in one place only |
 | Superseded | `signal-to-syndrome-execution-checklist-v1.md` (renamed at K0) covers the base build and stays in `docs/` as a disclosed record |
 | Commands | Windows cmd syntax, run from `E:\My Project\signal-to-syndrome` |
 
@@ -42,8 +42,14 @@ Every step of the v2 upgrade in the order it happens, across both people, with e
 - **The naive decoder stays bit-for-bit.** V9 must print `53933f98` after every change.
 - **Never weaken a test to make it pass.**
 - **Commit after every green test run; tag every ship point** (`sp5`, `sp6`, `sp7`, `rc2`, `v2.0`).
-- **Sleep Sat 23:30 → Sun 05:30**, both of you.
+- **Sleep Sun 00:00 → 05:30**, both of you (moved in 2.1).
+- **(2.1) No Stage 4 number is quoted anywhere until A53c.** The A50 run is provisional.
+- **(2.1) Never overwrite a results file with a 2.1 run:** each writes a new file (`--out`).
 - **From Sun 22:30, no new features.**
+
+### If you fall behind (revision 2.1)
+
+Drop in this order: CC-A23 (ring-up); the sensitivity rows of CC-A22 (`sensitivity: null`); the plain dense X run; the held-out d = 3 banks; held-out d = 5 banks beyond h2. Never drop CC-A17, the cluster and paired statistics (CC-A19 steps 1–5), the C6 variant run, or the final Stage 4 (CC-A22). If you start the Saturday steps later than 20:00, shift every Saturday time by the delay and keep the Sunday times.
 
 ---
 
@@ -54,9 +60,9 @@ Every step of the v2 upgrade in the order it happens, across both people, with e
 flowchart LR
     P0["P0. Eligibility and contract<br/>Sat 08:00"] --> P1["P1. Detector error model<br/>SP5 at 14:00"]
     P1 --> P2["P2. New errors, idle physics,<br/>comparison data"]
-    P2 --> P3["P3. Learn the noise, Level 5 v2<br/>SP6 at 20:30"]
-    P3 --> P4["P4. Rest<br/>23:30-05:30"]
-    P4 --> P5["P5. Interface completion<br/>SP7 at Sun 13:00"]
+    P2 --> P3["P3. SP6 at 22:30,<br/>overnight runs started"]
+    P3 --> P4["P4. Rest<br/>00:00-05:30"]
+    P4 --> P5["P5. Final numbers, page,<br/>interface; SP7 at Sun 13:00"]
     P5 --> P6["P6. Hallway test,<br/>fixes, video"]
     P6 --> P7["P7. Page, RC review"]
     P7 --> P8["P8. Freeze and submit<br/>by Mon 01:30"]
@@ -85,21 +91,28 @@ flowchart LR
 | A47 | Sat 15:45 | A | TERMINAL · VERIFY · GIT | V14; push; handoff N5 |
 | A48 | Sat 16:00 | A | TERMINAL · CLAUDE CODE | Assemble X banks; CC-A14: Stages 1–3 Z/X, budget, crosstalk scan |
 | B46 | Sat 16:30 | B | CLAUDE CODE | CC-B15: "Learn the noise", V16 |
-| A49 | Sat 18:00 | A | VERIFY · GIT | Check reruns (V7, V8, V10, V13, C1, C2, C6, O4); handoff N6 |
-| A50 | Sat 18:30 | A | EDITOR · CLAUDE CODE | Gate-parallelism decision; CC-A15: Stage 4 v2 |
 | B47 | Sat 19:00 | B | CLAUDE CODE | CC-B16: Level 5 v2 |
-| A51 | Sat 19:45 | A | VERIFY · GIT | V15; push; handoff N7 |
-| B48 | Sat 20:00 | B | EDITOR · VERIFY | SP6 switches; preview for N8 |
-| K3 | Sat 20:30 | Both | GATE · PUBLISH · GIT | SP6 |
-| A52 | Sat 21:15 | A | SELF | Results notes v2 |
-| — | Sat 23:30 | Both | — | Sleep until Sun 05:30 |
-| A53 | Sun 05:30 | A | REVIEW | Review B's SP6 interface |
+| A49 | Sat 20:00 | A | VERIFY · CLAUDE CODE · GIT | Check reruns; CC-A17: honest verdicts (C1 ion, C6, ties, F1); handoff N6 |
+| A49a | Sat 20:45 | A | CLAUDE CODE · QOLLAB | CC-A18: held-out bank generator, SPAM script; start Qollab runs |
+| B47a | Sat 21:00 | B | CLAUDE CODE | CC-B20: hero test fix, crosstalk-scan table |
+| A50 | Sat 21:15 | A | EDITOR · CLAUDE CODE | Gate-parallelism decision; CC-A15: Stage 4 v2 (provisional) |
+| A51 | Sat 22:00 | A | VERIFY · GIT | V15 (provisional); push; handoff N7 |
+| B48 | Sat 22:15 | B | EDITOR · VERIFY | SP6 switches; preview for N8 |
+| K3 | Sat 22:30 | Both | GATE · PUBLISH · GIT | SP6 |
+| A52 | Sat 23:00 | A | CLAUDE CODE · TERMINAL | CC-A19: cluster/paired statistics, shiftDelta, dense grid, C6 variant; start overnight runs |
+| — | Sun 00:00 | Both | — | Sleep until Sun 05:30 |
+| A52a | Sun 05:30 | A | TERMINAL | Check overnight runs |
 | B49 | Sun 05:30 | B | CLAUDE CODE | CC-B17: Level 2 sandbox, basis toggle |
-| A54 | Sun 06:30 | A | CLAUDE CODE | CC-A16: page physics and results v2 |
-| A55 | Sun 08:00 | A | EDITOR | Edit page; plain-language verdicts; handoff N9 |
-| B50 | Sun 08:00 | B | CLAUDE CODE | CC-B18: tour, curated examples, live-run panel |
-| A56 | Sun 10:00 | A | SELF · CLAUDE CODE | Buffer, or optional statistics (team U11) |
-| B51 | Sun 10:00 | B | CLAUDE CODE · VERIFY | CC-B19: accessibility, consistency, motion |
+| A53 | Sun 05:45 | A | REVIEW | Review B's SP6 interface |
+| A53a | Sun 06:30 | A | CLAUDE CODE · SELF | CC-A20: results notes v2; handoff N12 |
+| A53b | Sun 07:15 | A | TERMINAL · CLAUDE CODE | Held-out banks; CC-A21: V18, F1 out of sample; V19; handoff N11 |
+| A53c | Sun 08:00 | A | CLAUDE CODE · VERIFY | CC-A22: final Stage 4; V15; handoff N7b |
+| B50 | Sun 08:00 | B | CLAUDE CODE | CC-B18: tour, curated examples, live-run panel (time box 1.5 h) |
+| A54 | Sun 08:45 | A | CLAUDE CODE | CC-A16 (2.1): page around the findings |
+| B50a | Sun 09:30 | B | CLAUDE CODE | CC-B21: cluster intervals, F1 in "Learn the noise", hero decoder, Level 5 final |
+| A55 | Sun 10:15 | A | EDITOR | Edit page; plain-language verdicts; handoff N9 by 11:00 |
+| B51 | Sun 10:30 | B | CLAUDE CODE · VERIFY | CC-B19: accessibility, consistency, motion |
+| A56 | Sun 11:00 | A | SELF · CLAUDE CODE | Buffer, or CC-A23 (ring-up, optional) |
 | A57 | Sun 11:30 | A | REVIEW | Review B's Sunday work and README |
 | B52 | Sun 11:30 | B | EDITOR | README v2, interface page sections, screenshots; handoff N10 |
 | B53 | Sun 12:00 | B | REVIEW | Review A's v2 code |
@@ -279,7 +292,7 @@ Then push (team checklist A45) and send `HANDOFF N3 and N4`.
 
 ---
 
-## Phase P2 — New errors, idle physics, comparison data (Sat 14:30–20:00)
+## Phase P2 — New errors, idle physics, comparison data (Sat 14:30–22:15)
 
 ### A46 · A · Sat 14:30 — Card fields; CC-A13
 
@@ -334,29 +347,53 @@ Then the team checklist A48 prompt. Its runs take about an hour; Stage 3 is the 
 **Pass:** V16 passes for every fault slot at d = 3 and 5; in the preview the three steps work with the keyboard, the naive decoder draws a two-edge path for the diagonal pair, and the toggle changes the big number.
 - [ ] Done
 
-### A49 · A · Sat 18:00 — VERIFY: reruns; hand over N6
+### B47 · B · Sat 19:00 — CC-B16: Level 5 v2
 
-**Do:** check and record:
+**Do:** team checklist B47 prompt (paste U7.7).
+**Pass:** tests pass; the old tables sit inside "Data"; every chart has a values table.
+- [ ] Done
+
+### A49 · A · Sat 20:00 — VERIFY: reruns; CC-A17: honest verdicts; hand over N6
+
+**Do:** first commit the A48 outputs (team checklist A49 shows the commands), then check and record by hand:
 
 | Check | Source | Pass |
 |---|---|---|
 | V7, V8, V10 (Z basis) | Stage 2–3 console | Unchanged from v1 |
 | V7, V8, V10 (X basis) | Stage 2–3 console, `--basis X` | Pass |
 | V13 | `npm test` | Pass |
-| C2, both arms, learned | `stage2_ion.json`, `stage3_sc.json` | Verdict recorded |
-| C1 superconducting, learned, Z and X | `stage3_sc*.json` optima | Verdict recorded against τ*_phys(empirical) |
-| C1 ion part, per crosstalk rate | `stage2_ion.json` → `crosstalkScan` | Verdict per rate recorded |
-| C6 | τ*_log X against Z, superconducting | Verdict recorded |
-| O4 | `dem_forte1.json` → `ratioXoverZ` | Ratios recorded (E5) |
 | Budget magnitudes | `budget` arrays | Readout ~10⁻³–10⁻², idle ≤ 3×10⁻², gate ~10⁻² |
 
-Push and send `HANDOFF N6`.
-**Pass:** every row recorded with its source.
+Then the team checklist A49 prompt (CC-A17). It records C1 (ion part, three sub-verdicts; card rate refuted), C1 superconducting, C2, C6 ("not applicable" with the card, because T2 > T1), O4 and finding F1, marks every τ*_log with `fractionTied` ≥ 0.5 as unresolved, records the deviations in E12, and prints the N6 text. Do not quote any `stage4_comparison.json` number.
+Commit, push and send `HANDOFF N6`.
+**Pass:** every row recorded with its source; E5 and E12 filled; `npm test` still 252/253 (no code changed in this step).
 - [ ] Done
 
-### A50 · A · Sat 18:30 — Gate-parallelism decision; CC-A15
+### A49a · A · Sat 20:45 — CC-A18: held-out banks and SPAM check; start Qollab runs
 
-**Do:** decide parallel against sequential ion gates per round, record E8, set `gate_layers_per_round` in `params/cycle.json`, fix the superconducting `reset_us` source; then the team checklist A50 prompt.
+**Do:** team checklist A49a prompt (CC-A18). Commit and push **before the first Qollab run**, so that E11 (the held-out design) is dated before the data.
+
+```bat
+npm test
+git add qollab tools tests data\banks\heldout data\raw\heldout DECISIONS.md
+git commit -m "CC-A18: held-out bank configurations, SPAM check, E11 design"
+git pull --rebase
+git push
+```
+
+From now until Sun 07:15, between your other steps: run each held-out configuration on Qollab in the printed order (d = 5 L0 h1, L1 h1, L0 h2, L1 h2, …, then d = 3), saving each `BEGIN_BANK … END_BANK` block as `data\raw\heldout\<name>.txt`. Run `spam_check.py` once with `ideal` and once with `forte-1`; save the outputs as `data\raw\spam_ideal.txt` and `data\raw\spam_forte-1.txt`.
+**Pass:** tests pass; E11 committed before the first held-out run.
+- [ ] Done
+
+### B47a · B · Sat 21:00 — CC-B20: hero test fix, crosstalk-scan table
+
+**Do:** after `ACK N6`, team checklist B47a prompt (CC-B20).
+**Pass:** `npm test` has no failures (253/253 or more); `npm run check` passes; the crosstalk table never shows the raw boolean.
+- [ ] Done
+
+### A50 · A · Sat 21:15 — Gate-parallelism decision; CC-A15 (provisional Stage 4)
+
+**Do:** decide parallel against sequential ion gates per round, record E8, set `gate_layers_per_round` in `params/cycle.json`, fix the superconducting `reset_us` source; then the team checklist A50 prompt, unchanged. This Stage 4 is **provisional**: it gives Person B real data in the final format for Level 5; its numbers are replaced at A53c and are not quoted.
 
 ```bat
 node tools/sweep.mjs --stage 4
@@ -366,58 +403,72 @@ node tools/sweep.mjs --stage 4 --basis X
 **Pass:** tests pass; both Stage 4 files written with `framing`, `tradeoff`, `budgetAtOptimum`, sensitivity `effect` and `conclusions` C1–C6, O4.
 - [ ] Done
 
-### B47 · B · Sat 19:00 — CC-B16: Level 5 v2
+### A51 · A · Sat 22:00 — VERIFY V15 (provisional); hand over N7
 
-**Do:** team checklist B47 prompt (paste U7.7).
-**Pass:** tests pass; the old tables sit inside "Data"; every chart has a values table.
-- [ ] Done
-
-### A51 · A · Sat 19:45 — VERIFY V15; hand over N7
-
-**Do:** hand-check one trade-off point per arm: rounds per second = 10⁶ / T_cyc(µs), with T_cyc = layers × t₂q + τ + t_reset; error per round = ½[1 − (1 − 2p_L)^(1/r)]. Compare with `stage4_comparison.json`; read every conclusion and make sure no automated verdict contradicts your reading without a `note`. Push; send `HANDOFF N7`.
+**Do:** hand-check one trade-off point per arm: rounds per second = 10⁶ / T_cyc(µs), with T_cyc = layers × t₂q + τ + t_reset; error per round = ½[1 − (1 − 2p_L)^(1/r)]. Compare with `stage4_comparison.json`. Push; send `HANDOFF N7` marked "provisional: format final, numbers replaced at A53c".
 **Pass:** both points agree to 3 significant figures.
 - [ ] Done
 
 ---
 
-## Phase P3 — Integration of SP6 (Sat 20:00–23:30)
+## Phase P3 — Integration of SP6 and overnight runs (Sat 22:15 → Sun 00:00)
 
-### B48 · B · Sat 20:00 — SP6 switches
+### B48 · B · Sat 22:15 — SP6 switches
 
 **Do:** team checklist B48 and Appendix U3 rows 17–24; build a scratch preview with every flag on and send it to Person A (N8).
 **Pass:** `npm run check` passes with every switched flag on.
 - [ ] Done
 
-### K3 · Both · Sat 20:30 — GATE SP6
+### K3 · Both · Sat 22:30 — GATE SP6
 
 **Gate:**
-- [ ] V13, V14, V15, V16 pass
-- [ ] X-basis results and the crosstalk scan are real, not fixtures
+- [ ] V13, V14, V15 (provisional), V16 pass
+- [ ] `npm test` has no failures (CC-B20)
+- [ ] X-basis results and the crosstalk scan are real, not fixtures; the crosstalk table shows intervals and the resolved verdict, never the raw boolean
 - [ ] Level 1 game, Level 3 budget, "Learn the noise" on real data
-- [ ] Level 5 v2 on real data (or moved to SP7 by the cut rule)
+- [ ] Level 5 v2 on the provisional Stage 4 (or moved to SP7 by the cut rule); its numbers are not quoted anywhere
 - [ ] V9 and V9L still match on Qollab (private)
 
-**Cut deadline:** Sat 20:00. **Cut rule:** cut the crosstalk scan to the rates 0, 1e-5 and 1e-3 per µs; cut the X basis to d = 3 and 5; move Level 5 v2 to SP7.
+**Cut deadline:** Sat 22:15. **Cut rule:** cut the crosstalk scan to the rates 0, 1e-5 and 1e-3 per µs; cut the X basis to d = 3 and 5; move Level 5 v2 to SP7.
 
 **Do:** team checklist K3 (as K2, plus the phase-flip and crosstalk views); tag `sp6`.
 - [ ] Done
 
-### A52 · A · Sat 21:15 — Results notes v2
+### A52 · A · Sat 23:00 — CC-A19: statistics, dense grid, C6 variant; start the overnight runs
 
-**Do:** team checklist A52. Name plainly which v1 conclusions were decoder artefacts.
-**Pass:** every verdict has numbers and a source file.
+**Do:** team checklist A52 prompt (CC-A19). It adds the cluster bootstrap and paired differences (V17), `shiftDelta`, and the `--out`, `--dense` and `--set` options, and reruns Stage 2 into the `_v2b` files (about 2 minutes). Then:
+
+```bat
+npm test
+node tools/sweep.mjs --diag
+node tools/sweep.mjs --diag --decoder learned
+git add src\core tools tests data\results DECISIONS.md
+git commit -m "CC-A19: cluster and paired statistics, shiftDelta, --dense, --set; Stage 2 v2b"
+git pull --rebase
+git push
+```
+
+Set the laptop to never sleep. Paste the overnight command printed at the end of the CC-A19 report into a terminal (dense Z, then the T2 = 25 µs X variant, then dense X) and check that the first run prints progress.
+**Pass:** V17 passes; V9 `53933f98`, V9L `53933f98`; `_v2b` pL values equal the earlier files; the overnight command running.
 - [ ] Done
 
-**Sat 23:30 → Sun 05:30: sleep, both.**
+**Sun 00:00 → 05:30: sleep, both.**
 
 ---
 
-## Phase P5 — Interface completion (Sun 05:30–13:30)
+## Phase P5 — Final numbers, page and interface (Sun 05:30–13:00)
 
-### A53 · A · Sun 05:30 — REVIEW B's SP6 interface
+### A52a · A · Sun 05:30 — Check the overnight runs
 
-**Do:** team checklist A53 on N8's preview.
-**Pass:** findings sent (or "no findings").
+**Do:**
+
+```bat
+dir data\results\stage3_sc_dense.json data\results\stage3_sc_x_T2_25.json data\results\stage3_sc_x_dense.json
+node -e "for (const f of ['stage3_sc_dense','stage3_sc_x_T2_25']) { const j = JSON.parse(require('fs').readFileSync('data/results/'+f+'.json','utf8')); console.log(f, j.provenance.grid, JSON.stringify(j.provenance.overrides || {})); }"
+```
+
+If a run failed, restart it for d = 3 and 5 only and go on while it runs. Restart any held-out Qollab runs still missing.
+**Pass:** the dense Z file (grid "dense") and the variant file (override T2_us = 25) exist.
 - [ ] Done
 
 ### B49 · B · Sun 05:30 — CC-B17: sandbox and basis toggle
@@ -426,21 +477,49 @@ node tools/sweep.mjs --stage 4 --basis X
 **Pass:** tests pass; the toggle swaps every results source and label in the hero and Levels 3–5.
 - [ ] Done
 
-### A54 · A · Sun 06:30 — CC-A16: page physics and results v2
+### A53 · A · Sun 05:45 — REVIEW B's SP6 interface
 
-**Do:** team checklist A54 prompt.
-**Pass:** every number in A's sections has a source comment.
+**Do:** team checklist A53 on N8's preview.
+**Pass:** findings sent (or "no findings").
 - [ ] Done
 
-### A55 · A · Sun 08:00 — Edit the page; plain verdicts; hand over N9
+### A53a · A · Sun 06:30 — CC-A20: results notes v2; hand over N12
 
-**Do:** team checklist A55.
-**Pass:** C1–C6, O4 and the framing each have a one-line `plain` text of at most 20 words.
+**Do:** team checklist A53a prompt (CC-A20), then edit the draft by hand. It covers what 2.0 scheduled as A52: name plainly which v1 conclusions were decoder artefacts. Commit, push; send `HANDOFF N12` (the `_v2b` and dense files).
+**Pass:** every verdict has numbers and a source file; the C2 counts are shown with Wilson and with paired cluster intervals; C6 is reported from the variant card.
+- [ ] Done
+
+### A53b · A · Sun 07:15 — Held-out banks; V19; CC-A21 (V18, F1 out of sample); hand over N11
+
+**Do:** stop waiting for Qollab and use what has arrived (at least h1 for both d = 5 states).
+
+```bat
+node tools/assemble_bank.mjs data\raw\heldout
+git add data\banks\heldout data\raw\heldout data\raw\spam_*.txt
+git commit -m "Held-out banks and SPAM-check output"
+```
+
+Fill E13 from the two SPAM outputs (forte-1 against ideal, per qubit, with intervals). Then the team checklist A53b prompt (CC-A21). If V18 passed, record "SP5 cut lifted (V18 passed)" in your DECISIONS section. Commit, push, send `HANDOFF N11`.
+**Pass:** V18 verdict recorded in E4 and E11 (pass or fail, as is); E13 filled; `holdout.json` committed.
+- [ ] Done
+
+### A53c · A · Sun 08:00 — CC-A22: final Stage 4; V15; hand over N7b
+
+**Do:** team checklist A53c prompt (CC-A22), then:
+
+```bat
+npm test
+node tools/sweep.mjs --stage 4
+node tools/sweep.mjs --stage 4 --basis X
+```
+
+Hand-check V15 for one point per arm (as at A51) on the new file. Read every conclusion; C3 must carry `informative: false`, C6 the verdict "not applicable" with the variant result in its note, and `findings` must hold F1. Commit, push, send `HANDOFF N7b`.
+**Pass:** V15 agrees to 3 significant figures; no automated verdict contradicts your reading without a note.
 - [ ] Done
 
 ### B50 · B · Sun 08:00 — CC-B18: tour, curated examples, live-run panel
 
-**Do:** team checklist B50 prompt (paste U7.10–U7.12).
+**Do:** team checklist B50 prompt (paste U7.10–U7.12). Time box 08:00–09:30; if the tour is not done, leave it off and go to B50a.
 
 ```bat
 node tools/curate.mjs
@@ -453,23 +532,41 @@ npm run check
 ```
 
 (`fc` must report no differences: the second run reproduces the first.)
-**Pass:** tests pass; curated output reproducible; the tour moves focus to each stop and Escape ends it.
+**Pass:** tests pass; curated output reproducible; the tour (if on) moves focus to each stop and Escape ends it.
 - [ ] Done
 
-### A56 · A · Sun 10:00 — Buffer, or optional statistics
+### A54 · A · Sun 08:45 — CC-A16 (2.1): the page around the findings
 
-**Do:** fix open findings in your files; if none, take team checklist Appendix U11 items in order, rerunning only what each touches.
+**Do:** team checklist A54 prompt (CC-A16, revision 2.1).
+**Pass:** every number in A's sections has a source comment; F1–F3 come before the hypothesis table; no internal step codes in visible text.
 - [ ] Done
 
-### B51 · B · Sun 10:00 — CC-B19: accessibility, consistency, motion
+### B50a · B · Sun 09:30 — CC-B21: cluster intervals, F1, hero decoder, Level 5 final
+
+**Do:** after `ACK N11` and `ACK N12` (and N7b if it has landed), team checklist B50a prompt (CC-B21).
+**Pass:** tests pass; build and check pass; "Learn the noise" opens on the ion soft-against-hard reversal; the hero uses one decoder on both arms; Level 5 shows "not applicable" and "outcome fixed by construction" correctly.
+- [ ] Done
+
+### A55 · A · Sun 10:15 — Edit the page; plain verdicts; hand over N9
+
+**Do:** team checklist A55.
+**Pass:** C1–C6, O4, F1 and the framing each have a one-line `plain` text of at most 20 words; N9 sent by 11:00.
+- [ ] Done
+
+### B51 · B · Sun 10:30 — CC-B19: accessibility, consistency, motion
 
 **Do:** team checklist B51 prompt (paste U7.1 and U7.13).
 **Pass:** the audit lists every check as passed after fixes; reduced motion disables every animation.
 - [ ] Done
 
+### A56 · A · Sun 11:00 — Buffer, or CC-A23 (optional)
+
+**Do:** fix open findings in your files. Only if nothing is open and K4 is not at risk, team checklist A56 prompt (CC-A23, ring-up; V10r). Otherwise skip it; the page's Limitations already say the readout model's own estimate ignores ring-up.
+- [ ] Done
+
 ### A57 · A · Sun 11:30 — REVIEW B's Sunday work and the README
 
-**Do:** team checklist A57.
+**Do:** team checklist A57. Also check that every number in the interface matches the final Stage 4 and the `_v2b`, dense and holdout files.
 - [ ] Done
 
 ### B52 · B · Sun 11:30 — README v2, interface page sections, screenshots
@@ -480,23 +577,25 @@ npm run check
 findstr /i /c:"CC-" /c:"Person A" /c:"Person B" /c:"TODO" README.md docs\project_page.md
 ```
 
-**Pass:** `findstr` prints nothing; the disclosure section matches K0's current decision.
+**Pass:** `findstr` prints nothing; the disclosure section matches K0's current decision; screenshots taken after B50a.
 - [ ] Done
 
 ### B53 · B · Sun 12:00 — REVIEW A's v2 code
 
-**Do:** team checklist B53.
+**Do:** team checklist B53. Include `src/core/stats.js`, `qollab/spam_check.py` and the `--stage holdout` code in the diff.
 - [ ] Done
 
 ### B54 · B · Sun 12:30 — SP7 switches
 
-**Do:** Appendix U3 rows 25–28 for every item that passed.
+**Do:** Appendix U3 rows 25–28 for every item that passed, and rows 29–32 if B50a did not already apply them; rebuild on the final Stage 4.
 - [ ] Done
 
 ### K4 · Both · Sun 13:00 — GATE SP7
 
 **Gate:**
 - [ ] Every enabled feature uses real modules and data (`npm run check`)
+- [ ] Level 5 reads the final Stage 4 (A53c); V15 and V17 pass; V18 and V19 recorded
+- [ ] F1 is the first finding on the page and opens "Learn the noise"; the hero uses the same decoder on both arms, as decided by V18
 - [ ] Hero, Levels 1–5, "Learn the noise", sandbox, basis toggle, tour work with the keyboard
 - [ ] Accessibility audit passed
 - [ ] V9 and V9L match on Qollab
@@ -590,8 +689,12 @@ git push --tags
 | V12(b) | `dem_forte1.json` → `outOfSamplePooled` | Learned ≤ naive at every (d, r), and beyond the intervals at every d = 5 row |
 | V13 | `python -m pytest validation -q`; `npm test` (`tests/v4.test.js`) | Pass |
 | V14 | `npm test` (`tests/ion.test.js`, `tests/sc.test.js`) | Pass |
-| V15 | Hand check against `stage4_comparison.json` | 3 significant figures |
+| V15 | Hand check against `stage4_comparison.json` (provisional at A51, final at A53c) | 3 significant figures |
 | V16 | `npm test` (`tests/learnnoise.test.js`) | Pass |
+| V17 (2.1) | `npm test` (`tests/stats.test.js`); compare pL in `stage2_ion*_v2b.json` with `stage2_ion*.json` | Tests pass; pL identical |
+| V18 (2.1) | `node tools/sweep.mjs --stage holdout` → `holdout.json` → `setting1.V18` | V12(b) two-clause rule on the held-out banks; paired result reported beside it |
+| V19 (2.1) | `qollab/spam_check.py`, ideal and forte-1 | No pass/fail; result recorded in E13 |
+| V10r (2.1, optional) | `npm test` (`tests/sc.test.js`) after CC-A23 | Every llr bin within 4 SE with ring-up on |
 | Release | `npm run check` | All PASS, including the forbidden-terms check |
 
 *This effort is supported by Qollab & IonQ.*

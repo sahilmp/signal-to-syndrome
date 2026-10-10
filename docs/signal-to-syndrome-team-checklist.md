@@ -4,10 +4,10 @@ Every step needed to take Signal to Syndrome from its current state (tag `sp4`) 
 
 | | |
 |---|---|
-| Version | 2.0, Sat 10 Oct 2026, written inside the build window |
+| Version | 2.1, Sat 10 Oct 2026, about 20:00 IST, revised inside the build window after A48. Section 1.5 lists every change from 2.0; steps up to A48 and B46 are unchanged |
 | Build window | Sat 10 Oct 04:30 IST → Mon 12 Oct 04:30 IST (Fri 9 Oct 19:00 ET → Sun 11 Oct 19:00 ET) |
 | Starting point | The repository at tag `sp4` (commit `0730c92`, plus `7f27a36` "Remove BOM from features.js"). Tests 176/176, release check 75/75 after a clean rebuild, V9 `53933f98` |
-| Relation to v1 | v1 (`signal-to-syndrome-team-checklist-v1.md`) describes how the base was built and stays in `docs/` unchanged as a disclosed record. This v2 governs all work from tag `window-start` onward. Its step IDs continue v1's: joint steps K0–K9, Person A steps A40–A60, Person B steps B40–B56, prompts CC-A10–CC-A16 and CC-B11–CC-B19, handoffs N1–N10, validation checks V11–V16 |
+| Relation to v1 | v1 (`signal-to-syndrome-team-checklist-v1.md`) describes how the base was built and stays in `docs/` unchanged as a disclosed record. This v2 governs all work from tag `window-start` onward. Its step IDs continue v1's: joint steps K0–K9, Person A steps A40–A60, Person B steps B40–B56, prompts CC-A10–CC-A16 and CC-B11–CC-B19, handoffs N1–N10, validation checks V11–V16. Revision 2.1 adds steps A49a, A52a, A53a–A53c, B47a and B50a, prompts CC-A17–CC-A23 and CC-B20–CC-B21, handoffs N7b, N11 and N12, checks V17–V19 (and the optional V10r), and DECISIONS rows E11–E13 |
 | Companion | `signal-to-syndrome-execution-checklist.md` (v2): the same steps in one time-ordered list with every gate, verification command and cut rule. The Claude Code prompts live only in this file |
 | Repository | `E:\My Project\signal-to-syndrome` (or your path) |
 | Commands | Windows cmd syntax |
@@ -26,7 +26,7 @@ Every step needed to take Signal to Syndrome from its current state (tag `sp4`) 
 7. Person A checklist (physics and data)
 8. Person B checklist (decoder, interface and platform)
 
-Appendices: U1 `CLAUDE.md` v2 amendments · U2 `DECISIONS.md` v2 section · U3 bridge and feature switches v2 · U4 results formats v2 · U5 parameter-card additions · U6 review and fix prompts · U7 interface specification · U8 disclosure and email templates · U9 demo-video script · U10 hallway-test protocol · U11 optional statistics work
+Appendices: U1 `CLAUDE.md` v2 amendments · U2 `DECISIONS.md` v2 section · U3 bridge and feature switches v2 · U4 results formats v2 · U5 parameter-card additions · U6 review and fix prompts · U7 interface specification · U8 disclosure and email templates · U9 demo-video script · U10 hallway-test protocol · U11 statistics work (items 1 and 3 scheduled in 2.1, item 2 optional)
 
 ---
 
@@ -55,7 +55,7 @@ This checklist assumes the organizers allow a disclosed, pre-built base with the
 | W4 | "Learn the noise" level | Fault injection on a circuit timeline, the naive decoder's failure on a diagonal pair, the p_ij heatmap of the forte-1 banks, and a naive/learned toggle with the logical-error drop | B (interface), A (data) | SP6 |
 | W5 | Interface upgrade | Hero panel; Level 3 error-budget bar, d selector, challenge; text cut to two sentences per level; Level 1 decoding game; Level 5 visuals (trade-off, budget bars, scoreboard, tornado); demo video; Level 2 sandbox; global bit-flip/phase-flip toggle; one visual language; guided tour; polish (animations, curated Level 4 examples, live-run presence) | B (interface), both (video) | SP5–SP7 |
 
-Out of scope unless time remains: the statistics items in Appendix U11 (cluster bootstrap for every interval; ring-up in the superconducting belief model; a dense τ grid near the superconducting optimum). They are not in your list, but they decide how credible the C1 verdict is; do them if the buffer allows.
+Revision 2.1 brings two of the Appendix U11 statistics items into the plan (cluster bootstrap for every interval, and a dense τ grid near the superconducting optimum, both in CC-A19), keeps ring-up in the superconducting belief model optional (CC-A23), and adds a held-out-bank test of the learned decoder (CC-A18, CC-A21), a variant card that satisfies C6's premise (CC-A19) and a check of whether forte-1 includes measurement error (CC-A18). Section 1.5 says why.
 
 ### 1.2 Hypotheses for v2 (pre-registered at K1, before any rerun)
 
@@ -71,6 +71,12 @@ Write these into `docs/notes_results.md` at K1 and commit them before CC-A12 run
 | C6 (new) | In the phase-flip memory the superconducting τ*_log is shorter than in the bit-flip memory when T2 < T1 | Stage 3 in both bases | τ*_log(X) ≥ τ*_log(Z) beyond the intervals |
 | O4 (measurement, no hypothesis) | Ratio of bulk detector rates, X-basis to Z-basis banks, per (d, r): how biased forte-1 noise looks to the decoder | Stage dem | — |
 
+**Revision 2.1 note on reporting (the statements and falsifiers above stay exactly as pre-registered).** Three verdicts are reported with an added explanation, each recorded in DECISIONS row E12 with its time:
+
+- **C1, ion part.** The pre-registered rule uses the point estimate `interiorBelowTauPhys`, which flips with noise below 1e-3 /µs. From A49 the resolved flag and, from CC-A19, the pre-specified `shiftDelta` are reported beside it. Under the point estimate the card-rate result is split between the bases (Z none, X an optimum); under the resolved flag the clause is refuted in both. The change therefore matters, and both results are reported. The clause "no interior optimum at any scanned rate" is reported as weak, because the scan reaches rates where crosstalk is as large as the gate noise.
+- **C3.** With these cards the outcome is fixed by construction: the cycle times differ by about 2000× and the gate noise is shared. The verdict is computed by the U4 rule but marked `informative: false` and shown as a trade-off, not as a finding.
+- **C6.** Its premise is T2 < T1, but the card has T2 = 77 µs > T1 = 50 µs. With the card the verdict is "not applicable"; the test is run with a variant card, T2 = 25 µs, labelled UNSOURCED (illustrative).
+
 ### 1.3 New validation checks
 
 | ID | Check | Pass criterion | Owner |
@@ -84,6 +90,10 @@ Write these into `docs/notes_results.md` at K1 and commit them before CC-A12 run
 | V14 | Idle physics per basis: formulas; T2 ≤ 2T1 enforced (boundary test); crosstalk 0 reproduces the old ion idle; default basis Z reproduces V9 | All pass | A |
 | V15 | Trade-off values: hand check of one point per arm (rounds per second = 10⁶ / T_cyc in µs; error per round as in Stage 4) | Agrees with the file to 3 significant figures | A |
 | V16 | Fault-to-detector function used by "Learn the noise" agrees with `computeDetectors` on explicitly flipped bits, for every fault slot at d = 3 and 5 | All equal | B |
+| V17 (2.1) | Cluster bootstrap and paired difference (`clusterBootstrapRate`, `pairedClusterDiff`): synthetic tests; pL in the `_v2b` files equals the earlier files exactly | Tests pass; pL identical | A |
+| V18 (2.1) | V12(b) on held-out banks: rates and pGate learned only from the original banks, decoding banks from new simulator seeds | The V12(b) two-clause rule above, unchanged. The paired difference is reported beside it and does not change the verdict | A |
+| V19 (2.1) | Does forte-1 include measurement error: prepare-and-measure, forte-1 against ideal (`qollab/spam_check.py`) | No pass/fail: the result is recorded in E13 and decides the wording of every ε statement | A |
+| V10r (2.1, optional) | V10 llr calibration with ring-up on in both the sampler and the belief model (CC-A23) | Every bin within 4 SE; belief and empirical τ*_phys within one grid step | A |
 
 ### 1.4 Claims policy additions
 
@@ -91,6 +101,27 @@ Write these into `docs/notes_results.md` at K1 and commit them before CC-A12 run
 - The superconducting arm carries trapped-ion gate noise by construction; say so wherever the arms are compared.
 - The crosstalk rate and any unsourced T2 are labelled "UNSOURCED (illustrative)" on the page, and the crosstalk result is presented as a scan, not as one number.
 - Learned edge rates come from the same banks they decode; V12(b) is the out-of-sample check and its result is quoted next to every naive/learned comparison.
+- (2.1) From the CC-A19 reruns, every "beyond the intervals" claim uses the cluster intervals or the paired difference; Wilson intervals are shown beside them, never alone.
+- (2.1) A τ*_log with `fractionTied` ≥ 0.5 is "unresolved" and never presented as an optimum.
+- (2.1) Once V18 has run, its result replaces V12(b) next to every naive/learned comparison; F1 is labelled in or out of sample accordingly.
+- (2.1) C3 is shown as a trade-off, not as a finding; C6 is quoted only through the variant card, labelled UNSOURCED (illustrative).
+- (2.1) If V19 shows measurement error in forte-1, every ε statement says "added on top of the simulator's own measurement error".
+
+### 1.5 Revision 2.1: what changed after A48, and why
+
+| Problem found after A48 | Change | Where |
+|---|---|---|
+| `stage4_comparison.json` (8 Oct) mixes old and new numbers | No Stage 4 number is quoted until it is rerun; A50 gives a provisional file for the interface, A53c the final one | A49, A50, A53c |
+| The crosstalk flag flips with noise below 1e-3 /µs | Report the resolved flag and `shiftDelta`; record the change as a deviation | A49 (CC-A17), A52 (CC-A19), E12 |
+| C6's premise (T2 < T1) is not met by the card | "Not applicable" with the card; variant card T2 = 25 µs | A49, A52, A53a |
+| C3 (v2) cannot fail with these cards | Marked `informative: false`; shown as a trade-off | A53c (CC-A22) |
+| Wilson intervals treat the R readout draws of one quantum shot as independent | Cluster bootstrap over quantum shots; paired differences for hard/soft and naive/learned | A52 (CC-A19) |
+| The superconducting τ*_log shift is smaller than the grid spacing | Dense grid 0.40–1.30 µs in steps of 0.05 µs | A52 (CC-A19), run overnight |
+| V12(b) failed for lack of errors, and learned rates are in sample | Held-out banks from new simulator seeds (V18) | A49a (CC-A18), A53b (CC-A21) |
+| Unknown whether forte-1 already includes measurement error | V19 prepare-and-measure check | A49a (CC-A18) |
+| The best result (F1, soft decoding rescued by the learned decoder) is hidden: the hero shows the naive decoder and the page says "C2 refuted" | F1 becomes the first finding on the page, in "Learn the noise" and in the video | A53a, A53c, A54, B50a (CC-B21), U9 |
+| `tests/hero.test.js` fails (252/253) | Use the v1 fixture | B47a (CC-B20) |
+| No display of the crosstalk scan, and the raw boolean is misleading | A scan table in Level 3 (ion) with intervals and the resolved verdict | B47a (CC-B20) |
 
 ---
 
@@ -100,7 +131,7 @@ Ownership is unchanged from v1 (`CLAUDE.md`, team rules), with these additions (
 
 | Owner | New files |
 |---|---|
-| A | `src/core/dem.js`, `tests/dem.test.js`, `data/results/dem_forte1.json`, `data/results/*_x.json`, `data/banks/repx_*.json`, `data/banks/v13_*.json`, `data/raw/repx_*`, `data/raw/v13/*` |
+| A | `src/core/dem.js`, `tests/dem.test.js`, `data/results/dem_forte1.json`, `data/results/*_x.json`, `data/banks/repx_*.json`, `data/banks/v13_*.json`, `data/raw/repx_*`, `data/raw/v13/*`; from 2.1: `qollab/spam_check.py`, `data/banks/heldout/*`, `data/raw/heldout/*`, `data/results/*_v2b.json`, `*_dense.json`, `stage3_sc_x_T2_25.json`, `holdout.json`, `stage3_sc_ringup.json` (optional) |
 | B | `src/ui/hero.js`, `src/ui/learnnoise.js`, `src/ui/sandbox.js`, `src/ui/tour.js`, `src/ui/budget.js`, `src/ui/tokens.css` (all under `src/ui/*`, already B's), `tools/curate.mjs`, `data/curated/*`, `tests/learnnoise.test.js`, `tests/hero.test.js`, `tests/curate.test.js` |
 
 Shared: `CLAUDE.md`, `DECISIONS.md` (own section), `docs/project_page.md` (sections as assigned), `docs/notes_results.md` (A writes; B adds only the interface notes section).
@@ -121,6 +152,7 @@ Shared: `CLAUDE.md`, `DECISIONS.md` (own section), `docs/project_page.md` (secti
 | Stage reruns (Z and X, naive and learned), crosstalk scan, error budget, Stage dem | Level 1 game; Level 3 budget bar, d selector, challenge |
 | Stage 4 v2: trade-off, numeric sensitivity, C1–C6 verdicts | "Learn the noise" level (V16) |
 | Results notes; plain-language verdicts; physics and results sections of the page | Level 5 v2; Level 2 sandbox; basis toggle; tour; curated examples; live-run panel; accessibility; README |
+| (2.1) Cluster and paired statistics, `shiftDelta`, dense grid, C6 variant; held-out banks and V18; V19; final Stage 4 | (2.1) Hero test fix; crosstalk-scan table; cluster intervals in charts; F1 in "Learn the noise"; hero decoder switch; Level 5 for the new verdict fields |
 
 ### 3.2 Handoffs
 
@@ -133,10 +165,13 @@ Times are IST. "Push" means commit, push and send the handoff message (Section 5
 | N3 | A → B | `src/core/dem.js`, `src/core/sweep.js` with `noise` and `basis` | Sat 13:00 | Sat 13:30 (B44) | Learned decoding in levels 1–4 | Levels keep the naive decoder; SP5 ships hero and text cut only |
 | N4 | A → B | `data/results/dem_forte1.json`; Stage 1 and 2 (Z) results with naive and learned series | Sat 13:00 | Sat 13:30 (B44), 16:30 (B46) | Learned curves; "Learn the noise" data | Fixture data; "Learn the noise" cannot ship until N4 |
 | N5 | A → B | `ion.js`, `sc.js` with `idleFlipProbability(basis)` and `idleBreakdown(basis)`; updated `params/ion.json`, `params/sc.json` | Sat 15:45 | Sat 19:00 (B47) | Budget bars from live models; idle text | Budget from results arrays only (N6) |
-| N6 | A → B | X-basis banks; Stage 1–3 results for Z and X, both decoders, with `budget` and (ion) `crosstalkScan` | Sat 18:00 | Sat 20:00 (B48 switches) | Basis toggle; budget bar; crosstalk view | Ship SP6 with Z only and the crosstalk view off |
-| N7 | A → B | `data/results/stage4_comparison.json` v2 and `params/cycle.json` v2 | Sat 19:45 | Sat 20:00 (B48) | Level 5 v2 | Level 5 v2 ships at SP7 instead |
+| N6 | A → B | X-basis banks; Stage 1–3 results for Z and X, both decoders, with `budget` and (ion) `crosstalkScan`. From 2.1 also: the hero-test fix request, the crosstalk display rule (never the raw boolean), and "Stage 4 is stale until A50, provisional until A53c" | Sat 20:45 | Sat 21:00 (B47a), 22:15 (B48) | Basis toggle; budget bar; crosstalk table | Ship SP6 with Z only and the crosstalk display off |
+| N7 | A → B | **Provisional** `data/results/stage4_comparison.json` v2 and `params/cycle.json` v2 (format final, numbers not) | Sat 22:15 | Sat 22:15 (B48) | Level 5 v2 | Level 5 v2 ships at SP7 instead |
+| N7b (2.1) | A → B | **Final** `stage4_comparison.json` (A53c, CC-A22) with draft `plain` texts, `findings`, `informative` and the "not applicable" verdict | Sun 08:45 | Sun 09:30 (B50a) | Level 5 final numbers and scoreboard | B50a builds on the provisional file; B54 rebuilds when N7b lands |
+| N11 (2.1) | A → B | `data/results/holdout.json`, the V18 verdict, and whether the SP5 cut is lifted (recorded in DECISIONS) | Sun 08:00 | Sun 09:30 (B50a) | Hero decoder; F1 in "Learn the noise" | Hero keeps the naive decoder with a "learned (in sample)" switch; F1 from the in-sample files |
+| N12 (2.1) | A → B | `stage2_ion_v2b.json`, `stage2_ion_x_v2b.json` (cluster intervals, `paired`, `shiftDelta`) and the dense superconducting files | Sun 07:15 | Sun 09:30 (B50a) | Cluster intervals in charts; `shiftDelta` in the crosstalk table | Charts keep Wilson intervals, labelled as such |
 | N8 | B → A | A local build of SP6 with every flag on (`dist/local/preview.html`) | Sun 05:30 | Sun 05:30 (A53) | A's review of the new interface | A reviews the published private project instead |
-| N9 | A → B | Plain-language one-liners for C1–C6 and O4, and the framing sentence, in `stage4_comparison.json` (`conclusions[*].plain`) and `notes_results.md` | Sun 09:30 | Sun 11:30 (B52) | Scoreboard text; page | B uses A's verdict column from `notes_results.md` |
+| N9 | A → B | Plain-language one-liners for C1–C6, O4 and the findings, and the framing sentence, edited by A in `stage4_comparison.json` (`conclusions[*].plain`, `findings[*].plain`) and `notes_results.md` | Sun 11:00 | Sun 11:30 (B52) | Scoreboard text; page | B uses A's verdict column from `notes_results.md` |
 | N10 | B → A | Interface sections of the page and the README v2 | Sun 11:30 | Sun 18:00 (K7) | Page review | K7 reviews what exists |
 
 ### 3.3 Joint work
@@ -146,7 +181,7 @@ Times are IST. "Push" means commit, push and send the handoff message (Section 5
 | K0 | Sat 08:00 | Eligibility, disclosure fix, cleanup, `window-start` tag | Both; B commits |
 | K1 | Sat 09:00 | Contract v2, hypotheses v2, DECISIONS v2 | Both decide; B commits |
 | K2 | Sat 14:00 | SP5: learned decoder, hero, text cut | A checks numbers; B builds, uploads (private), tags |
-| K3 | Sat 20:30 | SP6: new error types, comparison data, Level 1 game, Level 3 budget, "Learn the noise", Level 5 v2 | As K2 |
+| K3 | Sat 22:30 | SP6: new error types, comparison data, Level 1 game, Level 3 budget, "Learn the noise", Level 5 v2 | As K2 |
 | K4 | Sun 13:00 | SP7: interface complete | As K2 |
 | K5 | Sun 14:00 | Hallway test with three outsiders | Both observe; B runs it |
 | K6 | Sun 16:30 | Demo video | B records; A narrates the physics |
@@ -160,34 +195,42 @@ Times are IST. "Push" means commit, push and send the handoff message (Section 5
 
 ### 4.1 Two-lane timeline
 
-```text
-                              Sat 08:00          Sat 20:00     Sun 06:00          Sun 18:00   Mon 02:00
-                              ├─────────────────────┼───────────┼─────────────────────┼───────────┤
-K0, K1 eligibility, contract  ▓▓
-A  dem.js                       ██
-A  X-basis generator, banks       ███████ (banks run in the background)
-A  sweep noise models, reruns       ███
-A  idle physics, crosstalk                ██
-A  stage reruns Z/X, budget                 ███
-A  stage 4 v2                                  ██
-A  notes, verdicts                                ██
-A  review B, page                                          █████████
-B  diagonal edges, V2b          ██
-B  basis field, fixtures v2       █
-B  tokens, hero, text cut          ██
-B  level 1 game, level 3              ██
-B  learn the noise                      ███
-B  level 5 v2                              ██
-B  sandbox, basis toggle                                  ███
-B  tour, curated, live run                                   ██
-B  a11y, polish, README                                        ███
-Integration                         ▓       ▓        ▓                  ▓
-Hallway test, fixes, video                                               ▓▓▓▓▓
-Page review, RC review                                                         ▓▓   ▓▓
-Freeze, submit                                                                   ▓▓▓
-Sleep                                                   ░░░░░░
-Ship points                         ◆SP5    ◆SP6                       ◆SP7
-```
+Up to A48 and B46 the 2.0 plan ran as written. Revision 2.1 re-plans everything from **Sat 20:00 IST**. If you start later, shift the Saturday rows by the delay and keep the Sunday rows; the overnight runs absorb it.
+
+**Saturday (from 20:00)**
+
+| Time (IST) | Person A | Person B | Qollab (Person A, between steps) |
+|---|---|---|---|
+| 20:00–20:45 | A49: check table, then CC-A17 (verdicts); send N6 | B47 (CC-B16), as planned | — |
+| 20:45–21:15 | A49a: CC-A18 (held-out generator, SPAM script); push | B47 (until about 21:00) | — |
+| 21:00–22:00 | — | B47a: CC-B20 (hero test, crosstalk table) | — |
+| 21:15–22:00 | A50: E8 decision, CC-A15 (provisional Stage 4) | | Start the held-out runs, one at a time, in the stated order; run `spam_check.py` (ideal, then forte-1) |
+| 22:00–22:15 | A51: V15; send N7 (provisional) | — | Keep starting runs |
+| 22:15–22:30 | — | B48: SP6 switches | |
+| 22:30–23:00 | K3 (SP6 gate) | K3 | |
+| 23:00–23:45 | A52: CC-A19 (statistics, `--dense`, `--set`); Stage 2 v2b reruns | Done for the night | Keep starting runs |
+| 23:45 | Start the overnight command (CC-A19 step 6); check the first run started | | Last run started |
+| 00:00–05:30 | Sleep | Sleep | |
+
+**Sunday**
+
+| Time (IST) | Person A | Person B | Qollab |
+|---|---|---|---|
+| 05:30–05:45 | A52a: check the overnight files | B49 (CC-B17) | Restart remaining held-out runs |
+| 05:45–06:30 | A53: review B's SP6 interface | B49 | |
+| 06:30–07:15 | A53a: CC-A20 (verdicts v2 draft), edit by hand; send N12 | B49 | |
+| 07:15–08:00 | A53b: assemble held-out banks, CC-A21 (V18, F1); send N11 | B49 ends 08:00 | Stop: use what has arrived |
+| 08:00–08:45 | A53c: CC-A22 (final Stage 4), V15; send N7b | B50 (CC-B18), 08:00–09:30 | |
+| 08:45–10:15 | A54: CC-A16 (page, revision 2.1) | B50 | |
+| 09:30–10:30 | | B50a: CC-B21 (cluster intervals, F1, hero decoder, Level 5) | |
+| 10:15–11:00 | A55: edit page; edit `plain` texts; send N9 | | |
+| 10:30–11:30 | | B51 (CC-B19, accessibility) | |
+| 11:00–11:30 | A56: buffer; CC-A23 (ring-up) only if nothing is open | | |
+| 11:30–12:30 | A57: review B's Sunday work | B52 (README, screenshots), then B53 | |
+| 12:30–13:00 | | B54: SP7 switches | |
+| 13:00 → | K4 → K5 → fixes → K6 → K7 → K8 → K9, as in Section 6 | Same | |
+
+**If you fall behind, drop in this order:** CC-A23 (ring-up); the sensitivity rows in CC-A22 (`sensitivity: null`); the plain dense X run (keep dense Z and the T2 = 25 µs variant); held-out d = 3 banks; held-out d = 5 banks beyond h2. **Never drop:** CC-A17, the cluster and paired statistics (CC-A19 steps 1–5), the C6 variant, the final Stage 4 (CC-A22).
 
 ### 4.2 Milestones
 
@@ -195,8 +238,9 @@ Ship points                         ◆SP5    ◆SP6                       ◆SP
 |---|---|---|---|---|---|
 | M10 Eligibility | K0, Sat 08:00 | `window-start` | — | Email sent; README fixed; tag pushed | — |
 | SP5 | K2, Sat 14:00 | `sp5` | Sat 13:30 | V2b, V9, V9L, V11, V12 pass; hero and text cut on real data; levels 1–4 use the learned decoder | If V12(b) fails: keep the naive decoder as default in levels 1–4 **and the hero** (both arms on the same decoder) until a decision recorded in DECISIONS lifts the cut, and report it; if V2b fails: revert the graph change and ship hero and text cut only |
-| SP6 | K3, Sat 20:30 | `sp6` | Sat 20:00 | V13, V14, V16 pass; X-basis and crosstalk data real; Level 1 game, Level 3 budget, "Learn the noise" on real data | Crosstalk scan cut to 3 rates; X-basis cut to d = 3, 5; Level 5 v2 moves to SP7 |
-| SP7 | K4, Sun 13:00 | `sp7` | Sun 12:30 | V15 passes; Level 5 v2, basis toggle, accessibility pass | Drop the sandbox, then the tour, then the polish items, in that order |
+| SP6 | K3, Sat 22:30 | `sp6` | Sat 22:15 | V13, V14, V16 pass; `npm test` clean (CC-B20); X-basis and crosstalk data real; Level 1 game, Level 3 budget, "Learn the noise" on real data; Level 5 on the provisional Stage 4 | Crosstalk scan cut to 3 rates; X-basis cut to d = 3, 5; Level 5 v2 moves to SP7 |
+| M10b (2.1) | Sat 23:45 | — | — | Overnight dense and C6-variant runs started; held-out runs under way | If CC-A19 is not finished by 23:45, start only the C6 variant run with the code that exists |
+| SP7 | K4, Sun 13:00 | `sp7` | Sun 12:30 | V15 (final Stage 4), V17 pass; V18 and V19 recorded; Level 5 v2 on the final Stage 4; F1 shown; basis toggle; accessibility pass | Drop the sandbox, then the tour, then the polish items, in that order |
 | M11 Video | K6, Sun 16:30 | — | Sun 17:30 | Two-minute video recorded | Annotated GIF of the hero and "Learn the noise" |
 | M12 Submitted | K9 | `v2.0` | Mon 03:00 | Final build verified signed out; submission confirmed | Submit the last tagged ship point |
 
@@ -211,8 +255,10 @@ Ship points                         ◆SP5    ◆SP6                       ◆SP
 5. **No stand-ins in public, and nothing public before K0 clears.** `npm run check` enforces the first; the second is on you.
 6. **Never rewrite git history.** No `rebase -i` on pushed commits, no `--amend` on pushed commits, no force push, no date changes.
 7. **The naive decoder stays.** Every change keeps the naive path bit-for-bit (V9 `53933f98`); the learned path is added beside it.
-8. **Same sleep block.** Both sleep Sat 23:30 → Sun 05:30.
+8. **Same sleep block.** Both sleep Sun 00:00 → 05:30 (moved from 23:30 in 2.1).
 9. **From Sun 22:30, no new features.**
+10. **(2.1) Never overwrite a results file with a 2.1 run.** Every 2.1 run writes a new file (`--out`); only CC-A22 regenerates `stage4_comparison.json`.
+11. **(2.1) No Stage 4 number is quoted anywhere until A53c.**
 
 ---
 
@@ -321,9 +367,9 @@ git push --tags
 **Pass:** release check passes; V9 and V9L equal locally and on Qollab; tag pushed. At the cut deadline apply the SP5 cut rule (Section 4.2).
 - [ ] Done
 
-### K3 · JOINT · Sat 20:30 — SP6 integration
+### K3 · JOINT · Sat 22:30 — SP6 integration
 
-As K2, with handoffs N5–N7, switches rows 17–24 (row 24 only if Level 5 v2 is ready), and tag `sp6`. Also: play "Learn the noise" end to end; switch to phase-flip in the header and check Levels 3–5; check the ion crosstalk view.
+As K2, with handoffs N5–N7 (N7 is the provisional Stage 4), switches rows 17–24 (row 24 only if Level 5 v2 is ready), and tag `sp6`. `npm test` must be clean (CC-B20). Level 5 numbers are provisional and must not be quoted. Also: play "Learn the noise" end to end; switch to phase-flip in the header and check Levels 3–5; check the ion crosstalk view.
 - [ ] Done
 
 ### K4 · JOINT · Sun 13:00 — SP7 integration
@@ -585,13 +631,77 @@ Run `npm test` and the six stage runs (expect about an hour in total; Stage 3 is
 **Pass:** tests pass (V13); six results files written.
 - [ ] Done
 
-### A49 · TERMINAL · VERIFY · GIT · Sat 18:00 — Check the reruns and hand over
+### A49 · TERMINAL · VERIFY · CLAUDE CODE · GIT · Sat 20:00 — Check the reruns; CC-A17: honest verdicts; hand over N6
 
-**Do:** check and record: V7, V8, V10 unchanged in the Z basis; learned soft against hard (C2) in both arms; C1 superconducting with the learned decoder; the crosstalk scan verdict (C1 ion part) per rate; C6 (τ*_log X against Z, superconducting); O4 ratio per (d, r); the budget arrays add up to sensible magnitudes (readout ~10⁻³–10⁻², idle ≤ 3×10⁻², gate ~10⁻²). Write them into `notes_results.md`. Then commit `data\banks data\raw data\results tools\sweep.mjs tests docs\notes_results.md DECISIONS.md`, push, and send `HANDOFF N6`.
-**Pass:** every check recorded with its source file.
+**Do:** first commit the A48 outputs, so that CC-A17's diff shows only its own changes:
+
+```bat
+git add data\banks data\raw data\results tools\sweep.mjs tests
+git commit -m "CC-A14: Stages 1-3 in both bases, budget, crosstalk scan"
+git pull --rebase
+git push
+```
+
+Then run the execution-checklist A49 check table by hand (V7, V8, V10 in both bases; V13; budget magnitudes). Then `/clear` and paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A17: record the A49 verdicts (revision 2.1). No code changes and no data/results changes in this task.
+Modify exactly: docs/notes_results.md (new section "v2 verdicts at A49", after the v2 Stage dem section), DECISIONS.md (Person A section; v2 table rows E5 and E12).
+
+Every number comes from the named file and field. Where a number given below differs from the file, the file wins: use it and list the difference in the report.
+
+1. Stage 4. Do not quote any number from data/results/stage4_comparison.json: it was built on 8 Oct from Stage 2 and 3 files that have since been replaced. It is regenerated at A50 (provisional) and A53c (final). Say so in one line.
+2. C1, ion part (stage2_ion.json and stage2_ion_x.json -> crosstalkScan). Table per basis, d (3, 5), mode and rate: tauLog xMin [lo, hi], fractionTied, interiorBelowTauPhys, interiorBelowTauPhysResolved. Verdicts:
+   a. Crosstalk off, no idle-driven optimum: holds. The point-estimate flag is true at rate 0 in Z at d = 3, but the interval contains tau*_phys = 23.5 us and the idle probability is about 1e-7: noise, not physics.
+   b. Crosstalk at the card value 1.67e-5 /us, an interior tau*_log < tau*_phys appears. Under the pre-registered point-estimate flag the result is SPLIT between the bases: Z says none at every (d, mode) (expected d3 hard 30.2 [21.2, 36.8]); X says one exists at every (d, mode) (expected d3 hard 19.3 [16.2, 47.5]). Under the resolved flag neither basis shows one, because every interval contains tau*_phys = 23.5 us. Record the verdict as REFUTED under the resolved flag and state the split point-estimate result beside it.
+   c. At 1e-4 /us the point estimates sit below tau*_phys but the intervals overlap it. An optimum below tau*_phys is resolved only at 1e-3 /us, 60x the card value, where crosstalk per detection (about 0.7% near 14 us) is as large as the learned gate classes (budget.gateClasses). The clause "no interior optimum at any scanned rate" is therefore not met, but state that it was a weak clause, because the scan reaches rates where crosstalk equals gate noise.
+3. DECISIONS row E12 (deviations, with the time): (a) the pre-registered rule for C1 (ion) used the point estimate interiorBelowTauPhys; from A49 we also report interiorBelowTauPhysResolved (and, from CC-A19, shiftDelta), decided after seeing the data because the point-estimate flag flips with noise below 1e-3 /us (Z says an optimum exists at rate 0 and none at the card rate; X the opposite). The change matters: at the card rate the point estimate gives a split result (Z none, X an optimum), the resolved flag refutes the clause in both bases. Both are reported, and the page states the change. (b) C6 is not applicable with the card (item 4); it is tested with a variant card at CC-A19. (c) C3 is reported with informative: false at A53c (team checklist Section 1.2 note).
+4. C6 (stage3_sc.json, stage3_sc_x.json, learned, optima.tauLog). Verdict: NOT APPLICABLE with the card. C6 is conditional on T2 < T1; params/sc.json has T2 = 77 us > T1 = 50 us. With this card the phase-flip idle probability is smaller (budget.idle at 1 us: X 0.0065, Z 0.0099), so physics predicts a longer X optimum, which is what the data show (expected d3 hard X 0.820 [0.772, 0.896], Z 0.764 [0.732, 0.802]).
+5. C1, superconducting, learned, both bases: per d and mode, tauLog [lo, hi] against tauPhysEmpirical (0.906 us); "below" only if hi < 0.906. Every row with fractionTied >= 0.5 is UNRESOLVED and excluded from verdicts. Apply the same tie rule to every tau*_log table in notes_results.md (including ion d = 7 learned and ion d = 5 X-basis rows): mark the rows, do not delete them.
+6. C2, both arms, learned: count points with soft above hard beyond the Wilson intervals, per arm and basis. Add: "Wilson intervals treat the R readout draws of one quantum shot as independent, so they are too narrow where gate faults dominate; CC-A19 adds cluster and paired intervals and these counts are redone at A53a."
+7. O4 (dem_forte1.json -> ratioXoverZ): every ratio with its interval, and: "All intervals contain or nearly contain 1: forte-1 gate noise looks unbiased to the decoder, so X-against-Z differences in our results come from the classical idle model, not from the simulator." Fill row E5.
+8. New subsection "Finding F1 (post hoc, not pre-registered): the v1 soft-decoding loss was a decoder-model artefact". From stage2_ion.json, Z, d = 3, tau = 20 us: naive soft 0.0072 against hard 0.0035 (soft worse beyond the intervals at 11 of 39 points); learned soft 0.00356 against hard 0.00350 (0 of 39). Mechanism: the diagonal edge class is as strong as the time-like class (dem_forte1.json, d3 r3: diag 0.0099, time 0.0100) and is missing from the naive graph. State that this is in sample and that V12(b) is underpowered at d = 5 (13 -> 7 and 20 -> 9 errors); the held-out test is V18 (CC-A18, CC-A21).
+9. Budget magnitudes from the budget arrays: readout, idle, crosstalk and gate ranges per arm and basis.
+10. At the end of the report, print the HANDOFF N6 text for Person B, containing: (a) tests/hero.test.js, test "v1 stage-3 file: naive series, its tau_log, tau*_phys from findMinimum", imports data/results/stage3_sc.json, which is now a v2 file; it should import data/fixtures/stage3_sc.json; it is the only failing test (252/253) and K3 needs a clean npm test (CC-B20); (b) the ion crosstalk result must be shown as a scan with tau*_log intervals against tau*_phys, never the raw interiorBelowTauPhys boolean (CC-B20); (c) stage4_comparison.json is stale until A50 and provisional until A53c.
+
+Run `npm test` (expect 252/253: no code changed) and `git diff --stat` (only the two files). End with the report format.
+```
+
+Then commit `docs\notes_results.md DECISIONS.md` ("A49: v2 verdicts, deviations recorded in E12"), push, and send `HANDOFF N6` with the text from the report.
+**Pass:** every row of the check table and every verdict recorded with its source file; E5 and E12 filled.
 - [ ] Done
 
-### A50 · CLAUDE CODE · Sat 18:30 — CC-A15: Stage 4 v2 (framing, trade-off, sensitivity effects, C1–C6)
+### A49a · CLAUDE CODE · QOLLAB · Sat 20:45 — CC-A18: held-out banks and the SPAM check
+
+**Why:** V12(b) failed for lack of errors (13 → 7 and 20 → 9 at d = 5), and the learned rates come from the banks they decode. New simulator seeds give a true out-of-sample test (V18). V19 settles whether forte-1 already contains measurement error, which decides how every ε statement is worded.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A18: held-out banks for a true out-of-sample test (V18) and a measurement-error check of the forte-1 noise model (V19). Nothing here runs on Qollab; Person A runs the scripts.
+Modify exactly: qollab/bank_generator.py, tools/assemble_bank.mjs, tests/assemble_bank.test.js, DECISIONS.md (Person A section; v2 table rows E11 and E13). Create: qollab/spam_check.py, data/banks/heldout/.gitkeep, data/raw/heldout/.gitkeep.
+
+1. bank_generator.py: add held-out configurations, Z basis, forte-1, SHOTS as today: rep_d5_r3_L0_h1..h5, rep_d5_r3_L1_h1..h5, rep_d3_r3_L0_h1, rep_d3_r3_L1_h1. _parse_name accepts the optional suffix _h<n> and returns the same configuration as the name without it, plus "heldout": n. Each gets its own fixed sampler seed in SEEDS: distinct from every existing seed and from each other, in 1..2^31, generated once by a stated method (for example random.Random(20261010).randrange(1, 2**31)) and written as literals. Circuit, gate set and noise model are identical to the original bank of the same (d, r, L); only the seed differs. In the report, print the run order: d5 L0 h1, d5 L1 h1, d5 L0 h2, d5 L1 h2, ..., d5 L1 h5, then d3 L0 h1, d3 L1 h1.
+2. assemble_bank.mjs: accept the _h<n> names; held-out banks go to data/banks/heldout/ and raw text to data/raw/heldout/, never to data/banks/. Test: a held-out name parses to the same d, r, L as its base name and lands in the heldout folder.
+3. Check whether tools/build.mjs or tools/release_check.mjs (Person B's files) read data/banks/ recursively or would embed data/banks/heldout/ in the page. Do not edit them; if they would, write a handoff request to Person B in the report.
+4. qollab/spam_check.py, in the style of bank_generator.py (same backend handling, native gates, seed only through set_options): 5 qubits; circuit A prepares all |0> and measures; circuit B applies one X to each qubit and measures; 4000 shots each; a CONFIG line selects "ideal" or "forte-1" (two runs). Print, between BEGIN_SPAM and END_SPAM, per qubit P(read 1 | prep 0) and P(read 0 | prep 1) with counts and Wilson 95% intervals, plus the noise model and the seed.
+5. DECISIONS E11 (write it now, before any held-out bank exists): the held-out design: names, seeds, shots; the rule that learned rates and naive pGate come only from the original rep_d5_r3_L0/L1 and rep_d3_r3_L0/L1 banks; the V12(b) two-clause criterion applied unchanged to the held-out banks (V18); the paired comparison as an addition. E13: "V19 SPAM check: pending", with the script name.
+
+Run `npm test` and `python -m pytest validation -q`. End with the report format.
+```
+
+Then commit and push **before any Qollab run** (the commit time proves E11 came first). On Qollab, between your next steps: put `bank_generator.py` in the generator project, set `CONFIG` to each held-out name in the printed order, run, and save each `BEGIN_BANK … END_BANK` block as `data\raw\heldout\<name>.txt`. Run `spam_check.py` once with `ideal` and once with `forte-1`, and save both outputs as `data\raw\spam_<model>.txt`.
+**Pass:** tests pass; E11 committed before the first held-out run; the run order printed.
+- [ ] Done
+
+### A50 · CLAUDE CODE · Sat 21:15 — CC-A15: Stage 4 v2, provisional (framing, trade-off, sensitivity effects, C1–C6)
+
+**Revision 2.1:** this run is **provisional**. It gives Person B real Stage 4 data in the final format for Level 5 tonight; its numbers are not quoted anywhere and are replaced at A53c (CC-A22). Run the prompt unchanged.
 
 **Do:** first decide whether the ion's two-qubit gates in one round run in parallel (two layers per round) or one after another (2(d−1) layers per round). Use a source if you find one; otherwise choose sequential as the conservative case. Record it in E8 and set `gate_layers_per_round` in `params/cycle.json` (Appendix U5). Then `/clear` and paste:
 
@@ -618,49 +728,191 @@ Run `npm test`, `node tools/sweep.mjs --stage 4`, `node tools/sweep.mjs --stage 
 **Pass:** tests pass; both files written.
 - [ ] Done
 
-### A51 · TERMINAL · VERIFY · GIT · Sat 19:45 — Check Stage 4 and hand over
+### A51 · TERMINAL · VERIFY · GIT · Sat 22:00 — Check Stage 4 (provisional) and hand over
 
-**Do:** hand-check V15 for one point per arm; read every conclusion; make sure no automated verdict contradicts your reading without a note. Commit `src\core\metrics.js tests\metrics.test.js tools\sweep.mjs params\cycle.json data\results DECISIONS.md`, push, send `HANDOFF N7`.
+**Do:** hand-check V15 for one point per arm; read every conclusion; make sure no automated verdict contradicts your reading without a note. Commit `src\core\metrics.js tests\metrics.test.js tools\sweep.mjs params\cycle.json data\results DECISIONS.md`, push, send `HANDOFF N7` with the words "provisional: format final, numbers replaced at A53c".
 - [ ] Done
 
-### A52 · SELF · Sat 21:15 — Results notes v2
+### A52 · CLAUDE CODE · TERMINAL · Sat 23:00 — CC-A19: cluster and paired statistics, `shiftDelta`, dense grid, C6 variant; start the overnight runs
 
-**Do:** rewrite the "Verdicts" part of `docs/notes_results.md` for C1–C6 and O4, each with the full-statistics verdict, the numbers and their sources, and a "what changed from v1" line (the learned decoder, the new idle physics). Note plainly which v1 conclusions were decoder artefacts. Commit and push.
+**Note:** the results notes v2 that 2.0 scheduled here move to A53a, so they are written once, from the final numbers.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A19: correct intervals and paired tests, a pre-specified shift statistic, a dense superconducting grid and the C6 variant card (revision 2.1; Appendix U11 items 1 and 3, extended).
+Modify exactly: src/core/stats.js, src/core/optimum.js (only if needed), tools/sweep.mjs, tests/stats.test.js, tests/sweep.test.js, DECISIONS.md (Person A section).
+
+Rules: existing results files are never overwritten; every run below writes a new file through a new --out option. New fields are additive (Appendix U4, revision 2.1 additions). V9 stays 53933f98 and V9L 53933f98. The naive path is unchanged bit for bit. Before any long run, time a small run and print the estimate.
+
+1. stats.js: clusterBootstrapRate(failCounts, R, B, rng), where failCounts[i] in 0..R is the number of failed readout draws of quantum shot i: resample quantum shots with replacement; rate = sum / (nShots * R); 95% percentile interval. pairedClusterDiff(failA, failB, R, B, rng): the same resampled shot indices for A and B; returns { diff: rateA - rateB, lo, hi }. Tests (V17; break comments): when every failing shot fails all R draws, the interval is wider than Wilson by about sqrt(R); with independent draws it agrees with Wilson within 15%; identical A and B give diff 0 with lo = hi = 0; a known shift is recovered inside its interval.
+2. tools/sweep.mjs, Stages 2 and 3 and the crosstalk scan: keep the per-quantum-shot failure counts per (series, tau) in memory (the tauLog bootstrap already uses a per-shot matrix: reuse it); do not write them to the results file. Add loCluster and hiCluster to every series (B = 500, a documented fixed seed). Add the paired array: softMinusHard per (decoder, d, tau) and learnedMinusNaive per (mode, d, tau), with pairedClusterDiff.
+3. shiftDelta (pre-specified): for a curve pL(tau) and its tau*_phys (empirical for superconducting, the stored tauPhys for the ion, as used today): tauRef = the grid point nearest tau*_phys in ln tau; tauShort = the grid point immediately below tauRef (on the dense grid: the point 0.15 us below tauRef). shiftDelta = { tauRef, tauShort, diff: pL(tauRef) - pL(tauShort), lo, hi, resolved: lo > 0 }, with pairedClusterDiff (the same quantum shots at both tau). Add it to every crosstalkScan entry and every optima.tauLog row.
+4. Options: --out <file> (results path). --dense (Stage 3 only): tau grid = the existing grid union {0.40, 0.45, ..., 1.30}; recompute tauPhys, tauPhysEmpirical (200 000 truth samples per tau) and tauLog with bootstrap. --set key=value (repeatable): overrides a parameter-card field after loading; refuse unknown keys; record it in params and provenance.overrides; the card's own checks (such as T2 <= 2*T1) still run. Add provenance.grid = "standard" | "dense".
+5. Run now (short):
+   node tools/sweep.mjs --stage 2 --decoder both --basis Z --out data/results/stage2_ion_v2b.json
+   node tools/sweep.mjs --stage 2 --decoder both --basis X --out data/results/stage2_ion_x_v2b.json
+   Check that every pL value equals stage2_ion.json / stage2_ion_x.json exactly (the seeds are unchanged); any difference is a bug to fix before going on.
+6. Do NOT run the long jobs. As the last lines of the report, print the one-line Windows cmd command Person A starts before sleeping, chained with &&, in this order (the C6 variant before the plain dense X run, which is the first thing to cut):
+   node tools/sweep.mjs --stage 3 --decoder both --basis Z --dense --out data\results\stage3_sc_dense.json && node tools/sweep.mjs --stage 3 --decoder both --basis X --dense --set T2_us=25 --out data\results\stage3_sc_x_T2_25.json && node tools/sweep.mjs --stage 3 --decoder both --basis X --dense --out data\results\stage3_sc_x_dense.json
+   with your runtime estimate for each part.
+7. DECISIONS (Person A): shiftDelta is a post-hoc addition (give the time); verdicts for pre-registered hypotheses still use the pre-registered rule, with shiftDelta and cluster intervals reported beside them. T2 = 25 us is UNSOURCED (illustrative), chosen only to satisfy C6's premise T2 < T1 = 50 us.
+
+Run `npm test`, `node tools/sweep.mjs --diag`, `node tools/sweep.mjs --diag --decoder learned`, then step 5. End with the report format.
+```
+
+Then commit `src\core tools tests data\results DECISIONS.md` ("CC-A19: cluster and paired statistics, shiftDelta, --dense, --set") and push. Set the laptop to never sleep, paste the overnight command from the report into a terminal, and check that the first run prints progress before you go to sleep.
+**Pass:** tests pass (V17); V9 and V9L unchanged; the `_v2b` pL values equal the earlier files; the overnight command running.
 - [ ] Done
 
-### A53 · REVIEW · Sun 05:30 — Review Person B's SP6 interface
+### A52a · TERMINAL · Sun 05:30 — Check the overnight runs
+
+**Do:** check that `stage3_sc_dense.json`, `stage3_sc_x_T2_25.json` and (if it finished) `stage3_sc_x_dense.json` exist and parse, each with `provenance.grid` "dense" and, for the variant, `provenance.overrides` T2_us = 25. If a run failed, restart it for d = 3 and 5 only and continue with the next step while it runs. Restart any held-out Qollab runs that are still missing.
+**Pass:** the dense Z file and the C6 variant file exist.
+- [ ] Done
+
+### A53 · REVIEW · Sun 05:45 — Review Person B's SP6 interface
 
 **Do:** pull; open N8's preview with every flag on. Check every number shown against the results files, the physics wording of "Learn the noise" (fault position, why the naive decoder needs two edges), the budget bar's labels and the framing caption. Send findings as a numbered list (blocking, major, minor) in B's DECISIONS-style format.
 - [ ] Done
 
-### A54 · CLAUDE CODE · Sun 06:30 — CC-A16: page physics and results sections v2
+### A53a · CLAUDE CODE · SELF · Sun 06:30 — CC-A20: results notes v2 (formerly A52)
 
 **Do:** `/clear`, then paste:
 
 ```text
 Read CLAUDE.md and DECISIONS.md first.
-Owner: Person A (shared file docs/project_page.md, Person A's sections only: "The physics in plain language", "Results", "Validation", "Limitations").
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
 
-Task CC-A16: rewrite Person A's sections of docs/project_page.md for v2 from docs/notes_results.md, DECISIONS.md and data/results/*.json only; every number carries an HTML comment naming its source file and field.
-- Frame every comparison as "two readout physics models at fixed gate noise"; state that the superconducting arm carries trapped-ion gate noise by construction.
-- Physics: add the phase-flip memory (what it sees, T2), measurement crosstalk on ions, and the detector error model (diagonal edges, learned rates, out-of-sample check), each in at most 120 words of plain language.
-- Results: one short paragraph per hypothesis C1-C6 and O4 with the verdict, the key numbers and the "changed from v1" line; the trade-off result in one paragraph.
-- Validation: add V2b, V9L, V11-V16.
-- Limitations: keep v1's, add the in-sample learned rates (with the V12b result), the crosstalk rate's status (sourced or illustrative), and fixed gate noise for both arms.
-Do not touch Person B's sections. End with the report format.
+Task CC-A20: draft the "Verdicts v2" part of docs/notes_results.md from the revision-2.1 files. No code and no data/results changes.
+Modify exactly: docs/notes_results.md.
+
+Sources: stage2_ion_v2b.json, stage2_ion_x_v2b.json, stage3_sc_dense.json, stage3_sc_x_T2_25.json, stage3_sc_x_dense.json (if it exists), stage1_flat*.json, dem_forte1.json, DECISIONS rows E4, E11-E13. Not stage4_comparison.json.
+For C1 (superconducting from the dense files, Z and X, with shiftDelta; ion in the three parts used at A49), C2, C5 (in sample here; out of sample at A53b), C6 (the T2 = 25 us variant against dense Z, d = 3 and 5, learned, both modes: tauLog with intervals, and pairedClusterDiff of pL at matching tau), O4 and F1, write: the pre-registered verdict; the numbers with source file and field; the cluster intervals beside the Wilson ones; shiftDelta where it applies; a "changed from v1" line. C4: "decided at A53c". C3: one line, "decided at A53c; the outcome is fixed by construction (team checklist Section 1.2 note)".
+Name plainly which v1 conclusions were decoder artefacts (the v1 C2 loss on the ion arm; the eps = 0 spike). Mark every tau*_log with fractionTied >= 0.5 as unresolved. Redo the A49 C2 counts with paired cluster intervals and show both counts.
+End with the report format and a list of every place where a cluster or paired result changes a verdict reached with Wilson intervals.
 ```
 
-**Pass:** every number has a source comment; nothing contradicts `notes_results.md`.
+Then edit the draft by hand until every verdict reads correctly. Commit and push; send `HANDOFF N12` (the `_v2b` and dense files).
+**Pass:** every verdict has numbers and a source file.
 - [ ] Done
 
-### A55 · EDITOR · Sun 08:00 — Edit the page; plain-language verdicts
+### A53b · TERMINAL · CLAUDE CODE · Sun 07:15 — Held-out banks; CC-A21: V18 and F1 out of sample
 
-**Do:** edit your sections by hand until they read well aloud. Write one plain sentence (at most 20 words) for each of C1–C6 and O4, and the framing sentence, into `conclusions[*].plain` of `stage4_comparison.json` (edit the JSON directly; record it in E-notes) and into `notes_results.md`. Commit, push, send `HANDOFF N9`.
+**Do:** stop waiting for Qollab: use the held-out banks that have arrived (at least h1 for both d = 5 states). Assemble them and record V19:
+
+```bat
+node tools/assemble_bank.mjs data\raw\heldout
+git add data\banks\heldout data\raw\heldout data\raw\spam_*.txt
+git commit -m "Held-out banks and SPAM-check output"
+```
+
+Fill E13 from the two SPAM outputs (forte-1 against ideal, per qubit, with intervals). Then `/clear` and paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A21: Stage holdout (V18) and F1 out of sample.
+Modify exactly: tools/sweep.mjs, tests/sweep.test.js, docs/notes_results.md, DECISIONS.md (Person A section; rows E4 and E11).
+
+1. --stage holdout writes data/results/holdout.json (Appendix U4, revision 2.1). Learned rates (ratesFromBanks) and naive pGate come from the ORIGINAL rep_d5_r3_L0/L1 and rep_d3_r3_L0/L1 banks only; every bank in data/banks/heldout/ is decoded with both decoders. Nothing is learned from a held-out bank: add a test that fails if a held-out bank reaches ratesFromBanks or estimatePGate in this stage.
+2. Setting 1 (the pre-registered V12(b) setting): flat eps = 0.02, hard, R = 1. Per (d, L) and pooled: naive and learned k, n, Wilson interval, cluster interval, and pairedClusterDiff(learned, naive). V18 verdict: the V12(b) two-clause rule exactly as in team checklist Section 1.3, applied to the held-out banks; the paired result is reported as an addition and does not change the verdict.
+3. Setting 2 (F1): the ion card (params/ion.json), Z basis, the Stage 2 tau grid, d = 3 and 5, hard and soft, both decoders, R = 4. Per tau: pL with cluster intervals, and pairedClusterDiff(soft, hard) per decoder; counts of "soft worse than hard beyond the paired interval" for naive and for learned.
+4. Record in holdout.json params how many held-out banks were used per (d, L); if fewer than planned, say so in the notes.
+5. Update E4 (keep the in-sample result; add the held-out result) and E11 (result). Write the V18 result and F1 out of sample into notes_results.md.
+
+Run `npm test` and `node tools/sweep.mjs --stage holdout`. End with the report format, then print the HANDOFF N11 text for Person B: the V18 verdict and whether the SP5 cut is lifted (only if V18 passed).
+```
+
+If V18 passed, record in your DECISIONS section "SP5 cut lifted (V18 passed)", with the time. Commit, push, send `HANDOFF N11`.
+**Pass:** V18 verdict and E13 recorded; `holdout.json` committed.
 - [ ] Done
 
-### A56 · SELF · Sun 10:00 — Buffer, or optional statistics work
+### A53c · CLAUDE CODE · VERIFY · Sun 08:00 — CC-A22: final Stage 4
 
-**Do:** fix review findings in your files with the fix prompt (U6). If nothing is open, take an item from Appendix U11 in the stated order; rerun only what it touches; update notes and page numbers.
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A22: final Stage 4 (revision 2.1). It replaces the provisional A50 output.
+Modify exactly: tools/sweep.mjs, tests/sweep.test.js, tests/metrics.test.js.
+
+1. Inputs: stage2_ion_v2b.json and stage2_ion_x_v2b.json (ion); stage3_sc_dense.json (Z) and stage3_sc_x_dense.json if it exists, else stage3_sc_x.json (superconducting); stage3_sc_x_T2_25.json (C6); holdout.json (C5 and F1) if it exists. Record each input file and its commit in provenance.inputs. Refuse to run if an input's params differ from params/*.json except through a recorded override.
+2. Every tau*_log with fractionTied >= 0.5 is "unresolved" and enters no verdict.
+3. Per-round and per-us values carry cluster intervals (loCluster/hiCluster through the per-round transform); Wilson values go in separate fields.
+4. conclusions, with the revision-2.1 fields informative and deviations (Appendix U4):
+   C1: superconducting from the dense files, with shiftDelta; ion as three sub-verdicts (crosstalk off; card rate; scan) as at A49, deviation E12 listed.
+   C2: the pre-registered rule, with the paired-cluster count beside it.
+   C3: the U4 dominance rule as in CC-A15; informative: false; note: "The outcome is fixed by construction: cycle times differ by about 2000x and gate noise is shared, so with these cards the superconducting arm always has more rounds per second and the ion arm a lower error per round. Shown as a trade-off, not as a finding."
+   C4: as CC-A15.
+   C5: at tau*_log, out of sample from holdout.json if present (say which), otherwise in sample and labelled so.
+   C6: verdict "not applicable" for the card (T2 > T1); the note gives the T2 = 25 us variant result (tauLog X against Z, pairedClusterDiff), labelled UNSOURCED (illustrative).
+   O4: as CC-A15.
+   findings: F1 from holdout.json if present, else from stage2_ion_v2b.json with inSample: true.
+   plain: draft one sentence of at most 20 words for every conclusion, every finding and the framing; Person A edits them at A55.
+5. Sensitivity: replace the 28 reduced-statistics rows with 6 rows: gamma dark->bright (ion), eta (superconducting) and T1 (superconducting), each x0.5 and x2; all shots, R = 2, cluster intervals, no tau*_log bootstrap; keep the effect fields so the Level 5 tornado chart still works. Estimate the runtime first; if it is over 45 minutes, set sensitivity to null with a sensitivityNote and do not run it.
+6. --stage 4 --basis X as in CC-A15.
+
+Run `npm test`, `node tools/sweep.mjs --stage 4`, `node tools/sweep.mjs --stage 4 --basis X`. Then print the V15 hand check for one point per arm (rounds per second = 1e6 / T_cyc; error per round = 1/2 [1 - (1 - 2 pL)^(1/r)]). End with the report format and the verdict table for C1-C6, O4 and F1.
+```
+
+Hand-check V15 for one point per arm against the file. Commit `tools tests data\results DECISIONS.md`, push, send `HANDOFF N7b`.
+**Pass:** tests pass; V15 agrees to 3 significant figures; every conclusion has a note wherever the automated verdict differs from your reading.
+- [ ] Done
+
+### A54 · CLAUDE CODE · Sun 08:45 — CC-A16 (revision 2.1): the project page around the findings
+
+**Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A (shared file docs/project_page.md: Person A's sections "Summary", "Findings", "Who did what", "What runs where", "The physics in plain language", "Results", "Validation", "Limitations"; Person B's sections are untouched).
+
+Task CC-A16 (revision 2.1): rewrite Person A's sections of docs/project_page.md for v2 from docs/notes_results.md, DECISIONS.md and data/results/*.json only. Every number carries an HTML comment naming its source file and field. No internal step codes in visible text (no A28, CC-A8, B14, U3, N6, SP5, K1, E4 or similar); the release check's forbidden terms also apply.
+
+Order (the first three sections go at the top, below the title):
+1. Summary: two sentences, using the framing "two readout physics models at fixed gate noise".
+2. Findings, one paragraph each, with one figure reference and its key numbers:
+   F1 Learning IonQ's noise rescues soft decoding: naive against learned soft-minus-hard, the diagonal edge class, and the out-of-sample status from holdout.json stated plainly.
+   F2 Superconducting: the logical optimum comes before the readout optimum because data qubits idle during readout (dense-grid tau*_log against the empirical tau*_phys, shiftDelta). Add the one-line estimate: the optimum sits where the falling readout error and the rising idle error 1/2 (1 - exp(-tau/T1)) have equal and opposite slopes; say whether the simulation agrees.
+   F3 Trapped ion: the readout optimum is set by optical pumping, not by idling; measurement crosstalk moves the logical optimum only at about 60x the sourced rate.
+3. Who did what (two sentences): the authors chose the physics, sourced the parameters, diagnosed the soft-decoding failure and decided to learn the error model; the code was written with Claude Code (link to the README disclosure).
+4. What runs where: the banks come from IonQ's simulator (fresh ancillas, all measurements at the end); readout, idle and crosstalk are classical models applied to the measured bits; what the simulator contributes (correlated gate noise, including the diagonal detector correlations); the V19 result (whether forte-1 includes measurement error, and what that means for the eps axis).
+5. The physics in plain language: phase-flip memory and T2, crosstalk, the detector error model; each at most 120 words.
+6. Results: C1-C6 and O4 as a table (statement, verdict, one-line reason): C3 "descriptive: the outcome is fixed by construction"; C6 "not applicable with the card; T2 < T1 variant: <result>"; the crosstalk flag change listed as a deviation. Then the trade-off in one paragraph.
+7. Validation: a V1-V19 table, outcomes only.
+8. Limitations: keep v1's; add: the superconducting arm carries trapped-ion gate noise; the crosstalk value is a lower bound measured with micromotion hiding, and same-chain mid-circuit detection without shielding or shuttling is an assumption; learned rates are in sample unless V18 says otherwise; d = 7 optima are unresolved; the superconducting readout model's own estimate ignores ring-up (unless CC-A23 ran).
+Keep Person A's sections under 2500 words in total. In the report, list every number with its source. End with the report format.
+```
+
+**Pass:** every number has a source comment; nothing contradicts `notes_results.md`; F1–F3 come before the hypothesis table.
+- [ ] Done
+
+### A55 · EDITOR · Sun 10:15 — Edit the page; plain-language verdicts
+
+**Do:** edit your sections by hand until they read well aloud. Edit the draft plain sentences (at most 20 words each) that CC-A22 wrote for C1–C6, O4, the findings and the framing, in `conclusions[*].plain` and `findings[*].plain` of `stage4_comparison.json` (edit the JSON directly; record it in E-notes), and copy them into `notes_results.md`. Commit, push, send `HANDOFF N9` by 11:00.
+- [ ] Done
+
+### A56 · SELF · CLAUDE CODE · Sun 11:00 — Buffer, or CC-A23 (optional)
+
+**Do:** fix review findings in your files with the fix prompt (U6). Only if nothing is open and K4 is not at risk, `/clear` and paste CC-A23 (Appendix U11 item 2); otherwise skip it and say so in Limitations:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person A. Create or modify only files owned by Person A (see CLAUDE.md).
+
+Task CC-A23 (optional): ring-up in the superconducting belief model, as a variant (V10r).
+Modify exactly: src/core/readout/sc.js, tests/sc.test.js, tools/sweep.mjs (only so that --set accepts beliefRingUp), docs/notes_results.md.
+1. sc.js: option beliefRingUp (default false, so every existing number and test is unchanged). When true, the belief model's state-conditional means of the integrated signal use exactly the ring-up law the sampler uses: read the sampler code and derive the time-integrated mean from it; do not introduce a different formula. Variances change only if the sampler's do.
+2. Test (V10r): with ring-up on in both sampler and belief, the llr calibration passes within 4 SE in every bin (it fails every bin today); belief and empirical tau*_phys agree within one grid step.
+3. Run node tools/sweep.mjs --stage 3 --decoder both --basis Z --set beliefRingUp=true --out data\results\stage3_sc_ringup.json and write into notes_results.md whether C1 (superconducting) and C2 still hold with calibrated soft weights. The page's headline numbers do not change; the result is reported as a variant under Limitations.
+Run `npm test`, `node tools/sweep.mjs --diag` and `--diag --decoder learned`. End with the report format.
+```
 - [ ] Done
 
 ### A57 · REVIEW · Sun 11:30 — Review Person B's Sunday work
@@ -836,9 +1088,30 @@ Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 **Pass:** tests pass.
 - [ ] Done
 
-### B48 · EDITOR · VERIFY · Sat 20:00 — Switch to SP6 data
+### B47a · CLAUDE CODE · Sat 21:00 — CC-B20: hero test fix and the crosstalk-scan table
 
-**Do:** after `ACK N5`, `N6`, `N7`: apply Appendix U3 rows 17–24 (24 only if B47 passed); build, check, preview with every switched flag on; produce `dist/local/preview.html` with every flag on in a scratch copy for N8 (send the file, do not commit the scratch flags). Join K3.
+**Depends on:** N6. **Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
+
+Task CC-B20: fix the failing hero test and add the ion crosstalk-scan display (revision 2.1, handoff N6).
+Modify exactly: tests/hero.test.js, src/ui/level3.js, tests/level3.test.js.
+
+1. tests/hero.test.js, test "v1 stage-3 file: naive series, its tau_log, tau*_phys from findMinimum": import data/fixtures/stage3_sc.json (a v1-format fixture: no decoder field, no tauPhysEmpirical) instead of data/results/stage3_sc.json, which is now a v2 file. State every expected value in terms of the fixture's own contents, so that the test still catches what its comment says. Do not weaken any other assertion. npm test must be 253/253.
+2. Level 3, trapped ion, behind FEATURES.crosstalk: inside "Explain more", a table "Measurement crosstalk scan (d = 3 and 5, learned decoder)", one row per rate in crosstalkScan.rates_per_us and (d, mode); the card rate is labelled "1.67e-5 /us (measured lower bound)" and the others "scan". Columns: rate; d; mode; best readout time for the code (tau*_log) with its interval; best readout time for one qubit (tau*_phys); "shift below the single-qubit optimum": "yes" only if entry.shiftDelta.resolved (when that field exists) or, without shiftDelta, only if interiorBelowTauPhysResolved; otherwise "not resolved". Never display the raw interiorBelowTauPhys boolean. One sentence above the table: "Crosstalk only moves the best readout time when it is far above the measured value." The table has a caption and is keyboard reachable.
+3. Tests: a row shows "not resolved" for an entry whose interiorBelowTauPhys is true and whose resolved flag is false; the table reads shiftDelta when present.
+
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
+```
+
+**Pass:** `npm test` 253/253 or more, with no failures; build and check pass.
+- [ ] Done
+
+### B48 · EDITOR · VERIFY · Sat 22:15 — Switch to SP6 data
+
+**Do:** after `ACK N5`, `N6`, `N7` (N7 is the provisional Stage 4): apply Appendix U3 rows 17–24 (24 only if B47 passed); build, check, preview with every switched flag on; produce `dist/local/preview.html` with every flag on in a scratch copy for N8 (send the file, do not commit the scratch flags). Join K3.
 - [ ] Done
 
 ### B49 · CLAUDE CODE · Sun 05:30 — CC-B17: Level 2 sandbox and the global basis toggle
@@ -864,6 +1137,7 @@ Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 
 ### B50 · CLAUDE CODE · Sun 08:00 — CC-B18: guided tour, curated Level 4 examples, live-run panel
 
+**Revision 2.1:** time box 08:00–09:30. If the tour is not finished by 09:30, leave `FEATURES.tour` off (it is first in the SP7 cut order after the sandbox) and go to B50a.
 **Do:** `/clear`, then paste:
 
 ```text
@@ -883,7 +1157,32 @@ Run `node tools/curate.mjs`, `npm test`, `npm run build`, `npm run check`. End w
 
 - [ ] Done
 
-### B51 · CLAUDE CODE · VERIFY · Sun 10:00 — CC-B19: accessibility, consistency, motion
+### B50a · CLAUDE CODE · Sun 09:30 — CC-B21: cluster intervals, F1 in "Learn the noise", hero decoder, Level 5 final
+
+**Depends on:** N11, N12 and N7b (if N7b is late, build on the provisional file; B54 rebuilds). **Do:** `/clear`, then paste:
+
+```text
+Read CLAUDE.md and DECISIONS.md first.
+Owner: Person B. Create or modify only files owned by Person B (see CLAUDE.md).
+
+Task CC-B21: interface changes from revision 2.1 (handoffs N7b, N11, N12).
+Modify exactly: src/ui/bridge_data.js, src/ui/hero.js, src/ui/learnnoise.js, src/ui/level3.js, src/ui/level4.js, src/ui/level5.js, src/ui/charts.js, tools/release_check.mjs (only so it knows the new results files), and the tests for these files.
+
+1. Apply Appendix U3 rows 29-32.
+2. Every chart of logical error uses loCluster/hiCluster when the series has them, otherwise the Wilson lo/hi, and says which in its "Chart values as a table" caption ("95% interval, resampling quantum shots" or "95% Wilson interval").
+3. "Learn the noise", step 3: the big number opens on the trapped-ion arm, d = 3, tau = 20 us, showing soft minus hard for the naive and for the learned decoder (the reversal), from holdout.json when present, otherwise from stage2v2 with the label "in sample". The superconducting 0.7 us naive -> learned drop becomes the second number.
+4. Hero: if DECISIONS records "SP5 cut lifted (V18 passed)", set HERO_DECODER = null and apply row 14. Otherwise keep 'naive' and add a "naive / learned" switch to the hero, with the learned side labelled "learned (in sample)". Both arms always use the same decoder.
+5. Level 5: read only the regenerated stage4_comparison.json. The scoreboard shows the verdict "not applicable" with its own badge (icon and text, not colour alone); a conclusion with informative: false shows no badge, only its plain text and the words "outcome fixed by construction"; the findings are shown above the scoreboard; if sensitivity is null, hide the tornado chart and show sensitivityNote.
+6. Level 3 and hero vertical markers: in the local preview, check that no two marker labels overprint at any slider position on either arm; fix if they do.
+Tests for items 2-5.
+
+Run `npm test`, `npm run build`, `npm run check`. End with the report format.
+```
+
+**Pass:** tests pass; build and check pass; in the preview, "Learn the noise" opens on the ion soft-against-hard reversal.
+- [ ] Done
+
+### B51 · CLAUDE CODE · VERIFY · Sun 10:30 — CC-B19: accessibility, consistency, motion
 
 **Do:** `/clear`, then paste:
 
@@ -905,7 +1204,7 @@ Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 
 ### B52 · EDITOR · Sun 11:30 — README v2, interface page sections, cleanup
 
-**Do:** README: authors, about (the framing sentence), run instructions, methods (add learned edge rates, diagonal edges, phase-flip memory, crosstalk, trade-off metric, with references), libraries, the disclosure section as decided at K0 (Appendix U8), licence. Page: "How to run it", "The levels" (hero, Levels 1–5, "Learn the noise", sandbox, toggle, tour), "Accessibility". No internal codes anywhere. Fresh screenshots of every view into `docs/screenshots/`. Commit, push, send `HANDOFF N10`.
+**Do:** README: authors, about (the framing sentence), run instructions, methods (add learned edge rates, diagonal edges, phase-flip memory, crosstalk, trade-off metric, with references), libraries, the disclosure section as decided at K0 (Appendix U8), licence. Page: "How to run it", "The levels" (hero, Levels 1–5, "Learn the noise", sandbox, toggle, tour), "Accessibility". No internal codes anywhere. In the README, make `docs/project_page.md` the "read this first" link, and state the three findings in one sentence each (from N9). Fresh screenshots of every view into `docs/screenshots/`, taken after B50a. Commit, push, send `HANDOFF N10`.
 - [ ] Done
 
 ### B53 · REVIEW · Sun 12:00 — Review Person A's v2 code
@@ -915,7 +1214,7 @@ Run `npm test`, `npm run build`, `npm run check`. End with the report format.
 
 ### B54 · EDITOR · VERIFY · Sun 12:30 — Switch to SP7
 
-**Do:** apply Appendix U3 rows 25–28 for what passed; join K4.
+**Do:** apply Appendix U3 rows 25–28 for what passed, and rows 29–32 if B50a did not already; rebuild on the final `stage4_comparison.json` (N7b); join K4.
 - [ ] Done
 
 ### B55 · JOINT · Sun 13:00 → 22:30 — K4–K8
@@ -1005,6 +1304,14 @@ Append at K1:
 | E10 | Hallway-test findings, ranked | | K5 notes | | Both |
 ```
 
+Revision 2.1 appends three rows to the v2 table (A49, A49a):
+
+```text
+| E11 | Held-out banks (V18): design before the runs; result after | | bank_generator.py SEEDS; holdout.json | | A |
+| E12 | Deviations from the pre-registered reporting (C1 ion flag, C3 informative, C6 premise) | | notes_results.md | | A |
+| E13 | V19: does forte-1 include measurement error | | spam_check.py output | | A |
+```
+
 ---
 
 ## Appendix U3 — Bridge and feature switches v2
@@ -1030,6 +1337,10 @@ After any switch: `npm run build`, then `npm run check`.
 | 26 | SP7 | — | `features.js` | `phaseFlip: true` (if not at row 21) |
 | 27 | SP7 | — | `features.js` | `tour: true` |
 | 28 | SP7 | — | `features.js`, `bridge_data.js` | `curated: true`; `curatedShots` → `data/curated/curated_shots.json` |
+| 29 (2.1) | SP7 | N12 | `bridge_data.js` | `stage2v2` → `data/results/stage2_ion_v2b.json`; `stage2x` → `data/results/stage2_ion_x_v2b.json` (the same pL values; adds cluster intervals, `paired`, `shiftDelta`). Stage 3 bridges stay on the standard-grid files |
+| 30 (2.1) | SP7 | N11 | `bridge_data.js` | new export `holdout` → `data/results/holdout.json` ("Learn the noise" big number) |
+| 31 (2.1) | SP7 | N11 | `hero.js`, levels 1–4 | **only if DECISIONS records "SP5 cut lifted (V18 passed)":** `HERO_DECODER = null` and apply row 14. Otherwise keep row 14a and the hero's naive/learned switch with "learned (in sample)" |
+| 32 (2.1) | SP7 | N7b | — | `stage4v2` keeps its path; the file is regenerated at A53c; rebuild |
 
 ---
 
@@ -1064,6 +1375,16 @@ After any switch: `npm run build`, then `npm run check`.
 **Stage 4 v2.** Adds to each platform `P`: `"tradeoff": { "<d>": { "hard": { "tau": [], "roundsPerSecond": [], "perRound": [], "lo": [], "hi": [] }, "soft": {...} } }` and `"budgetAtOptimum": { "readout", "idle", "crosstalk", "gate", "tau_us" }`. Adds `"framing"` (string). Sensitivity rows add `"effect": { "perRound_d3_hard": { "trapped-ion": n, "superconducting": n }, "tauLog_d3_hard": { ... } }`; `sensitivityBaseline` gets the same. `conclusions` holds `C1`–`C6` and `O4`, each `{ "statement", "verdict": "held" | "refuted" | "undetermined", "automated", "note", "plain" }`.
 
 **C3 dominance rule.** At each arm's τ*_log (d = 3, hard, learned): arm A dominates if its error per round is lower beyond the intervals and its rounds per second higher. C3 is "held" if neither dominates, "refuted" if one does.
+
+**Revision 2.1 additions (additive; agreed jointly in revision 2.1, so no further joint step is needed).**
+
+- New files: `stage2_ion_v2b.json`, `stage2_ion_x_v2b.json` (same pL as the earlier files), `stage3_sc_dense.json`, `stage3_sc_x_dense.json`, `stage3_sc_x_T2_25.json`, `holdout.json`, and optionally `stage3_sc_ringup.json`. Earlier files are not overwritten.
+- Series in every file written from CC-A19 on: `"loCluster": [...]`, `"hiCluster": [...]` (bootstrap over quantum shots, B = 500, 95%); the Wilson `lo`/`hi` keep their meaning.
+- `"paired": [{ "kind": "softMinusHard", "decoder", "d", "x", "diff", "lo", "hi" }, { "kind": "learnedMinusNaive", "mode", "d", "x", "diff", "lo", "hi" }]`.
+- `"shiftDelta": { "tauRef", "tauShort", "diff", "lo", "hi", "resolved" }` on every `crosstalkScan.entries[*]` and every `optima.tauLog[*]`, where diff = pL(tauRef) − pL(tauShort).
+- `provenance.grid`: `"standard"` | `"dense"`; `provenance.overrides`: the `--set` values.
+- `holdout.json`: `{ "schema": "s2s-results/1", "stage": "holdout", "trainedOn": [files], "heldout": [{ "file", "d", "L", "seed" }], "setting1": { "rows": [{ "d", "L", "naive": { "k", "n", "lo", "hi", "loCluster", "hiCluster" }, "learned": {...}, "paired": { "diff", "lo", "hi" } }], "pooled": [...], "V18": { "clause1", "clause2", "verdict" } }, "setting2": { "series": [{ "d", "mode", "decoder", "pL", "loCluster", "hiCluster" }], "paired": [...], "softWorseCount": { "naive", "learned" } }, "params", "provenance" }`.
+- Stage 4: `conclusions[*].verdict` may also be `"not applicable"`; each conclusion adds `"informative"` (boolean) and `"deviations"` (array of strings); top-level `"findings": [{ "id", "statement", "numbers", "source", "inSample", "plain" }]`; `"sensitivity"` may be `null`, with `"sensitivityNote"`.
 
 ---
 
@@ -1238,7 +1559,7 @@ Thank you,
 | 0:00–0:20 | Hero question | "To read a qubit you listen to it. Listen longer and the readout gets cleaner, but the rest of the code keeps ageing. How long should you listen?" |
 | 0:20–0:50 | Hero slider, superconducting, then trapped ion | Move τ through the band. "The best readout time for one qubit is not the best for the code. Here it's earlier, because the waiting data qubits lose more than the readout gains." |
 | 0:50–1:20 | Level 3 budget bar | "Readout error shrinks, idle error grows, and the gate floor stays put. The optimum is where they balance." |
-| 1:20–1:50 | "Learn the noise": fault, naive failure, heatmap, toggle | "IonQ's noise model creates errors our first decoder couldn't see. Learned from the data itself, the decoder makes several times fewer mistakes." |
+| 1:20–1:50 | "Learn the noise": fault, naive failure, heatmap, the soft-against-hard number, toggle | "With our first decoder, extra readout information made things worse. The fault was the decoder's picture of IonQ's noise: it couldn't see these diagonal errors. Learned from the data, the decoder uses that information properly again." Say "on data it never saw" only if V18 passed. |
 | 1:50–2:00 | Level 5 scoreboard | "Two readout models, same gates. Open source on Qollab. Supported by Qollab and IonQ." |
 
 ---
@@ -1253,9 +1574,9 @@ Thank you,
 
 ---
 
-## Appendix U11 — Optional statistics work (only if the buffer allows)
+## Appendix U11 — Statistics work
 
-In this order, each as a FIX-style prompt for Person A:
+Revision 2.1 schedules items 1 and 3 in CC-A19 (A52, Sat 23:00) and item 2 as the optional CC-A23 (A56). The original text is kept below as the specification:
 
 1. **Cluster bootstrap for every interval.** Replace Wilson intervals on pooled readout redraws (n = 4 × 8,000) with a bootstrap over quantum shots (B = 200), the same as τ*. Rerun Stages 2–4; update notes and page.
 2. **Ring-up in the superconducting belief model.** Use the tabulated ring-up mean for μ₀, μ₁ in the likelihoods; V10 with ring-up on must pass; τ*_phys then has a single value.
