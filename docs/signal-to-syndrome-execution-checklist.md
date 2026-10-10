@@ -487,7 +487,7 @@ If a run failed, restart it for d = 3 and 5 only and go on while it runs. Restar
 
 **Do:** team checklist A53a prompt (CC-A20), then edit the draft by hand. It covers what 2.0 scheduled as A52: name plainly which v1 conclusions were decoder artefacts. Commit, push; send `HANDOFF N12` (the `_v2b` and dense files).
 **Pass:** every verdict has numbers and a source file; the C2 counts are shown with Wilson and with paired cluster intervals; C6 is reported from the variant card.
-- [ ] Done
+- [x] Done
 
 ### A53b · A · Sun 07:15 — Held-out banks; V19; CC-A21 (V18, F1 out of sample); hand over N11
 

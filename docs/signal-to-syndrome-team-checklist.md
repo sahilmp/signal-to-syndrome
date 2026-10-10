@@ -797,7 +797,7 @@ End with the report format and a list of every place where a cluster or paired r
 
 Then edit the draft by hand until every verdict reads correctly. Commit and push; send `HANDOFF N12` (the `_v2b` and dense files).
 **Pass:** every verdict has numbers and a source file.
-- [ ] Done
+- [x] Done
 
 ### A53b · TERMINAL · CLAUDE CODE · Sun 07:15 — Held-out banks; CC-A21: V18 and F1 out of sample
 
