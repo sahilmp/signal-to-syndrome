@@ -113,10 +113,14 @@ Fingerprint (V9), checks, deviations and handoff notes:
     - Paired pL against the baseline (d = 3, hard, at its τ*_log): ion γ × 0.5 −6e-5 [−1.9e-4, 0] and × 2 +6e-5 [−1.3e-4, +2.5e-4], neither resolved. η × 0.5 +5.7e-3 [+4.2e-3, +7.2e-3]; η × 2 −6.3e-4 [−1.1e-3, −3.1e-4]; T1 × 2 −2.4e-3 [−3.8e-3, −1.1e-3].
     - The rows carry `effect`, `effectCluster`, `pairedVsBaseline` and `tauLog`, but no v1 verdicts.
   - **V15:** agrees to 3 significant figures. Ion: τ*_log 23.0 µs, T_cyc 3953 µs, 253 rounds/s, pL 0.00336 → 0.00112 per round. Superconducting: τ*_log 0.710 µs, T_cyc 1.04 µs, 9.58e5 rounds/s, pL 0.00660 → 0.00221 per round.
-  - **Tests:** `npm test` 318/320. **The two failures are Person B's `tests/level5.test.js` on the real file:**
+  - **Tests:** `npm test` 327/332 after the rebase onto Person B's A53 fixes (f06013c). **All five failures are Person B's `tests/level5.test.js` on the real file, which is now final:**
     - "sensitivityCounts on the real sweep" counts C1/C3 verdicts on the sensitivity rows, which no longer carry them.
     - "scoreboard … right badge" has no badge for the verdict "not applicable" (U4 revision 2.1; A53 item 2 (a)).
-    - Both are requests to Person B in N7b (CC-B21); no Person B test was changed.
+    - "tornado on the real data" expects a χ/2π row; the six final rows are γ dark→bright, η and T1.
+    - "notRunRows" expects a T2 × 2 row; only superconducting T1 × 0.5 is not run.
+    - "provisional banner" expects the real file to be provisional; it is now `provisional: false`.
+    - All five are requests to Person B in N7b (CC-B21); no Person B test was changed.
+  - **Provenance:** `provenance.commit` in both files is 022a042, the code commit as made locally before the pull. The pull rebased it onto f06013c as 4acb382, with identical tool and test content (`git diff 022a042 4acb382 -- tools tests/sweep.test.js tests/metrics.test.js` is empty).
   - **Deviations:**
     - C6 uses an unpaired cluster difference, because pairedClusterDiff is impossible across different banks.
     - C5 is out of sample only where held-out banks exist.
