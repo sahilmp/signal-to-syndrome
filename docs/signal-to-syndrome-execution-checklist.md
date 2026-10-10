@@ -367,7 +367,7 @@ Then the team checklist A48 prompt. Its runs take about an hour; Stage 3 is the 
 Then the team checklist A49 prompt (CC-A17). It records C1 (ion part, three sub-verdicts; card rate refuted), C1 superconducting, C2, C6 ("not applicable" with the card, because T2 > T1), O4 and finding F1, marks every τ*_log with `fractionTied` ≥ 0.5 as unresolved, records the deviations in E12, and prints the N6 text. Do not quote any `stage4_comparison.json` number.
 Commit, push and send `HANDOFF N6`.
 **Pass:** every row recorded with its source; E5 and E12 filled; `npm test` still 252/253 (no code changed in this step).
-- [ ] Done
+- [x] Done
 
 ### A49a · A · Sat 20:45 — CC-A18: held-out banks and SPAM check; start Qollab runs
 

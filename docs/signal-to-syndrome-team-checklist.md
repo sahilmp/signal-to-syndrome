@@ -672,7 +672,7 @@ Run `npm test` (expect 252/253: no code changed) and `git diff --stat` (only the
 
 Then commit `docs\notes_results.md DECISIONS.md` ("A49: v2 verdicts, deviations recorded in E12"), push, and send `HANDOFF N6` with the text from the report.
 **Pass:** every row of the check table and every verdict recorded with its source file; E5 and E12 filled.
-- [ ] Done
+- [x] Done
 
 ### A49a · CLAUDE CODE · QOLLAB · Sat 20:45 — CC-A18: held-out banks and the SPAM check
 
