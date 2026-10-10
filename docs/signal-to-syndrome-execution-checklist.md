@@ -383,7 +383,7 @@ git push
 
 From now until Sun 07:15, between your other steps: run each held-out configuration on Qollab in the printed order (d = 5 L0 h1, L1 h1, L0 h2, L1 h2, …, then d = 3), saving each `BEGIN_BANK … END_BANK` block as `data\raw\heldout\<name>.txt`. Run `spam_check.py` once with `ideal` and once with `forte-1`; save the outputs as `data\raw\spam_ideal.txt` and `data\raw\spam_forte-1.txt`.
 **Pass:** tests pass; E11 committed before the first held-out run.
-- [ ] Done
+- [x] Done
 
 ### B47a · B · Sat 21:00 — CC-B20: hero test fix, crosstalk-scan table
 

@@ -697,7 +697,7 @@ Run `npm test` and `python -m pytest validation -q`. End with the report format.
 
 Then commit and push **before any Qollab run** (the commit time proves E11 came first). On Qollab, between your next steps: put `bank_generator.py` in the generator project, set `CONFIG` to each held-out name in the printed order, run, and save each `BEGIN_BANK … END_BANK` block as `data\raw\heldout\<name>.txt`. Run `spam_check.py` once with `ideal` and once with `forte-1`, and save both outputs as `data\raw\spam_<model>.txt`.
 **Pass:** tests pass; E11 committed before the first held-out run; the run order printed.
-- [ ] Done
+- [x] Done
 
 ### A50 · CLAUDE CODE · Sat 21:15 — CC-A15: Stage 4 v2, provisional (framing, trade-off, sensitivity effects, C1–C6)
 
