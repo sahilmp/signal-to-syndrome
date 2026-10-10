@@ -84,7 +84,9 @@ test('overlapSentence: band, reverse, none, no interval, missing band', () => {
   const rev = { kind: 'reverse', tauLog: 8, x0: 5, x1: 8, ciLo: 7, ciHi: 9 };
   assert.equal(overlapSentence(rev), 'The code’s best (8 µs, 7 µs to 9 µs) is later than the readout’s best (5 µs): the code still gains from listening longer.');
   assert.equal(overlapSentence({ kind: 'none' }), 'These results show no interior optimum to compare.');
-  assert.equal(overlapSentence({ kind: 'coincide', tauLog: 3, x0: 3, x1: 3, ciLo: null, ciHi: null }), 'The code’s best (3 µs) and the readout’s best (3 µs) overlap. Treat them as the same.');
+  // Replaces 'The code’s best (3 µs) and the readout’s best (3 µs) overlap. Treat them as the same.'
+  // because the wording changed after the read-aloud review (both authors).
+  assert.equal(overlapSentence({ kind: 'coincide', tauLog: 3, x0: 3, x1: 3, ciLo: null, ciHi: null }), 'The code’s best and the readout’s best are the same here (3 µs).');
   assert.equal(overlapSentence(null), null);
 });
 
@@ -116,7 +118,9 @@ test('whySentence, superconducting Z and X: "nudges earlier" with the valley min
     assert.ok(inside.length >= 2, basis);
     assert.ok(row.xMin < res.optima.tauPhysEmpirical.xMin, basis);
     const s = whySentence({ platformId: 'superconducting', basis, curves, band });
-    assert.equal(s, `Idling (${formatNumber(b.idle)} per round) rivals the readout error (${formatNumber(b.readout)}) and nudges the code’s best earlier, but the valley is too flat (${formatNumber(Math.min(...inside))} to ${formatNumber(Math.max(...inside))}) to say how far.`, basis);
+    // Replaces "valley is too flat ({minPL} to {maxPL})" with "(logical error {minPL} to {maxPL})"
+    // because the wording changed after the read-aloud review (both authors).
+    assert.equal(s, `Idling (${formatNumber(b.idle)} per round) rivals the readout error (${formatNumber(b.readout)}) and nudges the code’s best earlier, but the valley is too flat (logical error ${formatNumber(Math.min(...inside))} to ${formatNumber(Math.max(...inside))}) to say how far.`, basis);
   }
 });
 
@@ -149,9 +153,11 @@ test('whySentence: third branch, thresholds and every null case on synthetic inp
   assert.equal(syn(0.1), null);
   assert.equal(syn(0.05), 'Idling here is 20× smaller than the readout error (0.05 against 1 per round), too small to move the code’s best.');
   assert.equal(syn(0.45), null);
-  assert.equal(syn(0.5), 'Idling (0.5 per round) rivals the readout error (1) and nudges the code’s best earlier, but the valley is too flat (0.1 to 0.3) to say how far.');
+  // Replaces "too flat (0.1 to 0.3)" with "too flat (logical error 0.1 to 0.3)" (this and the next
+  // rivals sentence) because the wording changed after the read-aloud review (both authors).
+  assert.equal(syn(0.5), 'Idling (0.5 per round) rivals the readout error (1) and nudges the code’s best earlier, but the valley is too flat (logical error 0.1 to 0.3) to say how far.');
   const later = { kind: 'coincide', tauLog: 3, x0: 2, x1: 3, ciLo: 1, ciHi: 4 };
-  assert.equal(syn(0.6, later), 'Idling (0.6 per round) rivals the readout error (1), but the valley is too flat (0.1 to 0.3) to see where it moves the code’s best.');
+  assert.equal(syn(0.6, later), 'Idling (0.6 per round) rivals the readout error (1), but the valley is too flat (logical error 0.1 to 0.3) to see where it moves the code’s best.');
   for (const kind of ['band', 'reverse', 'none']) assert.equal(syn(0.6, { ...SYN_BAND, kind }), null, kind);
   assert.equal(syn(0.6, { ...SYN_BAND, ciLo: null }), null);
   assert.equal(syn(0.6, null), null);
@@ -221,8 +227,10 @@ test('twistData equals F1; caption and footnote carry its numbers', () => {
   assert.ok(ex.naive.pairedSoftMinusHard.lo > 0);
   assert.ok(ex.learned.pairedSoftMinusHard.lo <= 0 && ex.learned.pairedSoftMinusHard.hi >= 0);
   const pct = (p) => `${(p * 100).toPrecision(2)}%`;
-  assert.equal(twistCaption('naive', d), `Using each reading’s confidence made things worse: ${pct(ex.naive.soft.pL)} against ${pct(ex.naive.hard.pL)} of stored bits lost.`);
-  assert.equal(twistCaption('learned', d), `Using each reading’s confidence no longer hurts: ${pct(ex.learned.soft.pL)} against ${pct(ex.learned.hard.pL)} of stored bits lost.`);
+  // Replaces "{soft}% against {hard}% of stored bits lost." with "{soft}% of stored bits lost,
+  // against {hard}% without it." (both captions) because the wording changed after the read-aloud review (both authors).
+  assert.equal(twistCaption('naive', d), `Using each reading’s confidence made things worse: ${pct(ex.naive.soft.pL)} of stored bits lost, against ${pct(ex.naive.hard.pL)} without it.`);
+  assert.equal(twistCaption('learned', d), `Using each reading’s confidence no longer hurts: ${pct(ex.learned.soft.pL)} of stored bits lost, against ${pct(ex.learned.hard.pL)} without it.`);
   // Footnote: the counts are settings (readout times x distances of holdout.json setting2),
   // not readout times; fails if it calls the 26 "readout times" again, mixes the chart's
   // d = 3, 20 µs into the settings phrase, or quotes numbers other than the files'.
@@ -269,4 +277,31 @@ test('every exported string and every real sentence: at most 40 words, no forbid
     const hits = FORBIDDEN_TEXT.filter((w) => s.toLowerCase().includes(w.toLowerCase()));
     assert.deepEqual(hits, [], s);
   }
+});
+
+// Read-aloud fixes. Catches: fails if the intro is not the reviewed copy; if the trapped-ion Z
+// overlap sentence (both optima print as 23 µs) quotes the same value twice instead of the "are
+// the same here" form, or the superconducting Z one (0.71 against 0.91 µs) takes that form; if
+// a caption puts the hard number before the soft one; or if any of these runs past 40 words.
+test('read-aloud fixes: intro, equal-optima overlap, caption order, 40 words', () => {
+  // Replaces 'The stopwatch barely mattered. What did: how well the decoder knows the noise.'
+  // because the wording changed after the read-aloud review (both authors).
+  assert.equal(T.TWIST_INTRO, 'Once the readout time is right, fine-tuning it barely mattered. What did: how well the decoder knows the noise.');
+  const ion = heroCase('trapped-ion', 'Z').band;
+  const sc = heroCase('superconducting', 'Z').band;
+  const row = stage4z.platforms['trapped-ion'].budgetAtOptimum;
+  assert.equal(formatTau(ion.tauLog), formatTau(ion.x0 === ion.tauLog ? ion.x1 : ion.x0));
+  assert.equal(overlapSentence(ion), `The code’s best and the readout’s best are the same here (${formatTau(row.tau_us)}; uncertainty ${formatTau(ion.ciLo)} to ${formatTau(ion.ciHi)}).`);
+  assert.ok(!overlapSentence(sc).includes('are the same here'), overlapSentence(sc));
+  const d = twistData();
+  const texts = [T.TWIST_INTRO, overlapSentence(ion), overlapSentence(sc)];
+  for (const dec of ['naive', 'learned']) {
+    const c = twistCaption(dec, d);
+    const soft = c.indexOf(`${(d[dec].soft.pL * 100).toPrecision(2)}%`);
+    const hard = c.indexOf(`${(d[dec].hard.pL * 100).toPrecision(2)}%`, soft + 1);
+    assert.ok(soft >= 0 && hard > soft && c.indexOf('without it') > hard, c);
+    texts.push(c);
+  }
+  for (const basis of ['Z', 'X']) for (const id of PLATFORM_IDS) texts.push(whySentence({ platformId: id, basis, ...heroCase(id, basis) }));
+  for (const t of texts) assert.ok(typeof t === 'string' && words(t) <= 40, `${t}`);
 });

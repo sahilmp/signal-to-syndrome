@@ -19,7 +19,7 @@ export const GUESS_SLIDER_LABEL = 'Your guess';
 export const LOCK_LABEL = 'Lock in my guess';
 export const WHY_SUMMARY = 'Why?';
 export const NEXT_LABEL = 'See what mattered';
-export const TWIST_INTRO = 'The stopwatch barely mattered. What did: how well the decoder knows the noise.';
+export const TWIST_INTRO = 'Once the readout time is right, fine-tuning it barely mattered. What did: how well the decoder knows the noise.';
 export const DECODER_LABELS = { naive: 'First decoder', learned: 'Decoder that learned the noise' };
 export const TWIST_TITLE = 'Trapped ion: hard against soft decoding (d = 3, 20 µs)';
 export const MODE_LABELS = { hard: 'Hard', soft: 'Soft' };
@@ -56,7 +56,8 @@ export function guessVerdict(tau, band) {
 const tauPhysOf = (band) => (close(band.x0, band.tauLog) ? band.x1 : band.x0);
 
 // The code's best against the readout's best, by band.kind. The bracketed range is tau*_log's
-// 95% interval, left out when the band has none.
+// 95% interval, left out when the band has none. When the two optima print the same (formatTau),
+// the coincide sentence says so instead of quoting one value twice (read-aloud review).
 export function overlapSentence(band) {
   if (!band || typeof band !== 'object') return null;
   if (band.kind === 'none') return 'These results show no interior optimum to compare.';
@@ -67,6 +68,10 @@ export function overlapSentence(band) {
   const lo = hasCi ? formatTau(band.ciLo) : null;
   const hi = hasCi ? formatTau(band.ciHi) : null;
   if (band.kind === 'coincide') {
+    if (log === phys) {
+      const unc = hasCi ? `; uncertainty ${lo} to ${hi}` : '';
+      return `The code’s best and the readout’s best are the same here (${log}${unc}).`;
+    }
     const within = hasCi ? `overlap within our uncertainty (${lo} to ${hi})` : 'overlap';
     return `The code’s best (${log}) and the readout’s best (${phys}) ${within}. Treat them as the same.`;
   }
@@ -123,7 +128,7 @@ export function whySentence({ platformId, basis, curves, band, budget } = {}) {
     .filter(({ t, p }) => finite(p) && (t >= band.ciLo || close(t, band.ciLo)) && (t <= band.ciHi || close(t, band.ciHi)))
     .map(({ p }) => p);
   if (inside.length === 0) return null;
-  const flat = `${formatNumber(Math.min(...inside))} to ${formatNumber(Math.max(...inside))}`;
+  const flat = `logical error ${formatNumber(Math.min(...inside))} to ${formatNumber(Math.max(...inside))}`;
   if (band.tauLog < tauPhysOf(band)) {
     return `Idling (${idle} per round) rivals the readout error (${readout}) and nudges the code’s best earlier, but the valley is too flat (${flat}) to say how far.`;
   }
@@ -172,7 +177,7 @@ const percent = (p) => (p * 100).toPrecision(2);
 export function twistCaption(decoder, data) {
   const c = data?.[decoder];
   if (!c || !finite(c.soft?.pL) || !finite(c.hard?.pL)) return null;
-  const nums = `${percent(c.soft.pL)}% against ${percent(c.hard.pL)}% of stored bits lost.`;
+  const nums = `${percent(c.soft.pL)}% of stored bits lost, against ${percent(c.hard.pL)}% without it.`;
   if (decoder === 'naive') return `Using each reading’s confidence made things worse: ${nums}`;
   if (decoder === 'learned') return `Using each reading’s confidence no longer hurts: ${nums}`;
   return null;
