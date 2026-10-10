@@ -119,3 +119,18 @@ PyMatching tie counts, published links, deviations and handoff notes:
 - Qollab docs: [runtime-environment](https://qollab.xyz/learn/docs/runtime-environment), [js-qiskit-projects](https://qollab.xyz/learn/docs/js-qiskit-projects), [python-qiskit-projects](https://qollab.xyz/learn/docs/python-qiskit-projects), [run-your-code](https://qollab.xyz/learn/docs/run-your-code), [compute-backends](https://qollab.xyz/learn/docs/compute-backends), [ideal-vs-noise-model-simulators](https://qollab.xyz/learn/docs/ideal-vs-noise-model-simulators), [how-your-circuit-is-compiled](https://qollab.xyz/learn/docs/how-your-circuit-is-compiled), [error-reference](https://qollab.xyz/learn/docs/error-reference), [faq](https://qollab.xyz/learn/docs/faq), [publish](https://qollab.xyz/learn/docs/publish), [fork-and-remix](https://qollab.xyz/learn/docs/fork-and-remix), [noise-and-the-real-machine lesson](https://qollab.xyz/learn/programming-your-first-quantum-circuits/noise-and-the-real-machine)
 - IonQ: [Simulation with noise models](https://docs.ionq.com/guides/simulation-with-noise-models), [Getting started with native gates](https://docs.ionq.com/features/getting-started-with-native-gates), [Native gates in Qiskit](https://docs.ionq.com/sdks/qiskit/native-gates-qiskit)
 - qiskit-ionq: [README](https://github.com/qiskit-community/qiskit-ionq), `qiskit_ionq/ionq_backend.py`, `qiskit_ionq/helpers.py` (noise seed read from `backend.options.sampler_seed`)
+
+## v2 (from tag window-start)
+
+| ID | Question | Answer | Evidence | Time | Who |
+|---|---|---|---|---|---|
+| E1 | What do the terms say about prior work; what did the organizers answer | | quote + email | | Both |
+| E2 | window-start commit | | git rev-parse | | B |
+| E3 | Edge classes and the boundary-rate method | as CC-A10 | tests/dem.test.js | | A |
+| E4 | V12b out of sample: learned against naive | | dem_forte1.json | | A |
+| E5 | O4: X/Z bulk detector-rate ratio per (d, r) | | dem_forte1.json | | A |
+| E6 | Ion crosstalk rate: value and source, or UNSOURCED | | params/ion.json | | A |
+| E7 | T2 values (ion idle, superconducting): value and source | | params/*.json | | A |
+| E8 | Ion two-qubit gates per round: parallel or sequential | | params/cycle.json | | A |
+| E9 | V9L hash (learned decoder) | | sweep.mjs --diag --decoder learned | | A |
+| E10 | Hallway-test findings, ranked | | K5 notes | | Both |

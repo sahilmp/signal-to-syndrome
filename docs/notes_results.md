@@ -287,3 +287,15 @@ Cycle times at τ*_log: ion 2002–2490 µs, SC 0.92–1.13 µs. Hand check of d
 - The page must not show the automated C1 "flips" or the sensitivity rows without the caveats above. The C1 ion "flips" comes from the 1e-6 idle threshold. The sensitivity C2 "holds" reflects too little statistical power and is not robustness.
 - Stage 4 `breakEven.byMode` is per mode. Level 5 should use it rather than repeat the hard value for soft (CC-B9 handoff, item 3).
 - Superconducting τ*_phys: the page should quote the empirical 0.906 µs, or both values. `optima.tauPhys` holds the belief value 0.587 µs.
+
+## v2 hypotheses (pre-registered Sat 10 Oct, before any rerun)
+
+| ID | Statement | Tested by | Refuted if |
+|---|---|---|---|
+| C1 (revised) | Superconducting: τ*_log < τ*_phys (empirical), with the learned decoder, in both bases. Trapped ion with crosstalk off: no idle-driven optimum. Trapped ion with crosstalk at the card value: an interior τ*_log < τ*_phys appears | Stages 2–3 rerun; crosstalk scan | SC τ*_log interval contains or exceeds τ*_phys at d = 3 and 5; or the ion shows the crosstalk-driven optimum with crosstalk off, or no interior optimum at any scanned crosstalk rate |
+| C2 (unchanged statement) | Soft decoding is at or below hard at every τ, with most gain where readouts are short | Stages 2–3, learned decoder | Soft above hard beyond the intervals at any point |
+| C3 (replaced) | Neither readout model dominates: along the τ grids the ion arm has lower error per round and the superconducting arm more rounds per second | Trade-off curves, Stage 4 | One arm is better on both axes at its τ*_log |
+| C4 (unchanged) | Break-even ε̄ (d = 5 beats d = 3) similar on both arms, on the empirical ε̄ axis | Stage 4 | Values differ beyond their uncertainties |
+| C5 (new) | The learned detector error model lowers the logical error against the naive one at every (d, arm, mode) at τ*_log, out of sample | Stage dem, Stage 4 | Learned above naive beyond the intervals at any point |
+| C6 (new) | In the phase-flip memory the superconducting τ*_log is shorter than in the bit-flip memory when T2 < T1 | Stage 3 in both bases | τ*_log(X) ≥ τ*_log(Z) beyond the intervals |
+| O4 (measurement, no hypothesis) | Ratio of bulk detector rates, X-basis to Z-basis banks, per (d, r): how biased forte-1 noise looks to the decoder | Stage dem | — |
