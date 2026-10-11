@@ -2,7 +2,9 @@
 // fills in the version and the diagnostics; with FEATURES.hero, the hero panel above the tabs;
 // with FEATURES.phaseFlip, the header switch "Bit-flip memory / Phase-flip memory" (U7.9), which
 // sets the basis of the hero and Levels 3-5 (level3.js setBasis); with FEATURES.tour, the
-// "3-minute tour" button in the header (U7.10, tour.js). Bundled by tools/build.mjs into one IIFE.
+// "3-minute tour" button in the header (U7.10, tour.js); with FEATURES.writeup, "Read the full write-up"
+// as the last level (P5, writeup.js); with FEATURES.pipelineNav, the pipeline map above the level
+// selector (P5, pipeline.js). Bundled by tools/build.mjs into one IIFE.
 
 import pkg from '../../package.json' with { type: 'json' };
 import { FEATURES } from './features.js';
@@ -17,6 +19,8 @@ import { mountHero } from './hero.js';
 import { mountHero3 } from './hero3.js';
 import { mountFindings } from './findings.js';
 import { createTour, TOUR_STOPS, TOUR_LABEL } from './tour.js';
+import { mountWriteup, WRITEUP_LABEL } from './writeup.js';
+import { mountPipeline } from './pipeline.js';
 import { setPlatform, setBasis, currentBasis, onBasisChange, BASES } from './level3.js';
 
 const LEVELS = [
@@ -36,6 +40,8 @@ const LEVELS = [
     label: FEATURES.level5v2 === true ? 'Level 5: Two readout models, same gates' : 'Level 5: Two platforms',
     mount: mountLevel5,
   },
+  // P5: the project page (docs/project_page.md); in no pipeline stage.
+  { id: 'writeup', flag: 'writeup', label: WRITEUP_LABEL, mount: mountWriteup },
 ];
 
 // "Learn the noise" opens on step 1; the tour's stop is step 3 (U7.10). learnnoise.js keeps its
@@ -100,6 +106,9 @@ function start() {
   const selector = root.querySelector('[data-s2s="levels"]');
   const main = root.querySelector('[data-s2s="main"]');
   const mounted = new Map();
+  // P5: each is called with the open level's id after every show(), whatever opened it.
+  const levelListeners = [];
+  let openLevel = null;
 
   function show(id, focusHeading) {
     for (const l of enabled) {
@@ -124,6 +133,8 @@ function start() {
       const btn = selector.querySelector(`[data-level="${l.id}"]`);
       if (btn) btn.setAttribute('aria-pressed', String(active));
     }
+    openLevel = id;
+    for (const fn of levelListeners) fn(id);
     if (focusHeading) {
       const h = mounted.get(id)?.querySelector('h2');
       if (h) {
@@ -210,6 +221,19 @@ function start() {
       mountFindings(holder, { open });
     } catch (err) {
       holder.textContent = `The findings could not start: ${err.message}`;
+    }
+    selector.parentNode.before(holder);
+  }
+
+  // Pipeline map (P5): below the findings strip, directly above the level selector.
+  if (FEATURES.pipelineNav === true && enabled.length > 0) {
+    const holder = document.createElement('div');
+    holder.className = 'pipeline-holder';
+    const onLevelChange = (fn) => { levelListeners.push(fn); fn(openLevel); };
+    try {
+      mountPipeline(holder, { open: (id) => show(id, true), onLevelChange, levels: enabled.map((l) => l.id) });
+    } catch (err) {
+      holder.textContent = `The pipeline map could not start: ${err.message}`;
     }
     selector.parentNode.before(holder);
   }

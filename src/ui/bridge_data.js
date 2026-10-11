@@ -42,3 +42,6 @@ export { bankXD3R3, holdout };
 // B50 (U7.11): curated Level 4 examples, written by tools/curate.mjs (Person B's data).
 import curatedShots from '../../data/curated/curated_shots.json' with { type: 'json' };
 export { curatedShots };
+// P5 (writeup): docs/project_page.md without its source comments, written by tools/make_writeup.mjs.
+import writeupData from '../../data/writeup/project_page.json' with { type: 'json' };
+export { writeupData };

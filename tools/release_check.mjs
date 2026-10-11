@@ -3,6 +3,7 @@
 
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 import { dirname, join, relative } from 'node:path';
 import { validateBank } from '../src/core/bank.js';
 
@@ -44,6 +45,10 @@ const NEEDS = {
   // compactText only moves text, but Level 5's short F1 line reads stage4v2.
   findingsStrip: ['stage3v2', 'stage4v2'],
   compactText: ['stage4v2'],
+  // P5: the write-up level reads data/writeup/project_page.json (not a results file); the
+  // pipeline map reads no data.
+  writeup: ['writeupData'],
+  pipelineNav: [],
 };
 // Results files the bridges may point at (data/results, Person A's data; CC-B21 item 7). Each
 // bridge export under data/results/ must be one of these, exist, and carry schema s2s-results/1.
@@ -194,6 +199,22 @@ for (const [name, { bridge, path }] of sources) {
   const known = RESULTS_FILES.includes(m[1]);
   row(`results file for ${name} known and valid`, known && schema === 's2s-results/1',
     `${bridge} -> data/results/${m[1]}${known ? '' : ' (not in RESULTS_FILES)'}${schema === 's2s-results/1' ? '' : `, schema ${schema ?? 'missing or unreadable'}`}`);
+}
+
+// P5: the write-up's copy of docs/project_page.md (tools/make_writeup.mjs) is current. Runs with
+// the writeup flag on or off, since the copy is embedded in main.js either way.
+{
+  const md = p('docs', 'project_page.md');
+  const copy = p('data', 'writeup', 'project_page.json');
+  let stored = null;
+  try {
+    stored = JSON.parse(readFileSync(copy, 'utf8')).sha256 ?? null;
+  } catch {
+    stored = null;
+  }
+  const current = existsSync(md) ? createHash('sha256').update(readFileSync(md)).digest('hex') : null;
+  row('writeup copy matches docs/project_page.md', stored !== null && stored === current,
+    stored !== null && stored === current ? `sha256 ${current.slice(0, 12)}` : 'run node tools/make_writeup.mjs');
 }
 
 // 7. Live-run import line (CLAUDE.md rule 3): only with liveRun on, and then exactly as the

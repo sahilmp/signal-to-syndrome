@@ -5,4 +5,6 @@ export const FEATURES = {
   level5v2: true, sandbox: false, tour: false, curated: false, heroV3: true,
   // UX2: the findings strip under the hero (findings.js) and the compact text of Levels 1, 2, 4, 5.
   findingsStrip: true, compactText: true,
+  // P5: "Read the full write-up" as the last level (writeup.js) and the pipeline map (pipeline.js).
+  writeup: false, pipelineNav: false,
 };
