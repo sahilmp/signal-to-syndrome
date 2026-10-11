@@ -34,11 +34,12 @@ const finite = (v) => Number.isFinite(v);
 const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b), 1);
 
 // Where the guess sits against tau*_log's range [logLo, logHi] (bandInfo). An end of the
-// range counts as inside.
+// range counts as inside. "above" names no cause: past the range the ion loses to optical
+// pumping, not to idling (F3), and the superconducting qubit to idling (F2) (E17 audit).
 const VERDICTS = {
   inside: 'Your guess is inside the code’s best range.',
   below: 'Shorter than the code wants: the reading is still too noisy there.',
-  above: 'Longer than the code wants: the waiting costs more than it gains.',
+  above: 'Longer than the code wants: it does better with a shorter readout.',
   none: 'These results show no best readout time to compare your guess with.',
 };
 export function guessVerdict(tau, band) {
@@ -115,7 +116,7 @@ export function whySentence({ platformId, basis, curves, band, budget } = {}) {
   const readout = formatNumber(b.readout);
   if (r < WHY_SMALL_RATIO) {
     if (!(b.idle > 0)) return null;
-    const ratio = Number((b.readout / b.idle).toPrecision(2));
+    const ratio = formatNumber(b.readout / b.idle);
     return `Idling here is ${ratio}× smaller than the readout error (${idle} against ${readout} per round), too small to move the code’s best.`;
   }
   if (r < WHY_RIVAL_RATIO) return null;
@@ -172,7 +173,8 @@ function settingDistances(n) {
 }
 const joinAnd = (xs) => (xs.length === 1 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
-const percent = (p) => (p * 100).toPrecision(2);
+// A logical error as a percentage, rounded as formatNumber rounds (E17 audit: not 2 figures).
+const percent = (p) => formatNumber(p * 100);
 
 export function twistCaption(decoder, data) {
   const c = data?.[decoder];

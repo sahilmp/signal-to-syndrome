@@ -91,14 +91,16 @@ test('overlapSentence: band, reverse, none, no interval, missing band', () => {
 });
 
 // Catches: fails if the trapped-ion cases (Z: idle/readout 0.002; X: 0.022) leave the "smaller"
-// branch, or if the ratio shown is not readout / idle from the Stage 4 file at 2 significant
-// figures, or the idle and readout numbers are not the file's through formatNumber.
+// branch, or if the ratio shown is not readout / idle from the Stage 4 file through formatNumber,
+// or the idle and readout numbers are not the file's through formatNumber.
 test('whySentence, trapped ion Z and X: the "smaller" branch with the file ratio', () => {
   for (const basis of ['Z', 'X']) {
     const b = STAGE4[basis].platforms['trapped-ion'].budgetAtOptimum;
     const { curves, band } = heroCase('trapped-ion', basis);
     const s = whySentence({ platformId: 'trapped-ion', basis, curves, band });
-    const ratio = Number((b.readout / b.idle).toPrecision(2));
+    // Replaces Number((b.readout / b.idle).toPrecision(2)) (520, 45) with formatNumber (523, 44.9)
+    // because the E17 audit allows only formatNumber rounding when a sentence states no precision.
+    const ratio = formatNumber(b.readout / b.idle);
     assert.equal(s, `Idling here is ${ratio}× smaller than the readout error (${formatNumber(b.idle)} against ${formatNumber(b.readout)} per round), too small to move the code’s best.`, basis);
     assert.ok(b.idle / b.readout < WHY_SMALL_RATIO, basis);
   }
@@ -191,7 +193,10 @@ test('guessVerdict: below, inside, above, both edges, none', () => {
   assert.equal(guessVerdict(2, band).text, 'Your guess is inside the code’s best range.');
   assert.equal(guessVerdict(2.5, band).kind, 'inside');
   assert.equal(guessVerdict(3, band).kind, 'above');
-  assert.equal(guessVerdict(3, band).text, 'Longer than the code wants: the waiting costs more than it gains.');
+  // Replaces 'Longer than the code wants: the waiting costs more than it gains.' because past the
+  // range the trapped ion loses to optical pumping, not to idling (F3; E17 audit).
+  assert.equal(guessVerdict(3, band).text, 'Longer than the code wants: it does better with a shorter readout.');
+  assert.doesNotMatch(guessVerdict(3, band).text, /wait|idl/i);
   assert.deepEqual(guessVerdict(2, { kind: 'none' }), { kind: 'none', text: 'These results show no best readout time to compare your guess with.' });
   assert.equal(guessVerdict(2, null), null);
 });
@@ -226,7 +231,9 @@ test('twistData equals F1; caption and footnote carry its numbers', () => {
   assert.equal(d.yMax, Math.max(...['naive', 'learned'].flatMap((k) => [ex[k].hard.hiCluster, ex[k].soft.hiCluster])) * 1.15);
   assert.ok(ex.naive.pairedSoftMinusHard.lo > 0);
   assert.ok(ex.learned.pairedSoftMinusHard.lo <= 0 && ex.learned.pairedSoftMinusHard.hi >= 0);
-  const pct = (p) => `${(p * 100).toPrecision(2)}%`;
+  // Replaces `${(p * 100).toPrecision(2)}%` (1.0%, 0.49%) with formatNumber (1.02%, 0.491%)
+  // because the E17 audit allows only formatNumber rounding when a sentence states no precision.
+  const pct = (p) => `${formatNumber(p * 100)}%`;
   // Replaces "{soft}% against {hard}% of stored bits lost." with "{soft}% of stored bits lost,
   // against {hard}% without it." (both captions) because the wording changed after the read-aloud review (both authors).
   assert.equal(twistCaption('naive', d), `Using each reading’s confidence made things worse: ${pct(ex.naive.soft.pL)} of stored bits lost, against ${pct(ex.naive.hard.pL)} without it.`);
@@ -297,8 +304,9 @@ test('read-aloud fixes: intro, equal-optima overlap, caption order, 40 words', (
   const texts = [T.TWIST_INTRO, overlapSentence(ion), overlapSentence(sc)];
   for (const dec of ['naive', 'learned']) {
     const c = twistCaption(dec, d);
-    const soft = c.indexOf(`${(d[dec].soft.pL * 100).toPrecision(2)}%`);
-    const hard = c.indexOf(`${(d[dec].hard.pL * 100).toPrecision(2)}%`, soft + 1);
+    // Replaces toPrecision(2) with formatNumber in these two lookups (E17 audit, as above).
+    const soft = c.indexOf(`${formatNumber(d[dec].soft.pL * 100)}%`);
+    const hard = c.indexOf(`${formatNumber(d[dec].hard.pL * 100)}%`, soft + 1);
     assert.ok(soft >= 0 && hard > soft && c.indexOf('without it') > hard, c);
     texts.push(c);
   }
