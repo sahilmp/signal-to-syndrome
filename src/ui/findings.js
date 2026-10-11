@@ -7,7 +7,7 @@
 
 import { stage3v2, stage4v2 } from './bridge_data.js';
 import { formatTau } from './level3.js';
-import { isNarrow, onNarrowChange } from './charts.js';
+import { isNarrow, onNarrowChange, formatNumber } from './charts.js';
 
 export const FINDINGS_HEADING = 'What we found';
 export const POST_HOC_NOTE = 'Found after seeing the data';
@@ -17,17 +17,16 @@ export const DEFAULT_SOURCES = { stage3: stage3v2, stage4: stage4v2 };
 export const isPostHoc = (f) => f?.inSample === false || /^Post hoc/.test(f?.statement ?? '');
 
 const fin = (...xs) => xs.every((x) => Number.isFinite(x));
-// Two significant figures, written without a power of ten (523 -> "520", 5.23 -> "5.2").
-export const sig2 = (x) => String(Number(x.toPrecision(2)));
 
 // F1's sentence from its out-of-sample block (also Level 5's short line with FEATURES.compactText);
-// null when a count is missing.
+// null when a count is missing. It names the held-out circuits: F1 is labelled out of sample
+// (team checklist 1.4; E17 audit).
 export function f1Line(f) {
   const oos = f?.numbers?.outOfSample;
   const c = oos?.softWorseCount;
   const n = oos?.pointsPerDecoder;
   if (!fin(c?.naive, c?.learned, n)) return null;
-  return `Confidence hurt at ${c.naive} of ${n} settings; with the learned decoder, ${c.learned} of ${n}`;
+  return `On held-out circuits, confidence hurt at ${c.naive} of ${n} settings; learned decoder: ${c.learned} of ${n}`;
 }
 
 // The three cards, F1 to F3: { id, title, line, note, target }; line and note are null when the
@@ -40,7 +39,8 @@ export function findingCards(sources = DEFAULT_SOURCES) {
   const b = s4?.platforms?.['trapped-ion']?.budgetAtOptimum;
   return [
     {
-      id: 'F1', title: 'Learning the noise rescues soft readout', line: line1,
+      // F1 is shown for the trapped ion only (project page F1; E17 audit), so the title says so.
+      id: 'F1', title: 'Trapped ion: learning the noise rescues soft readout', line: line1,
       note: line1 && isPostHoc(f1) ? POST_HOC_NOTE : null, target: 'learnnoise-3',
     },
     {
@@ -53,7 +53,8 @@ export function findingCards(sources = DEFAULT_SOURCES) {
     {
       id: 'F3', title: 'Trapped ion: optical pumping sets the clock',
       line: fin(b?.readout, b?.idle) && b.idle > 0
-        ? `Idling is ${sig2(b.readout / b.idle)}× smaller than readout error at the best readout time`
+        // Rounded as formatNumber rounds, as the hero's whySentence does (E17 audit: 523, not 520).
+        ? `Idling is ${formatNumber(b.readout / b.idle)}× smaller than readout error at the best readout time`
         : null,
       note: null, target: 'level3:trapped-ion',
     },

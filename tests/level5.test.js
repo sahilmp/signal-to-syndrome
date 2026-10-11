@@ -132,7 +132,7 @@ test('sensitivityCounts on the real sweep', () => {
 import {
   tradeoffOptions, scoreboardRows, tornadoRows, tornadoOptions, budgetOptions, gateLayers, roundsPerSecondAt, mountLevel5,
   SRC_V2, PLATFORMS_V2, CONCLUSION_ORDER, notRunRows, PROVISIONAL_TEXT, BASIS_NOTES,
-  sensitivityColumn, rowMark, pairedCell, findingRows, NOT_RESOLVED_CHANGE,
+  sensitivityColumn, rowMark, pairedCell, findingRows, findingLines, NOT_RESOLVED_CHANGE,
 } from '../src/ui/level5.js';
 import { isResolvedChange, formatChange } from '../src/ui/charts.js';
 import { FEATURES } from '../src/ui/features.js';
@@ -340,6 +340,23 @@ test('Level 5 v2: findings above the scoreboard, F1 first, and the labels in the
   // F1 first even when the file lists another finding before it.
   const f = findingRows(synthSrc({ findings: [{ id: 'F2', statement: 'b' }, { id: 'F1', statement: 'a' }] }));
   assert.deepEqual(f.map((x) => x.id), ['F1', 'F2']);
+});
+
+// Catches (E17 audit; team checklist 2.1, Wilson never alone): fails if F1's in-sample line
+// quotes the Wilson count alone or before the paired count, if the counts are not the file's
+// sums over both memories (paired 18 + 10, Wilson 13 + 9, points 39 + 39), or if an entry with no
+// paired count is still quoted. Boundary: paired 0 is quoted; paired missing is left out.
+test('findingLines: in-sample line leads with the paired count, Wilson beside it', () => {
+  const ins = stage4v2.findings.find((x) => x.id === 'F1').numbers.inSample;
+  const sum = (dec, k) => ins[`Z ${dec}`][k] + ins[`X ${dec}`][k];
+  const line = findingLines({ inSample: ins }).find((l) => l.startsWith('In sample'));
+  assert.ok(line);
+  for (const dec of ['naive', 'learned']) {
+    assert.ok(line.includes(`${dec} decoder ${sum(dec, 'paired')} of ${sum(dec, 'points')} (Wilson intervals: ${sum(dec, 'wilson')})`), line);
+  }
+  assert.match(line, /paired 95% interval/);
+  assert.equal(findingLines({ inSample: { 'Z naive': { wilson: 3, points: 5 } } }).length, 0);
+  assert.match(findingLines({ inSample: { 'Z naive': { paired: 0, wilson: 3, points: 5 } } })[0], /naive decoder 0 of 5 \(Wilson intervals: 3\)/);
 });
 
 // Catches: fails if an unexpected verdict word (the v1 "holds") is shown as a known badge, a

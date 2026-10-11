@@ -865,19 +865,23 @@ export function findingLines(n) {
       + `learned decoder ${formatChange(pl.diff, pl.lo, pl.hi, { exp })} (paired 95% intervals, resampling quantum shots).`);
   }
   // In sample, per decoder over both memories (keys "Z naive", "X learned", …); the memories are
-  // not named, so the line reads the same in either memory of the page.
+  // not named, so the line reads the same in either memory of the page. The paired count (soft
+  // minus hard, paired cluster interval above 0) leads and the Wilson count stands beside it;
+  // an entry without a paired count is left out, never quoted by Wilson alone (team checklist
+  // 2.1; E17 audit).
   const ins = n.inSample;
   if (ins && typeof ins === 'object') {
     const by = new Map();
     for (const [k, v] of Object.entries(ins)) {
-      if (!Number.isFinite(v?.wilson) || !Number.isFinite(v?.points)) continue;
+      if (!Number.isFinite(v?.paired) || !Number.isFinite(v?.wilson) || !Number.isFinite(v?.points)) continue;
       const dec = k.split(' ')[1] ?? k;
-      if (!by.has(dec)) by.set(dec, { wilson: 0, points: 0 });
+      if (!by.has(dec)) by.set(dec, { paired: 0, wilson: 0, points: 0 });
+      by.get(dec).paired += v.paired;
       by.get(dec).wilson += v.wilson;
       by.get(dec).points += v.points;
     }
-    const parts = [...by].map(([dec, v]) => `${dec} decoder ${v.wilson} of ${v.points}`);
-    if (parts.length) out.push(`In sample (rates learned from the same stored shots), points with soft decoding worse than hard beyond the 95% intervals, both memories together: ${parts.join(', ')}.`);
+    const parts = [...by].map(([dec, v]) => `${dec} decoder ${v.paired} of ${v.points} (Wilson intervals: ${v.wilson})`);
+    if (parts.length) out.push(`In sample (rates learned from the same stored shots), points where soft decoding is worse than hard by the paired 95% interval, both memories together: ${parts.join(', ')}.`);
   }
   return out;
 }

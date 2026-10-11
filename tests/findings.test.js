@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   findingCards, mountFindings, FINDINGS_HEADING, POST_HOC_NOTE, DEFAULT_SOURCES, isPostHoc,
 } from '../src/ui/findings.js';
+import { whySentence, budgetFor } from '../src/ui/hero3_text.js';
 
 // The results files, read here directly (not through the bridge) so that the card numbers are
 // checked against the files themselves.
@@ -13,10 +14,10 @@ const stage3 = readJson('stage3_sc_dense.json');
 const SOURCES = { stage3, stage4 };
 
 const words = (s) => s.trim().split(/\s+/).filter(Boolean).length;
-// Every number written in a sentence, in order ("0.71 µs" -> 0.71, "520×" -> 520).
+// Every number written in a sentence, in order ("0.71 µs" -> 0.71, "523×" -> 523).
 const numbersIn = (s) => (s.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-const p3 = (x) => Number(x.toPrecision(3)); // formatTau's three significant figures
-const p2 = (x) => Number(x.toPrecision(2));
+// formatTau's three significant figures (and formatNumber's, between 1e-3 and 1e4).
+const p3 = (x) => Number(x.toPrecision(3));
 
 // Catches: fails if the cards come in another order, lose a target, or if a number in a line
 // differs from the results file (a typed-in number, the wrong tauLog row, readout and idle
@@ -31,7 +32,9 @@ test('findingCards on the real data: F1, F2, F3, each number from the results fi
   const opt = stage3.optima.tauLog.find((t) => t.d === 3 && t.mode === 'hard' && t.decoder === 'learned');
   assert.deepEqual(numbersIn(cards[1].line), [p3(opt.xMin), p3(opt.lo), p3(opt.hi)]);
   const b = stage4.platforms['trapped-ion'].budgetAtOptimum;
-  assert.deepEqual(numbersIn(cards[2].line), [p2(b.readout / b.idle)]);
+  // Replaces p2 (toPrecision(2): 520) with p3 (formatNumber: 523) because the E17 audit allows
+  // only formatNumber rounding when a sentence states no precision.
+  assert.deepEqual(numbersIn(cards[2].line), [p3(b.readout / b.idle)]);
   // The bridge serves the same files: the page's default sources give the same cards.
   assert.deepEqual(findingCards(DEFAULT_SOURCES), cards);
 });
@@ -48,6 +51,20 @@ test('findingCards: short titles and lines, F1 wording and note', () => {
   assert.doesNotMatch(f1.line, /readout times/);
   assert.equal(isPostHoc(stage4.findings[0]), true);
   assert.equal(f1.note, POST_HOC_NOTE);
+});
+
+// Catches (E17 audit): fails if the F1 card stops naming the trapped ion (F1 is shown for the ion
+// only) or the held-out circuits (F1 is labelled out of sample), or if the F3 card's ratio and the
+// hero's trapped-ion Z "Why?" ratio print differently (the two were 520× and 523× at the audit).
+test('findingCards: F1 names the ion and the held-out circuits; F3 ratio as the hero prints it', () => {
+  const [f1, , f3] = findingCards(SOURCES);
+  assert.match(f1.title, /^Trapped ion:/);
+  assert.match(f1.line, /held-out circuits/);
+  const ratio = /Idling is (\S+)× smaller/.exec(f3.line)?.[1];
+  assert.ok(ratio, f3.line);
+  const b = budgetFor('trapped-ion', 'Z');
+  const hero = whySentence({ platformId: 'trapped-ion', basis: 'Z', band: { kind: 'coincide' }, budget: b });
+  assert.equal(/Idling here is (\S+)× smaller/.exec(hero)?.[1], ratio, hero);
 });
 
 // Catches: fails if a card with missing data prints "undefined" or NaN instead of showing its
