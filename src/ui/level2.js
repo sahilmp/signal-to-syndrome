@@ -239,7 +239,7 @@ export function mountLevel2(container) {
     const readout = createFlatReadout({ epsilon });
     const pt = runPoint({ bank: liveBank, readout, mode: 'hard', noise, seed: SEED + 3, maxShots: LIVE_SHOTS });
     const w = pt.wilson;
-    live.textContent = `Live estimate at ε = ${epsilon.toFixed(3)} (d = 3, r = 3, ${pt.n} stored shots): ${pt.k} logical errors, `
+    live.textContent = `Live estimate at ε = ${epsilon.toFixed(3)} (d = 3, r = 3, ${pt.n} shots): ${pt.k} logical errors, `
       + `p = ${formatNumber(w.p)} (95% interval ${formatNumber(w.lo)} to ${formatNumber(w.hi)}).`;
     chart.update({
       ...chartBase,

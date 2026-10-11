@@ -1823,7 +1823,7 @@ function f1Finding(files, holdout) {
   }
   return {
     id: 'F1',
-    statement: 'Post hoc, not pre-registered: on the trapped-ion arm, soft decoding is worse than hard beyond the intervals with the naive decoder and never with the learned decoder; the v1 C2 loss was a decoder-model artefact (the naive graph lacks the diagonal edges).',
+    statement: 'Post hoc, not pre-registered: on the trapped-ion arm, soft decoding is worse than hard beyond the intervals with the naive decoder and never with the learned decoder; the earlier loss of soft decoding on the ion came from the noise model of the naive decoder (the naive graph lacks the diagonal edges).',
     numbers: { outOfSample, inSample: inSampleCounts },
     source: s2 ? `${HOLDOUT_FILE} -> setting2 (out of sample); ${files.Z.names[ION]}, ${files.X.names[ION]} (in sample)` : `${files.Z.names[ION]}, ${files.X.names[ION]}`,
     inSample: !s2,
