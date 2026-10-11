@@ -15,6 +15,7 @@ import { mountLearnNoise } from './learnnoise.js';
 import { mountDiagnostics } from './diag.js';
 import { mountHero } from './hero.js';
 import { mountHero3 } from './hero3.js';
+import { mountFindings } from './findings.js';
 import { createTour, TOUR_STOPS, TOUR_LABEL } from './tour.js';
 import { setPlatform, setBasis, currentBasis, onBasisChange, BASES } from './level3.js';
 
@@ -170,28 +171,47 @@ function start() {
     show(enabled[0].id, false);
   }
 
-  // Hero panel above the level tabs (U7.2). "Go deeper" opens Level 3 on the hero's platform.
+  // Opening a level from the hero or the findings strip. "Go deeper" opens Level 3 on a platform.
+  const level3 = enabled.find((l) => l.id === 'level3');
+  const goDeeper = level3 ? (platformId) => {
+    setPlatform(platformId);
+    show('level3', true);
+    mounted.get('level3')?.scrollIntoView({ block: 'start' });
+  } : null;
+  // "See it step by step" (hero v3) opens "Learn the noise" as the level selector does, at step 3.
+  const openLearnNoise = enabled.some((l) => l.id === 'learnnoise') ? () => {
+    show('learnnoise', true);
+    const s = mounted.get('learnnoise');
+    if (s) openLearnNoiseStep3(s);
+  } : null;
+
+  // Hero panel above the level tabs (U7.2).
   const hero = root.querySelector('[data-s2s="hero"]');
   if (hero && FEATURES.hero === true) {
     hero.hidden = false;
-    const level3 = enabled.find((l) => l.id === 'level3');
-    const goDeeper = level3 ? (platformId) => {
-      setPlatform(platformId);
-      show('level3', true);
-      mounted.get('level3')?.scrollIntoView({ block: 'start' });
-    } : null;
-    // "See it step by step" (hero v3) opens "Learn the noise" as the level selector does, at step 3.
-    const openLearnNoise = enabled.some((l) => l.id === 'learnnoise') ? () => {
-      show('learnnoise', true);
-      const s = mounted.get('learnnoise');
-      if (s) openLearnNoiseStep3(s);
-    } : null;
     try {
       if (heroMount() === mountHero3) mountHero3(hero, { goDeeper, openLearnNoise });
       else mountHero(hero, { goDeeper });
     } catch (err) {
       hero.textContent = `The hero panel could not start: ${err.message}`;
     }
+  }
+
+  // Findings strip (UX2), between the hero and the level selector: "learnnoise-3" opens "Learn the
+  // noise" at step 3, "level3:<platform>" opens Level 3 on that platform.
+  if (FEATURES.findingsStrip === true && enabled.length > 0) {
+    const holder = document.createElement('div');
+    holder.className = 'findings-holder';
+    const open = (target) => {
+      if (target === 'learnnoise-3') openLearnNoise?.();
+      else if (target.startsWith('level3:')) goDeeper?.(target.slice('level3:'.length));
+    };
+    try {
+      mountFindings(holder, { open });
+    } catch (err) {
+      holder.textContent = `The findings could not start: ${err.message}`;
+    }
+    selector.parentNode.before(holder);
   }
 
   // Guided tour (U7.10): each stop opens its level and returns its target; a stop whose part of

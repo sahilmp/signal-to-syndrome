@@ -14,7 +14,7 @@ import {
 } from './charts.js';
 import { FEATURES } from './features.js';
 import { headlineResults, decoderLabel } from './level3.js';
-import { litShotPool, describeCorrections, learnedNoise } from './level1.js';
+import { litShotPool, describeCorrections, learnedNoise, shotSentence } from './level1.js';
 import { mountSandbox } from './sandbox.js';
 
 const SEED = 20261011;
@@ -164,6 +164,7 @@ export function mountLevel2(container) {
   container.appendChild(gridBox);
   const gridText = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(gridText);
+  const shotLine = shotSentence(container, gridText);
 
   const nav = el('div', { class: 'control-row' });
   const prev = el('button', { type: 'button', class: 'secondary' }, 'Previous shot');
@@ -229,9 +230,9 @@ export function mountLevel2(container) {
     const { svg, corrections } = drawGrid(graph, res);
     gridBox.replaceChildren(svg);
     const ok = res.corrected === bank.logical;
-    gridText.textContent = `Shot ${pos + 1} of ${order.length} with a lit detector (stored shot ${idx + 1} of ${shots.length}), ε = ${epsilon.toFixed(3)}. `
+    shotLine.set(`Shot ${pos + 1} of ${order.length} with a lit detector`, `stored shot ${idx + 1} of ${shots.length}`, `, ε = ${epsilon.toFixed(3)}. `
       + `${res.nDefects} lit detector${res.nDefects === 1 ? '' : 's'}; decoder: ${corrections.length ? corrections.map((c) => c.text).join('; ') : 'no correction'}. `
-      + `Logical value ${res.corrected}: ${ok ? 'survived' : 'lost'}.${res.exact ? '' : ' (Matching not exact.)'}`;
+      + `Logical value ${res.corrected}: ${ok ? 'survived' : 'lost'}.${res.exact ? '' : ' (Matching not exact.)'}`);
   }
 
   function renderEstimate() {

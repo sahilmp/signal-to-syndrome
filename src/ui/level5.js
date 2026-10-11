@@ -32,6 +32,7 @@ import {
   cardValue, physicalOptimum, PLATFORMS as LEVEL3_PLATFORMS, MIN_ERRORS_RESOLVED, errorsAtMinimum, isResolved, formatCount,
   naiveResults, headlineResults, decoderLabel, LEARNED_LABEL, BASES, basisOn, currentBasis, onBasisChange, memoryTag, formatTau,
 } from './level3.js';
+import { POST_HOC_NOTE, isPostHoc, f1Line } from './findings.js';
 
 export const CAPTION = 'Both readout models are classical models with literature parameters, applied to the same IonQ-simulated circuit noise. '
   + 'This is a controlled comparison of readout physics, not a hardware benchmark.';
@@ -880,16 +881,52 @@ export function findingLines(n) {
   }
   return out;
 }
+// One finding as the page has always shown it: the statement, then its number lines.
+function findingItem(f) {
+  const li = el('li', { class: 'l5-finding', style: 'padding:8px 0;border-bottom:1px solid #c4c8cf' });
+  li.appendChild(el('p', { style: 'margin:0' }, '')).append(el('strong', {}, `${f.id} `), f.statement);
+  for (const t of f.lines) li.appendChild(el('p', { class: 'hint', style: 'margin:4px 0 0' }, t));
+  return li;
+}
+// With FEATURES.compactText, what each finding shows outside its expander: the plain sentence
+// (the statement when plain is empty), the badge "Found after seeing the data" for a finding
+// found after seeing the data (findings.js isPostHoc), and for F1 the short held-out count line
+// of the findings strip (findings.js f1Line); row is findingRows' row, shown in full under
+// "Details and caveats". In the order of findingRows.
+export const FINDING_DETAILS = 'Details and caveats';
+export function compactFindingRows(src = SRC_V2) {
+  const raw = Array.isArray(src.stage4.findings) ? src.stage4.findings : [];
+  return findingRows(src).map((row) => {
+    const f = raw.find((x) => x.id === row.id) || {};
+    const plain = typeof f.plain === 'string' && f.plain.trim() !== '' ? f.plain : row.statement;
+    const short = row.id === 'F1' ? f1Line(f) : null;
+    return { id: row.id, plain, postHoc: isPostHoc(f), short: short ? `${short}.` : null, row };
+  });
+}
+const POST_HOC_STYLE = 'display:inline-block;margin-right:4px;padding:1px 8px;border-radius:10px;background:#eef0f3;color:#3c4450;font-style:italic';
 function findingsList(src) {
   const rows = findingRows(src);
   if (!rows.length) return null;
-  const list = el('ul', { class: 'l5-findings', style: 'list-style:none;padding:0;margin:0' });
-  for (const f of rows) {
-    const li = el('li', { class: 'l5-finding', style: 'padding:8px 0;border-bottom:1px solid #c4c8cf' });
-    li.appendChild(el('p', { style: 'margin:0' }, '')).append(el('strong', {}, `${f.id} `), f.statement);
-    for (const t of f.lines) li.appendChild(el('p', { class: 'hint', style: 'margin:4px 0 0' }, t));
-    list.appendChild(li);
+  if (FEATURES.compactText === true) {
+    const list = el('ul', { class: 'l5-findings-compact', style: 'list-style:none;padding:0;margin:0' });
+    for (const c of compactFindingRows(src)) {
+      const li = el('li', { class: 'l5-finding-compact', style: 'padding:8px 0;border-bottom:1px solid #c4c8cf' });
+      const line = el('p', { style: 'margin:0' });
+      line.append(el('strong', {}, `${c.id} `));
+      if (c.postHoc) line.append(el('span', { class: 'l5-label l5-label-posthoc', style: POST_HOC_STYLE }, POST_HOC_NOTE), ' ');
+      line.append(c.plain);
+      li.appendChild(line);
+      if (c.short) li.appendChild(el('p', { class: 'hint', style: 'margin:4px 0 0' }, c.short));
+      // The finding exactly as shown without the flag, one click deeper.
+      const full = el('ul', { class: 'l5-findings', style: 'list-style:none;padding:0;margin:0' });
+      full.appendChild(findingItem(c.row));
+      li.appendChild(explainMore([full], FINDING_DETAILS));
+      list.appendChild(li);
+    }
+    return list;
   }
+  const list = el('ul', { class: 'l5-findings', style: 'list-style:none;padding:0;margin:0' });
+  for (const f of rows) list.appendChild(findingItem(f));
   return list;
 }
 

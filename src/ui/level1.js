@@ -130,6 +130,37 @@ function el(tag, attrs = {}, text = null) {
   return e;
 }
 
+// A shot sentence of Levels 1, 2 and 4: `${before} (${detail})${after}`. With FEATURES.compactText
+// the "(stored shot …)" part leaves the visible sentence and goes, in the same words, to the
+// sentence element's title and to a "Shot details" expander right after it (appended here, so
+// call this right after appending target). clear() is for the element's other sentences.
+export const SHOT_DETAILS = 'Shot details';
+export function shotSentence(container, target) {
+  if (FEATURES.compactText !== true) {
+    return { set(before, detail, after) { target.textContent = `${before} (${detail})${after}`; }, clear() {} };
+  }
+  const box = el('details', { class: 'shot-details' });
+  const body = el('p', { class: 'hint' });
+  box.append(el('summary', {}, SHOT_DETAILS), body);
+  box.hidden = true;
+  container.appendChild(box);
+  let titled = false;
+  return {
+    set(before, detail, after) {
+      target.textContent = `${before}${after}`;
+      target.setAttribute('title', detail);
+      titled = true;
+      body.textContent = detail;
+      box.hidden = false;
+    },
+    clear() {
+      if (titled) target.removeAttribute('title');
+      titled = false;
+      box.hidden = true;
+    },
+  };
+}
+
 export function mountLevel1(container) {
   const bank = bankD3R1;
   const { d, r } = bank;
@@ -188,6 +219,7 @@ export function mountLevel1(container) {
 
   const status = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(status);
+  const shotLine = shotSentence(container, status);
 
   // Board: data qubits alternate with check lights.
   const board = el('div', { class: 'l1-board', role: 'group', 'aria-label': 'Data qubits and check lights' });
@@ -289,9 +321,8 @@ export function mountLevel1(container) {
     });
     noneBtn.disabled = false;
     nextBtn.disabled = true;
-    status.textContent = ux
-      ? `Shot ${shotNo} of ${SHOTS_PER_GAME} at ε = ${epsilon} (stored shot ${index + 1} of ${shots.length}). Which data qubit flipped?`
-      : `Shot ${shotNo} of ${SHOTS_PER_GAME} (stored shot ${index + 1} of ${shots.length}). Which data qubit flipped?`;
+    shotLine.set(ux ? `Shot ${shotNo} of ${SHOTS_PER_GAME} at ε = ${epsilon}` : `Shot ${shotNo} of ${SHOTS_PER_GAME}`,
+      `stored shot ${index + 1} of ${shots.length}`, '. Which data qubit flipped?');
     reveal.replaceChildren();
     renderScore();
     if (focus) qubitButtons[0].focus();

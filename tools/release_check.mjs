@@ -40,6 +40,10 @@ const NEEDS = {
   curated: ['curatedShots'],
   // hero3_text.js reads stage4v2 (budgetAtOptimum, F1); stage4x is covered by phaseFlip.
   heroV3: ['findMinimum', 'stage2v2', 'stage3v2', 'stage4v2'],
+  // UX2: findings.js reads stage4v2 (finding F1, budgetAtOptimum) and stage3v2 (optima.tauLog);
+  // compactText only moves text, but Level 5's short F1 line reads stage4v2.
+  findingsStrip: ['stage3v2', 'stage4v2'],
+  compactText: ['stage4v2'],
 };
 // Results files the bridges may point at (data/results, Person A's data; CC-B21 item 7). Each
 // bridge export under data/results/ must be one of these, exist, and carry schema s2s-results/1.

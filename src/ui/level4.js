@@ -20,7 +20,7 @@ import {
   createChart, svgEl, formatNumber, tokenStyle, goalLine, explainMore, takeawayCard, intervalOf, intervalCaption,
 } from './charts.js';
 import { FEATURES } from './features.js';
-import { describeCorrections, P_GATE, learnedNoise } from './level1.js';
+import { describeCorrections, P_GATE, learnedNoise, shotSentence } from './level1.js';
 import {
   tauGrid, defaultTauIndex, formatTau, optimaInfo, currentPlatform, onPlatformChange, mountPlatformToggle,
   currentBasis, onBasisChange, resultsFor, memoryTag, setPlatform, decoderLabel,
@@ -246,6 +246,7 @@ export function mountLevel4(container) {
   container.appendChild(pair);
   const shotText = el('p', { class: 'status', 'aria-live': 'polite' });
   container.appendChild(shotText);
+  const shotLine = shotSentence(container, shotText);
   // Shown in the phase-flip memory only: the shots above come from the bit-flip memory.
   const basisNote = el('p', { class: 'hint basis-note' }, 'The shots above come from the bit-flip memory; the chart below shows the phase-flip memory.');
   basisNote.hidden = currentBasis() !== 'X';
@@ -361,6 +362,7 @@ export function mountLevel4(container) {
     try {
       both = decodeBoth();
     } catch (err) {
+      shotLine.clear();
       shotText.textContent = `This shot could not be decoded: ${err.message}`;
       return null;
     }
@@ -381,12 +383,13 @@ export function mountLevel4(container) {
     if (cur) {
       const list = curatedShots[cur.kind];
       const what = CURATED_KINDS.find((k) => k.kind === cur.kind).what;
+      shotLine.clear();
       shotText.textContent = `Example ${cur.pos + 1} of ${list.length} where ${what}: ${plat.label.toLowerCase()}, stored value ${bank.logical}, `
         + `stored shot ${cur.rec.index + 1} of ${count(bank.shots)}, readout seed ${cur.rec.seed}, τ = ${formatTau(tau)}, learned decoder: ${lit}`;
       return { ...both, same };
     }
-    shotText.textContent = `${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET} (stored shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}), τ = ${formatTau(tau)}: `
-      + `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}. ${same ? 'Both decoders chose the same matching.' : 'The decoders chose different matchings.'}`;
+    shotLine.set(`${plat.label}, shot ${tally.n} of ${SHOTS_PER_SET}`, `stored shot ${current.index + 1} of ${shots.length}, readout seed ${current.seed}`, `, τ = ${formatTau(tau)}: `
+      + `${both.hard.nDefects} lit detector${both.hard.nDefects === 1 ? '' : 's'}. ${same ? 'Both decoders chose the same matching.' : 'The decoders chose different matchings.'}`);
     return { ...both, same };
   }
 
@@ -476,6 +479,7 @@ export function mountLevel4(container) {
     if (plat.id !== curatedShots.settings.platform) return;
     const ti = grid.indexOf(tau);
     if (ti < 0) {
+      shotLine.clear();
       shotText.textContent = `τ = ${formatTau(tau)} is not on this platform's grid.`;
       return;
     }
